@@ -13,7 +13,7 @@ use crate::context::FilterContext;
 use crate::filter::Filter;
 use crate::param_schema::*;
 use crate::planes::OklabPlanes;
-use zenpixels_convert::oklab;
+use zenpixels_convert::oklab::OklabSpace;
 
 /// ASC CDL (Color Decision List) per-channel color correction.
 ///
@@ -283,9 +283,7 @@ impl Filter for AscCdl {
             return;
         }
 
-        let m1_inv = oklab::lms_to_rgb_matrix(zenpixels::ColorPrimaries::Bt709)
-            .expect("BT.709 always supported");
-        let m1 = oklab::rgb_to_lms_matrix(zenpixels::ColorPrimaries::Bt709)
+        let space = OklabSpace::for_primaries(zenpixels::Primaries::Bt709)
             .expect("BT.709 always supported");
 
         let n = planes.pixel_count();
@@ -296,7 +294,7 @@ impl Filter for AscCdl {
 
         for i in 0..n {
             // Oklab → linear RGB
-            let [r, g, b] = oklab::oklab_to_rgb(planes.l[i], planes.a[i], planes.b[i], &m1_inv);
+            let [r, g, b] = space.to_rgb([planes.l[i], planes.a[i], planes.b[i]]);
 
             // SOP: slope * in + offset, clamped, then power
             let r2 = (sr * r + or).max(0.0).powf(pr).min(1.0);
@@ -316,7 +314,7 @@ impl Filter for AscCdl {
             };
 
             // Linear RGB → Oklab
-            let [l, oa, ob] = oklab::rgb_to_oklab(r3, g3, b3, &m1);
+            let [l, oa, ob] = space.from_rgb([r3, g3, b3]);
             planes.l[i] = l;
             planes.a[i] = oa;
             planes.b[i] = ob;

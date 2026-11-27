@@ -158,7 +158,7 @@ fn prepared_job_metadata_claim_still_needs_successful_postconditions() {
         .require_metadata(MetadataTransfer::PreserveReported)
         .require_output_schedule(OutputSchedule::FinishFirst);
     let error = TranscodeRequest::new(ImageFormat::Jpeg)
-        .with_cms(&MoxCms)
+        .with_cms(Arc::new(MoxCms))
         .transcode_for_publication(&codecs, &fixture(false), &mut policy)
         .unwrap_err();
     assert_eq!(error.error().stage(), Stage::Verify);
@@ -326,12 +326,12 @@ fn late_fixture(progressive: bool, placement: Placement, color: bool) -> Vec<u8>
     let raw = [23, 101, 211].repeat(WIDTH as usize * HEIGHT as usize);
     let base = jpeg_config(progressive)
         .encode(
-            PixelSlice::new(
+            PixelView::new(
                 &raw,
                 WIDTH,
                 HEIGHT,
                 WIDTH as usize * 3,
-                PixelDescriptor::RGB8_SRGB,
+                &zenpixels::formats::RGB8_SRGB,
             )
             .unwrap(),
         )
@@ -418,7 +418,7 @@ fn native_late_descriptions_are_preserved_or_discarded_with_independent_png_read
     }
 }
 fn operation_source(codecs: &CodecSet, input: &[u8]) -> Vec<u8> {
-    let source = zencodec::operation::DecodeRequest::new()
+    let source = zencodec::operation::DecodeOptions::new()
         .decode(codecs, input)
         .unwrap();
     (0..source.height())
@@ -454,10 +454,10 @@ fn native_png_late_metadata_is_unknown_before_encoder_configuration() {
     let pixels = [23, 45, 67];
     let input = zenpng::PngEncoderConfig::new()
         .job()
-        .with_metadata_policy(metadata, MetadataPolicy::PreserveExact)
+        .with_unfiltered_metadata(metadata.filtered(&MetadataPolicy::PreserveExact))
         .encoder()
         .unwrap()
-        .encode(PixelSlice::new(&pixels, 1, 1, 3, PixelDescriptor::RGB8_SRGB).unwrap())
+        .encode(PixelView::new(&pixels, 1, 1, 3, &zenpixels::formats::RGB8_SRGB).unwrap())
         .unwrap()
         .into_vec();
     let codecs = codecs();

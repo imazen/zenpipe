@@ -14,7 +14,7 @@ publish = false
 [dependencies]
 zenpipe = { path = "../..", default-features = false, features = ["io", "io-tokio"] }
 zencodec.workspace = true
-zencodec-io = { version = "0.1.0", features = ["std", "tokio"] }
+zencodec-io = { version = "0.2.0", features = ["std", "tokio"] }
 zenpixels.workspace = true
 zenresize = { version = "0.3.1", default-features = false }
 # The whole-raster orientation reference (`zenpipe::execute_layout::orient_image`) takes its enum.

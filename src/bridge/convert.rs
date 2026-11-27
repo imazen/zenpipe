@@ -552,7 +552,7 @@ pub(crate) fn convert_round_corners(node: &dyn NodeInstance) -> crate::PipeResul
         transform: Box::new(move |data, w, h, fmt| {
             let width = *w;
             let height = *h;
-            let bpp = fmt.bytes_per_pixel();
+            let bpp = fmt.layout.bytes_per_pixel();
             if width == 0 || height == 0 {
                 return;
             }

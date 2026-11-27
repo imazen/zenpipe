@@ -18,8 +18,8 @@ use zenfilters::filters::*;
 use zenfilters::{
     Filter, FilterContext, OklabPlanes, gather_oklab_to_srgb_u8, scatter_srgb_u8_to_oklab,
 };
-use zenpixels::ColorPrimaries;
-use zenpixels_convert::oklab;
+use zenpixels::Primaries;
+use zenpixels_convert::oklab::OklabSpace;
 
 const MAX_DIM: u32 = 512;
 const JPEG_QUALITY: u8 = 85;
@@ -1085,8 +1085,9 @@ fn main() {
     let configs = audit_configs();
     eprintln!("{} filter configs to test", configs.len());
 
-    let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
-    let m1_inv = oklab::lms_to_rgb_matrix(ColorPrimaries::Bt709).unwrap();
+    let space = OklabSpace::for_primaries(Primaries::Bt709).unwrap();
+    let m1 = space.rgb_to_lms();
+    let m1_inv = space.lms_to_rgb();
     let mut ctx = FilterContext::new();
     let mut manifest: Vec<String> = Vec::new();
 

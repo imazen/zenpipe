@@ -3,7 +3,7 @@
 
 use zencodecs::{EncodeRequest, ImageFormat, config::CodecConfig};
 use zenjpeg::encoder::{ChromaSubsampling, EncoderConfig, PixelLayout};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::PixelView;
 
 #[test]
 fn native_scan_and_entropy_settings_are_preserved() {
@@ -25,7 +25,7 @@ fn native_scan_and_entropy_settings_are_preserved() {
         .unwrap();
     let native = native.finish().unwrap();
     let overrides = CodecConfig::default().with_jpeg_encoder(config);
-    let pixels = PixelSlice::new(&data, W, H, stride, PixelDescriptor::RGB8_SRGB).unwrap();
+    let pixels = PixelView::new(&data, W, H, stride, &zenpixels::formats::RGB8_SRGB).unwrap();
     let output = EncodeRequest::new(ImageFormat::Jpeg)
         .with_codec_config(&overrides)
         .encode(pixels, false)
@@ -47,12 +47,12 @@ fn short_fixed_table_canvas_keeps_the_complete_file_until_finish() {
         );
         let make = || EncodeRequest::new(ImageFormat::Jpeg).with_codec_config(&overrides);
         let data: Vec<u8> = (0..width * height * 3).map(|i| (i * 37) as u8).collect();
-        let pixels = PixelSlice::new(
+        let pixels = PixelView::new(
             &data,
             width,
             height,
             width as usize * 3,
-            PixelDescriptor::RGB8_SRGB,
+            &zenpixels::formats::RGB8_SRGB,
         )
         .unwrap();
         let whole = make().encode(pixels.clone(), false).unwrap();
@@ -61,7 +61,9 @@ fn short_fixed_table_canvas_keeps_the_complete_file_until_finish() {
             .unwrap()
             .encoder;
         assert_eq!(
-            encoder.begin(width, height, pixels.descriptor()).unwrap(),
+            encoder
+                .begin(width, height, pixels.format().clone())
+                .unwrap(),
             zencodec::encode::OutputTiming::AT_FINISH
         );
         assert!(encoder.pending_output().is_empty());

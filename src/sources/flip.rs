@@ -35,13 +35,13 @@ impl Source for FlipHSource {
             return Ok(None);
         };
 
-        let bpp = strip.descriptor().bytes_per_pixel();
+        let bpp = strip.format().layout.bytes_per_pixel();
         let width = strip.width() as usize;
         self.buf
-            .reconfigure(strip.width(), strip.rows(), strip.descriptor());
+            .reconfigure(strip.width(), strip.height(), strip.format().clone());
         self.buf.reset();
 
-        for r in 0..strip.rows() {
+        for r in 0..strip.height() {
             let src_row = strip.row(r);
             self.buf.push_row(src_row);
             let dst_row = self.buf.row_mut(r);
@@ -67,8 +67,8 @@ impl Source for FlipHSource {
     fn format(&self) -> PixelFormat {
         self.upstream.format()
     }
-    fn color_context(&self) -> Option<alloc::sync::Arc<zenpixels::ColorContext>> {
-        self.upstream.color_context()
+    fn color_origin(&self) -> Option<zenpixels::ColorOrigin> {
+        self.upstream.color_origin()
     }
 }
 
@@ -97,7 +97,7 @@ mod tests {
             255, 255, 255, 255,  // D: white
         ];
 
-        let upstream = MaterializedSource::from_data(data, w, h, fmt).with_strip_height(h);
+        let upstream = MaterializedSource::from_data(data, w, h, fmt.clone()).with_strip_height(h);
 
         let mut flip = FlipHSource::new(Box::new(upstream));
         assert_eq!(flip.width(), w);
@@ -105,10 +105,10 @@ mod tests {
         assert_eq!(flip.format(), fmt);
 
         let strip = flip.next().unwrap().unwrap();
-        assert_eq!(strip.rows(), 1);
+        assert_eq!(strip.height(), 1);
 
         let row = strip.row(0);
-        let bpp = fmt.bytes_per_pixel();
+        let bpp = fmt.layout.bytes_per_pixel();
 
         // After flip, order should be D, C, B, A.
         // D: white

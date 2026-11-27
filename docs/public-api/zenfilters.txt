@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenfilters.txt 979 lines (supported surface) | zenfilters.features.txt 852 added (features: experimental,local-darktable,local-fixtures,local-vips,serde,srgb-compat,srgb-filters,zennode,zenquant) | zenfilters.internal.txt 58 lines (66 hidden + 0 excluded-feature)
+# files: zenfilters.txt 978 lines (supported surface) | zenfilters.features.txt 852 added (features: experimental,local-darktable,local-fixtures,local-vips,serde,srgb-compat,srgb-filters,zennode,zenquant) | zenfilters.internal.txt 58 lines (66 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -19,8 +19,8 @@
 #   enum variants                             141
 #   trait roster entries (type × trait)       477
 #   conditional trait impls (verbatim)          1
-#   auto-trait-complete types                 112
-#   auto-trait exceptions                       4
+#   auto-trait-complete types                 113
+#   auto-trait exceptions                       3
 #
 # per-module pub lines:
 #   (root)                          160
@@ -741,8 +741,8 @@ pub fn slider::sharpen_noise_floor_to_slider(f32) -> f32
 #[non_exhaustive] pub enum ConvenienceError
 pub ConvenienceError::Convert(zenpixels_convert::error::ConvertError)
 pub ConvenienceError::Pipeline(PipelineError)
-pub ConvenienceError::UnsupportedLayout(zenpixels::descriptor::ChannelLayout)
-pub ConvenienceError::UnsupportedPrimaries(zenpixels::descriptor::ColorPrimaries)
+pub ConvenienceError::UnsupportedLayout(zenpixels::layout::ChannelOrder)
+pub ConvenienceError::UnsupportedPrimaries(zenpixels::color::Primaries)
 #[non_exhaustive] pub enum GamutMapping
 pub GamutMapping::Bypass
 pub GamutMapping::ChromaReduce
@@ -755,7 +755,7 @@ pub PipelineError::BufferSize
 pub PipelineError::BufferSize::actual: usize
 pub PipelineError::BufferSize::expected: usize
 pub PipelineError::Cancelled(enough::reason::StopReason)
-pub PipelineError::UnsupportedPrimaries(zenpixels::descriptor::ColorPrimaries)
+pub PipelineError::UnsupportedPrimaries(zenpixels::color::Primaries)
 pub enum PlaneSemantics
 pub PlaneSemantics::Any
 pub PlaneSemantics::Oklab
@@ -865,7 +865,7 @@ pub fn Pipeline::split_scaled(self, u32, u32) -> (Self, Self)
 pub fn Pipeline::total_halo(&self, u32, u32) -> u32
 #[non_exhaustive] pub struct PipelineConfig
 pub PipelineConfig::gamut_mapping: GamutMapping
-pub PipelineConfig::primaries: zenpixels::descriptor::ColorPrimaries
+pub PipelineConfig::primaries: zenpixels::color::Primaries
 pub PipelineConfig::reference_white: f32
 pub PipelineConfig::reference_width: core::option::Option<u32>
 pub PipelineConfig::working_space: WorkingSpace
@@ -888,9 +888,9 @@ pub fn Filter::resize_phase(&self) -> ResizePhase
 pub fn Filter::scale_for_resolution(&mut self, f32)
 pub fn Filter::tag(&self) -> filter_compat::FilterTag
 pub trait PipelineBufferExt
-pub fn PipelineBufferExt::apply_buffer(&self, &zenpixels::buffer::PixelBuffer, &mut FilterContext) -> core::result::Result<zenpixels::buffer::PixelBuffer, whereat::at::At<ConvenienceError>>
-pub fn PipelineBufferExt::apply_buffer_linear(&self, &zenpixels::buffer::PixelBuffer, &mut FilterContext) -> core::result::Result<zenpixels::buffer::PixelBuffer, whereat::at::At<ConvenienceError>>
-pub fn apply_to_buffer(&Pipeline, &zenpixels::buffer::PixelBuffer, bool, &mut FilterContext) -> core::result::Result<zenpixels::buffer::PixelBuffer, whereat::at::At<ConvenienceError>>
+pub fn PipelineBufferExt::apply_buffer(&self, &zenpixels::buffer::PixelBuf, &mut FilterContext) -> core::result::Result<zenpixels::buffer::PixelBuf, whereat::at::At<ConvenienceError>>
+pub fn PipelineBufferExt::apply_buffer_linear(&self, &zenpixels::buffer::PixelBuf, &mut FilterContext) -> core::result::Result<zenpixels::buffer::PixelBuf, whereat::at::At<ConvenienceError>>
+pub fn apply_to_buffer(&Pipeline, &zenpixels::buffer::PixelBuf, bool, &mut FilterContext) -> core::result::Result<zenpixels::buffer::PixelBuf, whereat::at::At<ConvenienceError>>
 pub fn gather_from_oklab(&OklabPlanes, &mut [f32], u32, &zenpixels_convert::gamut::GamutMatrix, f32)
 pub fn gather_oklab_to_srgb_u8(&OklabPlanes, &mut [u8], u32, &zenpixels_convert::gamut::GamutMatrix)
 pub fn scatter_srgb_u8_to_oklab(&[u8], &mut OklabPlanes, u32, &zenpixels_convert::gamut::GamutMatrix)
@@ -1017,8 +1017,7 @@ impl<F> metric_gate::QualityMetric for F where F: core::ops::function::Fn(&Oklab
 
 ## auto traits
 
-112 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
-ConvenienceError: !RefUnwindSafe !UnwindSafe
+113 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 Pipeline: !RefUnwindSafe !UnwindSafe
 masked::MaskedFilter: !RefUnwindSafe !UnwindSafe
 metric_gate::MetricGated<M>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe

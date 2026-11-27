@@ -11,7 +11,7 @@
 use imgref::{ImgRef, ImgVec};
 use rgb::{Rgb, Rgba};
 use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, Metadata};
-use zenpixels::PixelSlice;
+use zenpixels::{ColorSpace, PixelView};
 
 // ─── Inline fixtures ─────────────────────────────────────────────────────
 
@@ -55,11 +55,11 @@ fn encode_webp_rgba8(img: ImgRef<'_, Rgba<u8>>, quality: f32) -> Vec<u8> {
 }
 
 fn encode_webp_with_meta(img: ImgRef<'_, Rgb<u8>>, meta: Metadata, quality: f32) -> Vec<u8> {
-    let typed: PixelSlice<'_, Rgb<u8>> = PixelSlice::from(img);
+    let view = PixelView::from_imgref(img, ColorSpace::SRGB).expect("from_imgref");
     EncodeRequest::new(ImageFormat::WebP)
         .with_quality(quality)
         .with_metadata(meta)
-        .encode(typed.erase(), false)
+        .encode(view, false)
         .expect("encode WebP with metadata")
         .into_vec()
 }
@@ -75,6 +75,16 @@ fn synthetic_icc(len: usize) -> Vec<u8> {
     v.extend_from_slice(&(len as u32).to_be_bytes());
     while v.len() < len {
         v.push((v.len() as u8).wrapping_mul(31));
+    }
+    if len >= 20 {
+        v[12..16].copy_from_slice(b"mntr");
+        v[16..20].copy_from_slice(b"RGB ");
+    }
+    if len >= 40 {
+        v[36..40].copy_from_slice(b"acsp");
+    }
+    if len >= 132 {
+        v[128..132].copy_from_slice(&0u32.to_be_bytes());
     }
     v
 }
@@ -121,11 +131,11 @@ fn webp_quality_parameter_changes_size() {
 fn webp_lossless_round_trip_is_lossless() {
     // WebP lossless mode: encode → decode must produce byte-identical pixels.
     let img = rgba8_image(16, 16);
-    let typed: PixelSlice<'_, Rgba<u8>> = PixelSlice::from(img.as_ref());
+    let view = PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB_ALPHA).expect("from_imgref");
 
     let bytes = EncodeRequest::new(ImageFormat::WebP)
         .with_lossless(true)
-        .encode(typed.erase(), true)
+        .encode(view, true)
         .expect("encode WebP lossless")
         .into_vec();
 

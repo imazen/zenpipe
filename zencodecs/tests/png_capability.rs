@@ -12,7 +12,7 @@
 use imgref::{ImgRef, ImgVec};
 use rgb::{Rgb, Rgba};
 use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, Metadata};
-use zenpixels::PixelSlice;
+use zenpixels::{ColorSpace, PixelView};
 
 // ─── Inline fixtures ─────────────────────────────────────────────────────
 
@@ -54,10 +54,10 @@ fn encode_png_rgba8(img: ImgRef<'_, Rgba<u8>>) -> Vec<u8> {
 }
 
 fn encode_png_with_meta(img: ImgRef<'_, Rgb<u8>>, meta: Metadata) -> Vec<u8> {
-    let typed: PixelSlice<'_, Rgb<u8>> = PixelSlice::from(img);
+    let view = PixelView::from_imgref(img, ColorSpace::SRGB).expect("from_imgref");
     EncodeRequest::new(ImageFormat::Png)
         .with_metadata(meta)
-        .encode(typed.erase(), false)
+        .encode(view, false)
         .expect("encode PNG with metadata")
         .into_vec()
 }
@@ -73,6 +73,16 @@ fn synthetic_icc(len: usize) -> Vec<u8> {
     v.extend_from_slice(&(len as u32).to_be_bytes());
     while v.len() < len {
         v.push((v.len() as u8).wrapping_mul(31));
+    }
+    if len >= 20 {
+        v[12..16].copy_from_slice(b"mntr");
+        v[16..20].copy_from_slice(b"RGB ");
+    }
+    if len >= 40 {
+        v[36..40].copy_from_slice(b"acsp");
+    }
+    if len >= 132 {
+        v[128..132].copy_from_slice(&0u32.to_be_bytes());
     }
     v
 }
@@ -130,7 +140,7 @@ fn png_rgba8_round_trip_is_lossless_pixel_byte_equal() {
 fn png_rgba16_round_trip_is_lossless_pixel_byte_equal() {
     use imgref::ImgVec;
     use rgb::Rgba;
-    use zenpixels::{ChannelType, PixelSlice};
+    use zenpixels::SampleType;
 
     let pixels: Vec<Rgba<u16>> = (0..32 * 32)
         .map(|i| Rgba {
@@ -141,22 +151,23 @@ fn png_rgba16_round_trip_is_lossless_pixel_byte_equal() {
         })
         .collect();
     let img = ImgVec::new(pixels, 32, 32);
-    let typed: PixelSlice<'_, Rgba<u16>> = PixelSlice::from(img.as_ref());
+    let view = PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB_ALPHA).expect("from_imgref");
 
     let bytes = EncodeRequest::new(ImageFormat::Png)
-        .encode(typed.erase(), false)
+        .encode(view, false)
         .expect("encode PNG rgba16")
         .into_vec();
 
     let decoded = DecodeRequest::new(&bytes)
         .decode_full_frame()
         .expect("decode PNG");
-    let desc = decoded.pixels().descriptor();
+    let pixels = decoded.pixels();
+    let fmt = pixels.format();
     assert_eq!(
-        desc.channel_type(),
-        ChannelType::U16,
+        fmt.layout.sample,
+        SampleType::U16,
         "16-bit PNG must not narrow to U8; got {:?}",
-        desc.channel_type()
+        fmt.layout.sample
     );
 
     let actual: &[u8] = decoded.pixels().as_strided_bytes();
@@ -178,7 +189,7 @@ fn png_rgba16_round_trip_is_lossless_pixel_byte_equal() {
 #[ignore = "needs codec-corpus PNG pngsuite at /mnt/v/GitHub/codec-corpus/; run with cargo test -- --ignored"]
 #[test]
 fn png_external_16bit_samples_decode_at_16bpc() {
-    use zenpixels::ChannelType;
+    use zenpixels::SampleType;
     let files = [
         "/mnt/v/GitHub/codec-corpus/image-rs/test-images/png/16bpc/basi0g16.png",
         "/mnt/v/GitHub/codec-corpus/image-rs/test-images/png/16bpc/basn2c16.png",
@@ -190,8 +201,8 @@ fn png_external_16bit_samples_decode_at_16bpc() {
             .decode_full_frame()
             .expect("decode 16bpc PNG");
         assert_eq!(
-            decoded.pixels().descriptor().channel_type(),
-            ChannelType::U16,
+            decoded.pixels().format().layout.sample,
+            SampleType::U16,
             "{}: expected U16 channel type",
             f
         );
@@ -311,7 +322,7 @@ fn png_cicp_chunk_round_trips() {
     let img = rgb8_image(32, 32);
     // BT.2100 PQ — primaries=9, transfer=16, matrix=9, full_range=true.
     // (Picked deliberately non-default to prove it's the value we set.)
-    let cicp = Cicp::BT2100_PQ;
+    let cicp = Cicp::BT2100_PQ_RGB;
     let meta = Metadata::none().with_cicp(cicp);
 
     let bytes = encode_png_with_meta(img.as_ref(), meta);

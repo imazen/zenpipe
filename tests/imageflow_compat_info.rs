@@ -23,16 +23,25 @@ fn exif_with_orientation(value: u16) -> Vec<u8> {
 }
 
 /// Encode a `w`×`h` RGB JPEG carrying the given EXIF orientation value.
+///
+/// Uses `zenjpeg` directly (bypassing `zencodecs::EncodeRequest`'s upright
+/// orientation baking) so the stored JPEG retains `w`×`h` dimensions and the
+/// raw EXIF Orientation tag.
 fn jpeg_with_orientation(w: u32, h: u32, orientation: u16) -> Vec<u8> {
+    use zencodec::encode::{EncodeJob as _, Encoder as _, EncoderConfig as _};
     let stride = w as usize * 3;
     let pixels = vec![100u8; stride * h as usize];
-    let ps =
-        zenpixels::PixelSlice::new(&pixels, w, h, stride, zenpixels::PixelDescriptor::RGB8_SRGB)
-            .expect("pixel slice");
-    zencodecs::EncodeRequest::new(zencodec::ImageFormat::Jpeg)
-        .with_quality(80.0)
-        .with_metadata(zencodec::Metadata::none().with_exif(exif_with_orientation(orientation)))
-        .encode(ps, false)
+    let ps = zenpixels::PixelView::new(&pixels, w, h, stride, &zenpixels::formats::RGB8_SRGB)
+        .expect("pixel view");
+    zenjpeg::JpegEncoderConfig::new()
+        .with_generic_quality(80.0)
+        .job()
+        .with_unfiltered_metadata(
+            zencodec::Metadata::none().with_exif(exif_with_orientation(orientation)),
+        )
+        .encoder()
+        .expect("JPEG encoder")
+        .encode(ps)
         .expect("JPEG encode")
         .into_vec()
 }

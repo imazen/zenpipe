@@ -16,10 +16,10 @@ const H: u32 = 64;
 
 /// Packed output rows (strip stride padding removed).
 fn drain(mut source: Box<dyn Source>) -> Vec<u8> {
-    let row_len = source.width() as usize * source.format().bytes_per_pixel();
+    let row_len = source.width() as usize * source.format().layout.bytes_per_pixel();
     let mut out = Vec::new();
     while let Some(strip) = source.next().expect("next") {
-        for r in 0..strip.rows() {
+        for r in 0..strip.height() {
             out.extend_from_slice(&strip.row(r)[..row_len]);
         }
     }
@@ -28,7 +28,7 @@ fn drain(mut source: Box<dyn Source>) -> Vec<u8> {
 
 fn rgba8_input(strip_height: u32) -> Box<dyn Source> {
     let fmt = format::RGBA8_SRGB;
-    let stride = fmt.aligned_stride(W);
+    let stride = W as usize * fmt.layout.bytes_per_pixel();
     let mut data = vec![0u8; stride * H as usize];
     for y in 0..H as usize {
         for x in 0..W as usize {
@@ -44,7 +44,7 @@ fn rgba8_input(strip_height: u32) -> Box<dyn Source> {
 
 fn f32_input(strip_height: u32) -> Box<dyn Source> {
     let fmt = format::RGBAF32_LINEAR;
-    let stride = fmt.aligned_stride(W);
+    let stride = W as usize * fmt.layout.bytes_per_pixel();
     let mut data = vec![0u8; stride * H as usize];
     for y in 0..H as usize {
         for x in 0..W as usize {
@@ -92,7 +92,7 @@ fn rgba8_resize_is_independent_of_upstream_strip_height() {
 fn f32_resize_is_independent_of_upstream_strip_height() {
     for (ow, oh) in TARGETS {
         let config = zenresize::ResizeConfig::builder(W, H, ow, oh)
-            .format(zenresize::PixelDescriptor::RGBAF32_LINEAR)
+            .format(format::RGBAF32_LINEAR)
             .build();
         let reference = drain(Box::new(
             ResizeF32Source::new(f32_input(16), &config, 16).expect("source"),

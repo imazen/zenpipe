@@ -63,13 +63,17 @@ fn load_image(name: &str) -> RgbImage {
 fn apply_filter(img: &RgbImage, filter: Box<dyn Filter>) -> RgbImage {
     let (w, h) = img.dimensions();
     let input_bytes: Vec<u8> = img.as_raw().clone();
-    let desc = zenpixels::PixelDescriptor::RGB8_SRGB;
-    let input_buf = zenpixels::buffer::PixelBuffer::from_vec(input_bytes, w, h, desc).unwrap();
+    let desc = zenpixels::PixelFormat::RGB8_SRGB;
+    let input_buf = zenpixels::buffer::PixelBuf::from_bytes(input_bytes, w, h, desc).unwrap();
     let mut pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
     pipeline.push(filter);
     let mut ctx = FilterContext::new();
     let output_buf = apply_to_buffer(&pipeline, &input_buf, true, &mut ctx).unwrap();
-    let output_bytes = output_buf.copy_to_contiguous_bytes();
+    let output_bytes = output_buf
+        .as_view()
+        .to_contiguous_bytes()
+        .unwrap()
+        .into_owned();
     image::ImageBuffer::from_raw(w, h, output_bytes).unwrap()
 }
 

@@ -24,7 +24,7 @@
 use imgref::{ImgRef, ImgVec};
 use rgb::{Rgb, Rgba};
 use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, Metadata};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{ColorSpace, PixelFormat, PixelView};
 
 // Inline RGB/RGBA fixtures (tests/common/mod.rs uses removed convenience methods).
 fn rgb8_image(w: usize, h: usize) -> ImgVec<Rgb<u8>> {
@@ -50,24 +50,28 @@ fn rgba8_image(w: usize, h: usize) -> ImgVec<Rgba<u8>> {
     ImgVec::new(pixels, w, h)
 }
 
-// ─── Encode helpers (modern PixelSlice API) ──────────────────────────────
+// ─── Encode helpers (modern PixelView API) ───────────────────────────────
 
 fn encode_jpeg_rgb8(img: ImgRef<'_, Rgb<u8>>, quality: f32) -> Vec<u8> {
-    let typed: PixelSlice<'_, Rgb<u8>> = PixelSlice::from(img);
+    let view = PixelView::from_imgref(img, ColorSpace::SRGB).expect("from_imgref");
     EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(quality)
-        .encode(typed.erase(), false)
+        .encode(view, false)
         .expect("encode rgb8 jpeg")
         .into_vec()
 }
 
 fn encode_jpeg_rgba8_ignore_alpha(img: ImgRef<'_, Rgba<u8>>, quality: f32) -> Vec<u8> {
-    let typed: PixelSlice<'_, Rgba<u8>> = PixelSlice::from(img);
-    let pixels = typed
-        .with_descriptor(
-            PixelDescriptor::RGBA8_SRGB.with_alpha(Some(zenpixels::AlphaMode::Undefined)),
-        )
-        .erase();
+    let fmt = PixelFormat::RGBX8_SRGB;
+    let bytes: &[u8] = bytemuck::cast_slice(img.buf());
+    let pixels = PixelView::new(
+        bytes,
+        img.width() as u32,
+        img.height() as u32,
+        img.stride() * 4,
+        &fmt,
+    )
+    .expect("PixelView::new");
     EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(quality)
         .encode(pixels, false)
@@ -76,11 +80,11 @@ fn encode_jpeg_rgba8_ignore_alpha(img: ImgRef<'_, Rgba<u8>>, quality: f32) -> Ve
 }
 
 fn encode_jpeg_with_meta(img: ImgRef<'_, Rgb<u8>>, meta: Metadata, quality: f32) -> Vec<u8> {
-    let typed: PixelSlice<'_, Rgb<u8>> = PixelSlice::from(img);
+    let view = PixelView::from_imgref(img, ColorSpace::SRGB).expect("from_imgref");
     EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(quality)
         .with_metadata(meta)
-        .encode(typed.erase(), false)
+        .encode(view, false)
         .expect("encode jpeg with metadata")
         .into_vec()
 }
@@ -99,6 +103,16 @@ fn synthetic_icc(len: usize) -> Vec<u8> {
     v.extend_from_slice(&(len as u32).to_be_bytes());
     while v.len() < len {
         v.push((v.len() as u8).wrapping_mul(31));
+    }
+    if len >= 20 {
+        v[12..16].copy_from_slice(b"mntr");
+        v[16..20].copy_from_slice(b"RGB ");
+    }
+    if len >= 40 {
+        v[36..40].copy_from_slice(b"acsp");
+    }
+    if len >= 132 {
+        v[128..132].copy_from_slice(&0u32.to_be_bytes());
     }
     v
 }

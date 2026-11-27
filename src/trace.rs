@@ -344,9 +344,9 @@ pub struct TraceEntry {
     /// Whether this node materializes (full-frame buffer).
     pub materializes: bool,
 
-    /// Two-axis conversion cost (effort + loss) for implicit format conversions.
+    /// Conversion cost (effort + loss) for implicit format conversions.
     /// `None` for explicit nodes and identity conversions.
-    pub conversion_cost: Option<zenpixels_convert::ConversionCost>,
+    pub conversion_cost: Option<zenpixels_convert::FormatCost>,
 
     /// Runtime notes — content-adaptive decisions, detection results, etc.
     /// Populated during compilation for nodes like CropWhitespace, Analyze.
@@ -370,7 +370,8 @@ impl TraceEntry {
 
     /// Did alpha mode change?
     pub fn alpha_changed(&self) -> bool {
-        self.input_format.has_alpha() != self.output_format.has_alpha()
+        crate::format::format_has_alpha(&self.input_format)
+            != crate::format::format_has_alpha(&self.output_format)
     }
 }
 
@@ -662,7 +663,7 @@ impl TraceAppender {
             origin: None,
             implicit: true,
             implicit_reason: Some(alloc::string::String::from("Analyze sub-chain")),
-            input_format: fmt,
+            input_format: fmt.clone(),
             input_width: w,
             input_height: h,
             output_format: fmt,
@@ -756,7 +757,7 @@ impl Tracer {
         };
 
         let (in_fmt, in_w, in_h) = match upstream {
-            Some(meta) => (meta.format, meta.width, meta.height),
+            Some(meta) => (meta.format.clone(), meta.width, meta.height),
             None => (source.format(), source.width(), source.height()),
         };
 
@@ -777,7 +778,7 @@ impl Tracer {
             origin: None,
             implicit: false,
             implicit_reason: None,
-            input_format: in_fmt,
+            input_format: in_fmt.clone(),
             input_width: in_w,
             input_height: in_h,
             output_format: source.format(),
@@ -803,7 +804,7 @@ impl Tracer {
             // A materializing node drains its whole input into one frame;
             // charge that frame from its first pull to its EOF pull.
             let frame = if materializes {
-                in_w as u64 * in_h as u64 * in_fmt.bytes_per_pixel() as u64
+                in_w as u64 * in_h as u64 * in_fmt.layout.bytes_per_pixel() as u64
             } else {
                 0
             };
@@ -822,7 +823,7 @@ impl Tracer {
     /// When inactive, equivalent to a plain `ensure_format` — checks if conversion
     /// is needed and inserts a `RowConverterOp` if so. Zero allocations when inactive.
     ///
-    /// Computes and records [`ConversionCost`](zenpixels_convert::ConversionCost)
+    /// Computes and records [`FormatCost`](zenpixels_convert::FormatCost)
     /// (effort + loss) in the trace entry when tracing is active.
     pub fn ensure_format(
         &self,
@@ -838,13 +839,19 @@ impl Tracer {
         let in_w = source.width();
         let in_h = source.height();
 
-        let cost = zenpixels_convert::conversion_cost(current, target);
+        let cost = zenpixels_convert::Negotiate::select(
+            &current,
+            core::slice::from_ref(&target),
+            &zenpixels_convert::ConvertPolicy::permissive(),
+        )
+        .map(|n| n.cost);
 
-        let op = crate::ops::RowConverterOp::new(current, target).ok_or_else(|| {
-            crate::error::PipeError::Op(alloc::format!(
-                "no conversion path from {current} to {target}"
-            ))
-        })?;
+        let op =
+            crate::ops::RowConverterOp::new(current.clone(), target.clone()).ok_or_else(|| {
+                crate::error::PipeError::Op(alloc::format!(
+                    "no conversion path from {current:?} to {target:?}"
+                ))
+            })?;
         let result: Box<dyn crate::Source> =
             Box::new(crate::sources::TransformSource::new(source).push(op));
 
@@ -852,6 +859,7 @@ impl Tracer {
         if let Some(trace_arc) = &self.inner {
             let mut trace = trace_arc.lock().unwrap();
             let trace_order = trace.len();
+            let (effort, loss) = cost.map_or((0, 0), |c| (c.effort, c.loss_rank));
             trace.push(TraceEntry {
                 index: usize::MAX,
                 trace_order,
@@ -861,8 +869,8 @@ impl Tracer {
                     format_short(&current),
                     format_short(&target),
                     reason,
-                    cost.effort,
-                    cost.loss,
+                    effort,
+                    loss,
                 ),
                 origin: None,
                 implicit: true,
@@ -877,7 +885,7 @@ impl Tracer {
                 output_width: in_w,
                 output_height: in_h,
                 materializes: false,
-                conversion_cost: Some(cost),
+                conversion_cost: cost,
                 notes: Vec::new(),
                 timing: None,
             });
@@ -915,7 +923,7 @@ impl Tracer {
             origin: None,
             implicit: true,
             implicit_reason: Some(alloc::string::String::from(reason)),
-            input_format,
+            input_format: input_format.clone(),
             input_width: input_w,
             input_height: input_h,
             output_format: input_format,
@@ -1082,7 +1090,7 @@ impl PipelineTrace {
             if let Some(ref cost) = e.conversion_cost {
                 out.push_str(&format!(
                     "        cost: effort={} loss={}\n",
-                    cost.effort, cost.loss
+                    cost.effort, cost.loss_rank
                 ));
             }
             // Show runtime notes indented below the entry.
@@ -1218,7 +1226,7 @@ impl PipelineTrace {
             }
 
             if e.alpha_changed() {
-                let label = if e.output_format.has_alpha() {
+                let label = if crate::format::format_has_alpha(&e.output_format) {
                     "+a"
                 } else {
                     "-a"
@@ -1953,7 +1961,7 @@ impl FullPipelineTrace {
 
 /// Short human-readable format description.
 pub fn format_short(fmt: &PixelFormat) -> String {
-    let layout = match (fmt.channels(), fmt.bytes_per_pixel()) {
+    let layout = match (fmt.layout.channels(), fmt.layout.bytes_per_pixel()) {
         (4, 4) => "RGBA8",
         (3, 3) => "RGB8",
         (4, 16) => "RGBAF32",
@@ -1962,8 +1970,16 @@ pub fn format_short(fmt: &PixelFormat) -> String {
         (1, 1) => "Gray8",
         _ => "?",
     };
-    let transfer = if fmt.is_linear() { "Lin" } else { "sRGB" };
-    let alpha = if fmt.has_alpha() { " +a" } else { "" };
+    let transfer = if crate::format::format_is_linear(fmt) {
+        "Lin"
+    } else {
+        "sRGB"
+    };
+    let alpha = if crate::format::format_has_alpha(fmt) {
+        " +a"
+    } else {
+        ""
+    };
     format!("{layout} {transfer}{alpha}")
 }
 

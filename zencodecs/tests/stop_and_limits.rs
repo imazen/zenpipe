@@ -659,9 +659,8 @@ fn encode_animated_gif(w: u32, h: u32, frames: u32) -> Vec<u8> {
             p[2] = 200;
             p[3] = 255;
         }
-        let ps =
-            zenpixels::PixelSlice::new(&px, w, h, stride, zenpixels::PixelDescriptor::RGBA8_SRGB)
-                .expect("pixel slice");
+        let ps = zenpixels::PixelView::new(&px, w, h, stride, &zenpixels::formats::RGBA8_SRGB)
+            .expect("pixel view");
         enc.push_frame(ps, 100, None).expect("push_frame");
     }
     enc.finish(None).expect("finish").into_vec()
@@ -713,20 +712,20 @@ fn limits_animation_total_pixels_cuts_off_mid_stream() {
 /// Minimal collecting sink for the to-sink path.
 struct CollectSink {
     buf: Vec<u8>,
+    pending_format: Option<zenpixels::PixelFormat>,
 }
 
 impl zencodec::decode::DecodeRowSink for CollectSink {
     fn provide_next_buffer(
         &mut self,
-        _y: u32,
-        height: u32,
-        width: u32,
-        descriptor: zenpixels::PixelDescriptor,
-    ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
-        let stride = width as usize * descriptor.bytes_per_pixel();
-        self.buf.resize(stride * height as usize, 0);
+        strip: zencodec::decode::RowStrip,
+        pixel_format: zenpixels::PixelFormat,
+    ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
+        let stride = strip.width as usize * pixel_format.layout.bytes_per_pixel();
+        self.buf.resize(stride * strip.height as usize, 0);
+        let fmt = self.pending_format.insert(pixel_format);
         Ok(
-            zenpixels::PixelSliceMut::new(&mut self.buf, width, height, stride, descriptor)
+            zenpixels::PixelViewMut::new(&mut self.buf, strip.width, strip.height, stride, fmt)
                 .expect("buffer sized correctly"),
         )
     }
@@ -741,13 +740,19 @@ fn limits_animation_total_pixels_to_sink_path() {
         .with_limits(&limits)
         .animation_frame_decoder()
         .expect("animation decoder");
-    let mut sink = CollectSink { buf: Vec::new() };
+    let mut sink = CollectSink {
+        buf: Vec::new(),
+        pending_format: None,
+    };
     assert!(
         dec.render_next_frame_to_sink(None, &mut sink)
             .expect("frame 0")
             .is_some()
     );
-    let mut sink = CollectSink { buf: Vec::new() };
+    let mut sink = CollectSink {
+        buf: Vec::new(),
+        pending_format: None,
+    };
     let second = dec.render_next_frame_to_sink(None, &mut sink);
     assert!(
         second.is_err(),

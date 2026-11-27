@@ -264,7 +264,7 @@ pub(crate) fn encode_ultrahdr_rgb_f32(
         rgba_data,
         width,
         height,
-        UhdrPixelFormat::RgbaF32,
+        UhdrPixelFormat::RGBAF32,
         uhdr_gamut_from_metadata(metadata)?,
         UhdrColorTransfer::Linear,
     )
@@ -324,7 +324,7 @@ pub(crate) fn encode_ultrahdr_rgba_f32(
         rgba_bytes.to_vec(),
         width,
         height,
-        UhdrPixelFormat::RgbaF32,
+        UhdrPixelFormat::RGBAF32,
         uhdr_gamut_from_metadata(metadata)?,
         UhdrColorTransfer::Linear,
     )
@@ -368,8 +368,8 @@ pub(crate) fn encode_with_precomputed_gainmap(
 
     let stop_token: &dyn enough::Stop = &pulse;
     let pixel_format = match channels {
-        3 => UhdrPixelFormat::Rgb8,
-        4 => UhdrPixelFormat::Rgba8,
+        3 => UhdrPixelFormat::RGB8,
+        4 => UhdrPixelFormat::RGBA8,
         _ => {
             return Err(at!(CodecError::InvalidInput(alloc::format!(
                 "unsupported {channels} channels for gain map encode"
@@ -496,14 +496,9 @@ mod metadata_retention_tests {
             (MetadataPolicy::Web, true),
             (MetadataPolicy::ColorAndRotation, false),
         ] {
-            let view = zenpixels::PixelSlice::new(
-                &pixels,
-                16,
-                16,
-                48,
-                zenpixels::PixelDescriptor::RGB8_SRGB,
-            )
-            .unwrap();
+            let view =
+                zenpixels::PixelView::new(&pixels, 16, 16, 48, &zenpixels::formats::RGB8_SRGB)
+                    .unwrap();
             let output = crate::EncodeRequest::new(ImageFormat::Jpeg)
                 .with_metadata(meta.clone())
                 .with_metadata_policy(policy)

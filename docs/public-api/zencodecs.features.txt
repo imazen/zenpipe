@@ -12,7 +12,7 @@
 #   pub modules                                 5
 #   pub types (struct/enum/trait/alias)        11
 #   free functions                              3
-#   inherent methods                           46
+#   inherent methods                           47
 #   struct fields                              15
 #   enum variants                              40
 #   re-exports                                 33
@@ -22,12 +22,12 @@
 #
 # per-module pub lines:
 #   (root)                           31
-#   checked_transcode                68
+#   checked_transcode                69
 #   config                           20
 #   gainmap                          16
 #   metadata                         18
 
-## items (150 lines)
+## items (151 lines)
 
 pub use GainMap
 pub use GainMapMetadata
@@ -88,27 +88,28 @@ pub checked_transcode::Stage::Verify
 pub struct checked_transcode::Error
 pub fn checked_transcode::Error::report(&self) -> &zencodec::operation::policy::OperationReport
 pub fn checked_transcode::Error::stage(&self) -> checked_transcode::Stage
-pub struct checked_transcode::TranscodeRequest<'a>
-pub async fn checked_transcode::TranscodeRequest<'_>::transcode_async<S: zencodec_io::tokio_io::AsyncSource + ?core::marker::Sized>(&self, &zencodec::set::CodecSet, &mut S) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>>
-pub async fn checked_transcode::TranscodeRequest<'_>::transcode_async_with<S, R>(&self, &zencodec::set::CodecSet, &mut S, &mut R) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>> where S: zencodec_io::tokio_io::AsyncSource + ?core::marker::Sized, R: zencodec::operation::binding::OperationPolicy + ?core::marker::Sized
-pub fn checked_transcode::TranscodeRequest<'_>::transcode_for_publication<R: zencodec::operation::binding::OperationPolicy + ?core::marker::Sized>(&self, &zencodec::set::CodecSet, &[u8], &mut R) -> core::result::Result<checked_transcode::publication::VerifiedOutput, whereat::at::At<checked_transcode::Error>>
-pub fn checked_transcode::TranscodeRequest<'a>::new(zencodec::format::ImageFormat) -> Self
-pub fn checked_transcode::TranscodeRequest<'a>::preferring_fidelity(self, alloc::vec::Vec<zencodec::fidelity::Fidelity>) -> Self
-pub fn checked_transcode::TranscodeRequest<'a>::transcode(&self, &zencodec::set::CodecSet, &[u8]) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>>
-pub fn checked_transcode::TranscodeRequest<'a>::transcode_from_read_at<S: zencodec::source::ReadAt + ?core::marker::Sized>(&self, &zencodec::set::CodecSet, &mut S) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>>
-pub fn checked_transcode::TranscodeRequest<'a>::transcode_from_read_at_with<S, R>(&self, &zencodec::set::CodecSet, &mut S, &mut R) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>> where S: zencodec::source::ReadAt + ?core::marker::Sized, R: zencodec::operation::binding::OperationPolicy + ?core::marker::Sized
-pub fn checked_transcode::TranscodeRequest<'a>::transcode_with<R: zencodec::operation::binding::OperationPolicy + ?core::marker::Sized>(&self, &zencodec::set::CodecSet, &[u8], &mut R) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>>
-pub fn checked_transcode::TranscodeRequest<'a>::with_cms(self, &'a dyn zenpixels_convert::cms::PluggableCms) -> Self
-pub fn checked_transcode::TranscodeRequest<'a>::with_decode(self, zencodec::operation::DecodeRequest) -> Self
-pub fn checked_transcode::TranscodeRequest<'a>::with_encode_policy(self, zencodec::policy::EncodePolicy) -> Self
-pub fn checked_transcode::TranscodeRequest<'a>::with_fidelity(self, zencodec::fidelity::Fidelity) -> Self
-pub fn checked_transcode::TranscodeRequest<'a>::with_io_options(self, zencodec_io::drive::DriveOptions) -> Self
-pub fn checked_transcode::TranscodeRequest<'a>::with_metadata(self, zencodec::operation::transcode::MetadataTransfer) -> Self
-pub fn checked_transcode::TranscodeRequest<'a>::with_output(self, zenpixels_convert::output::OutputProfile, zenpixels::descriptor::PixelFormat, zenpixels::policy::ConvertOptions) -> Self
-pub fn checked_transcode::TranscodeRequest<'a>::with_output_limit(self, usize) -> Self
-pub fn checked_transcode::TranscodeRequest<'a>::with_policy_set(self, zencodec::operation::policy::PolicySet) -> Self
-pub fn checked_transcode::TranscodeRequest<'a>::with_storage(self, zencodec::storage::StorageBudget) -> Self
-pub fn checked_transcode::TranscodeRequest<'a>::with_strip_rows(self, u32) -> Self
+pub struct checked_transcode::TranscodeRequest
+pub fn checked_transcode::TranscodeRequest::new(zencodec::format::ImageFormat) -> Self
+pub fn checked_transcode::TranscodeRequest::preferring_fidelity(self, alloc::vec::Vec<zencodec::fidelity::Fidelity>) -> Self
+pub fn checked_transcode::TranscodeRequest::transcode(&self, &zencodec::set::CodecSet, &[u8]) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>>
+pub fn checked_transcode::TranscodeRequest::transcode_from_read_at<S: zencodec::source::ReadAt + ?core::marker::Sized>(&self, &zencodec::set::CodecSet, &mut S) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>>
+pub fn checked_transcode::TranscodeRequest::transcode_from_read_at_with<S, R>(&self, &zencodec::set::CodecSet, &mut S, &mut R) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>> where S: zencodec::source::ReadAt + ?core::marker::Sized, R: zencodec::operation::binding::OperationPolicy + ?core::marker::Sized
+pub fn checked_transcode::TranscodeRequest::transcode_with<R: zencodec::operation::binding::OperationPolicy + ?core::marker::Sized>(&self, &zencodec::set::CodecSet, &[u8], &mut R) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>>
+pub fn checked_transcode::TranscodeRequest::with_cms(self, alloc::rcs::arc::Arc<dyn zenpixels_convert::cms::CmsBackend>) -> Self
+pub fn checked_transcode::TranscodeRequest::with_decode(self, zencodec::operation::DecodeOptions) -> Self
+pub fn checked_transcode::TranscodeRequest::with_encode_policy(self, zencodec::policy::EncodePolicy) -> Self
+pub fn checked_transcode::TranscodeRequest::with_fidelity(self, zencodec::fidelity::Fidelity) -> Self
+pub fn checked_transcode::TranscodeRequest::with_io_options(self, zencodec_io::drive::DriveOptions) -> Self
+pub fn checked_transcode::TranscodeRequest::with_metadata(self, zencodec::operation::transcode::MetadataTransfer) -> Self
+pub fn checked_transcode::TranscodeRequest::with_output(self, zenpixels::color::PixelFormat, zenpixels_convert::policy::ConvertPolicy) -> Self
+pub fn checked_transcode::TranscodeRequest::with_output_limit(self, usize) -> Self
+pub fn checked_transcode::TranscodeRequest::with_policy_set(self, zencodec::operation::policy::PolicySet) -> Self
+pub fn checked_transcode::TranscodeRequest::with_signaling(self, zenpixels_convert::output::OutputSignaling) -> Self
+pub fn checked_transcode::TranscodeRequest::with_storage(self, zencodec::storage::StorageBudget) -> Self
+pub fn checked_transcode::TranscodeRequest::with_strip_rows(self, u32) -> Self
+pub async fn checked_transcode::TranscodeRequest::transcode_async<S: zencodec_io::tokio_io::AsyncSource + ?core::marker::Sized>(&self, &zencodec::set::CodecSet, &mut S) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>>
+pub async fn checked_transcode::TranscodeRequest::transcode_async_with<S, R>(&self, &zencodec::set::CodecSet, &mut S, &mut R) -> core::result::Result<zencodec::operation::Outcome<zencodec::output::EncodeOutput>, whereat::at::At<checked_transcode::Error>> where S: zencodec_io::tokio_io::AsyncSource + ?core::marker::Sized, R: zencodec::operation::binding::OperationPolicy + ?core::marker::Sized
+pub fn checked_transcode::TranscodeRequest::transcode_for_publication<R: zencodec::operation::binding::OperationPolicy + ?core::marker::Sized>(&self, &zencodec::set::CodecSet, &[u8], &mut R) -> core::result::Result<checked_transcode::publication::VerifiedOutput, whereat::at::At<checked_transcode::Error>>
 pub mod config::jpeg::ultrahdr
 pub use config::jpeg::ultrahdr::AdaptiveTonemapper
 pub use config::jpeg::ultrahdr::GainMap
@@ -185,7 +186,7 @@ pub fn transcode_to_hdr_pq_png(&[u8], &AllowedFormats, core::option::Option<f32>
 checked_transcode::Error: Debug, Display, Error
 checked_transcode::Refusal: Clone, Copy, Debug, Display, Eq, Error, PartialEq
 checked_transcode::Stage: Clone, Copy, Debug, Eq, PartialEq
-checked_transcode::TranscodeRequest<'a>: Clone
+checked_transcode::TranscodeRequest: Clone
 checked_transcode::publication::PublicationError: Debug, Display, Error
 checked_transcode::publication::VerifiedOutput: Debug
 gainmap::DecodedGainMap: Clone, Debug
@@ -195,6 +196,6 @@ metadata::ScrubRequest<'a>: Clone
 
 5 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 checked_transcode::Error: !RefUnwindSafe !UnwindSafe
-checked_transcode::TranscodeRequest<'a>: !RefUnwindSafe !UnwindSafe
+checked_transcode::TranscodeRequest: !RefUnwindSafe !UnwindSafe
 checked_transcode::publication::PublicationError: !RefUnwindSafe !UnwindSafe
 metadata::ScrubRequest<'a>: !RefUnwindSafe !Send !Sync !UnwindSafe

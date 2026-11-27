@@ -257,8 +257,8 @@ fn make_exact_overlay_materialize(overlay: ExactOverlayNode) -> NodeOp {
                         ))
                     };
 
-                let bpp = fmt.bytes_per_pixel();
-                let canvas_stride = fmt.aligned_stride(canvas_w);
+                let bpp = fmt.layout.bytes_per_pixel();
+                let canvas_stride = crate::format::aligned_stride(fmt, canvas_w);
                 let ov_stride = target_w as usize * 4;
 
                 for oy in 0..target_h {
@@ -387,8 +387,8 @@ fn make_red_dot_materialize() -> NodeOp {
                 if iw < 3 || ih < 3 {
                     return; // Canvas too small for the dot.
                 }
-                let bpp = fmt.bytes_per_pixel();
-                let stride = fmt.aligned_stride(iw);
+                let bpp = fmt.layout.bytes_per_pixel();
+                let stride = crate::format::aligned_stride(fmt, iw);
 
                 // Red color: RGBA = (255, 0, 0, 255)
                 let red: [u8; 4] = [255, 0, 0, 255];
@@ -447,8 +447,8 @@ fn make_watermark_materialize(overlay: WatermarkOverlayNode) -> NodeOp {
                 );
 
                 // Composite the watermark onto the canvas.
-                let bpp = fmt.bytes_per_pixel();
-                let canvas_stride = fmt.aligned_stride(canvas_w);
+                let bpp = fmt.layout.bytes_per_pixel();
+                let canvas_stride = crate::format::aligned_stride(fmt, canvas_w);
                 let wm_stride = target_w as usize * 4; // Watermark is always RGBA8.
                 let opacity = overlay.opacity;
 
@@ -582,7 +582,7 @@ fn resize_rgba8(src: &[u8], src_w: u32, src_h: u32, dst_w: u32, dst_h: u32) -> V
 
     let config = zenresize::ResizeConfig::builder(src_w, src_h, dst_w, dst_h)
         .filter(zenresize::Filter::Robidoux)
-        .format(zenresize::PixelDescriptor::RGBA8_SRGB)
+        .format(zenresize::PixelFormat::RGBA8_SRGB)
         .build();
 
     zenresize::Resizer::new(&config).resize(src)
@@ -608,8 +608,11 @@ pub fn decode_watermark(
 
     let w = decoded.width();
     let h = decoded.height();
-    let descriptor = decoded.descriptor();
-    let raw_bytes = decoded.into_buffer().copy_to_contiguous_bytes();
+    let descriptor = decoded.pixel_format().clone();
+    let raw_bytes = decoded
+        .into_buffer()
+        .into_vec::<u8>()
+        .map_err(|e| ZenError::Codec(format!("watermark buffer: {e}")))?;
 
     // Convert to RGBA8 sRGB using zenpipe's format conversion.
     let target_format = crate::format::RGBA8_SRGB;
@@ -621,7 +624,7 @@ pub fn decode_watermark(
             crate::sources::MaterializedSource::from_data(raw_bytes, w, h, descriptor),
         );
         let src_format = source.format();
-        let converter = crate::ops::RowConverterOp::new(src_format, target_format)
+        let converter = crate::ops::RowConverterOp::new(src_format.clone(), target_format.clone())
             .ok_or_else(|| {
                 ZenError::Codec(format!(
                     "watermark pixel format conversion not supported: {src_format:?} -> {target_format:?}"

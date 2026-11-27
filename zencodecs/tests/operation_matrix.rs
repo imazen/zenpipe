@@ -12,9 +12,9 @@
 use zencodec::encode::{DynEncoderConfig, EncoderConfig, Fidelity};
 use zencodecs::{
     AllowedFormats, DecodeRequest, EncodeRequest, FormatDecision, ImageFormat, MetadataPolicy,
-    PixelBufferConvertTypedExt, SupplementPolicy, TranscodeColor, TranscodeOptions,
+    SupplementPolicy, TranscodeColor, TranscodeOptions,
 };
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelFormat, PixelView};
 
 type InventoryCheck = dyn Fn(&[u8]) -> zencodec_testkit::Conformance;
 
@@ -314,11 +314,82 @@ fn rgb_bytes(width: u32, height: u32, padding: usize) -> (Vec<u8>, usize) {
     }
     (bytes, stride)
 }
+fn normalize_unknown_color<'a>(view: PixelView<'a>) -> PixelView<'a> {
+    let fmt = view.format();
+    let default_tf = if fmt.layout.sample.is_float() {
+        zenpixels::Transfer::Linear
+    } else {
+        zenpixels::Transfer::Srgb
+    };
+    let color = match &fmt.color {
+        zenpixels::ColorSpace::Rgb {
+            primaries,
+            transfer,
+            range,
+            alpha,
+            white,
+        } if *primaries == zenpixels::Primaries::Unknown
+            || *transfer == zenpixels::Transfer::Unknown =>
+        {
+            zenpixels::ColorSpace::Rgb {
+                primaries: if *primaries == zenpixels::Primaries::Unknown {
+                    zenpixels::Primaries::Bt709
+                } else {
+                    *primaries
+                },
+                transfer: if *transfer == zenpixels::Transfer::Unknown {
+                    default_tf
+                } else {
+                    *transfer
+                },
+                range: *range,
+                alpha: *alpha,
+                white: *white,
+            }
+        }
+        zenpixels::ColorSpace::Gray {
+            transfer: zenpixels::Transfer::Unknown,
+            range,
+            alpha,
+            white,
+        } => zenpixels::ColorSpace::Gray {
+            transfer: default_tf,
+            range: *range,
+            alpha: *alpha,
+            white: *white,
+        },
+        _ => return view,
+    };
+    let norm = PixelFormat::new(fmt.layout, color);
+    let mut out = PixelView::new_with_format_cow(
+        view.as_strided_bytes(),
+        view.width(),
+        view.height(),
+        view.stride_bytes(),
+        zenpixels::FormatCow::from_owned(norm),
+    )
+    .expect("relabel view")
+    .with_assumed_facts(view.facts())
+    .with_hdr(view.hdr())
+    .with_orientation(view.orientation());
+    if let Some(origin) = view.origin() {
+        out = out.with_origin(origin);
+    }
+    out
+}
+
 fn decode_rgb(bytes: &[u8]) -> Result<Vec<rgb::Rgb<u8>>, String> {
     let image = DecodeRequest::new(bytes)
         .decode_full_frame()
         .map_err(|e| e.to_string())?;
-    Ok(image.into_buffer().to_rgb8().as_imgref().buf().to_vec())
+    let view = normalize_unknown_color(image.pixels());
+    let rgb = zenpixels_convert::convert_to_buf(
+        &view,
+        PixelFormat::RGB8_SRGB,
+        &zenpixels_convert::ConvertPolicy::permissive(),
+    )
+    .map_err(|e| e.to_string())?;
+    rgb.into_vec::<rgb::Rgb<u8>>().map_err(|e| e.to_string())
 }
 
 #[test]
@@ -345,7 +416,7 @@ fn exhaustive_registered_still_routes_and_fidelity_targets() {
             if let Ok(job) = selected {
                 let (samples, stride) = rgb_bytes(7, 5, 6);
                 let pixels =
-                    PixelSlice::new(&samples, 7, 5, stride, PixelDescriptor::RGB8_SRGB).unwrap();
+                    PixelView::new(&samples, 7, 5, stride, &zenpixels::formats::RGB8_SRGB).unwrap();
                 let expected: Vec<_> = (0..5)
                     .flat_map(|y| {
                         pixels
@@ -441,8 +512,16 @@ fn exhaustive_registered_still_routes_and_fidelity_targets() {
     for (width, height, padding) in [(1, 1, 0), (7, 5, 12), (17, 9, 6)] {
         let fixture = format!("rgb8-{width}x{height}-pad{padding}");
         let (bytes, stride) = rgb_bytes(width, height, padding);
-        let input =
-            || PixelSlice::new(&bytes, width, height, stride, PixelDescriptor::RGB8_SRGB).unwrap();
+        let input = || {
+            PixelView::new(
+                &bytes,
+                width,
+                height,
+                stride,
+                &zenpixels::formats::RGB8_SRGB,
+            )
+            .unwrap()
+        };
         let expected: Vec<_> = (0..height)
             .flat_map(|y| {
                 input()
@@ -581,12 +660,12 @@ fn exhaustive_registered_still_routes_and_fidelity_targets() {
                 let result = if destination.native_backend {
                     let samples: Vec<_> =
                         source_pixels.iter().flat_map(|p| [p.r, p.g, p.b]).collect();
-                    let pixels = PixelSlice::new(
+                    let pixels = PixelView::new(
                         &samples,
                         width,
                         height,
                         width as usize * 3,
-                        PixelDescriptor::RGB8_SRGB,
+                        &zenpixels::formats::RGB8_SRGB,
                     )
                     .unwrap();
                     destination
@@ -607,10 +686,16 @@ fn exhaustive_registered_still_routes_and_fidelity_targets() {
                     if decoded.width() != width || decoded.height() != height {
                         return Err("wrong dimensions".into());
                     }
-                    let actual = decoded.into_buffer().to_rgb8();
-                    if destination.exact_rgb8
-                        && *actual.as_imgref().buf() != source_pixels.as_slice()
-                    {
+                    let view = normalize_unknown_color(decoded.pixels());
+                    let actual: Vec<rgb::Rgb<u8>> = zenpixels_convert::convert_to_buf(
+                        &view,
+                        PixelFormat::RGB8_SRGB,
+                        &zenpixels_convert::ConvertPolicy::permissive(),
+                    )
+                    .map_err(|e| e.to_string())?
+                    .into_vec()
+                    .map_err(|e| e.to_string())?;
+                    if destination.exact_rgb8 && actual.as_slice() != source_pixels.as_slice() {
                         return Err("lossless destination changed source RGB8 samples".into());
                     }
                     if let Some(pixels) = external_rgb(destination.format, &out)? {
@@ -676,8 +761,8 @@ fn animation_order_exact_timing_and_typed_refusal() {
     use zencodec_testkit::{ExpectedError, TimingCase, check_animation_cases};
     let a = [20, 80, 140, 255].repeat(16 * 8);
     let b = [180, 40, 100, 255].repeat(16 * 8);
-    let a = PixelSlice::new(&a, 16, 8, 16 * 4, PixelDescriptor::RGBA8_SRGB).unwrap();
-    let b = PixelSlice::new(&b, 16, 8, 16 * 4, PixelDescriptor::RGBA8_SRGB).unwrap();
+    let a = PixelView::new(&a, 16, 8, 16 * 4, &zenpixels::formats::RGBA8_SRGB).unwrap();
+    let b = PixelView::new(&b, 16, 8, 16 * 4, &zenpixels::formats::RGBA8_SRGB).unwrap();
     let rejected = ExpectedError::Unsupported(zencodec::UnsupportedOperation::AnimationTiming);
     let cases = [
         TimingCase {
@@ -748,15 +833,9 @@ fn structural_prefixes_distinguish_payload_from_trailer() {
     bytes.extend_from_slice(&pixels);
     let payload_end = bytes.len();
     bytes.extend_from_slice(&[0; 1024]);
-    // Current PNM adapter preserves sample values without attaching a transfer.
-    let expected = PixelSlice::new(
-        &pixels,
-        2,
-        1,
-        6,
-        PixelDescriptor::RGB8_SRGB.with_transfer(zenpixels::TransferFunction::Unknown),
-    )
-    .unwrap();
+    // PNM adapter decodes P6 samples as sRGB RGB8.
+    let expected_fmt = PixelFormat::RGB8_SRGB;
+    let expected = PixelView::new(&pixels, 2, 1, 6, &expected_fmt).unwrap();
     let cases = [
         PrefixCase {
             end: payload_end - 1,

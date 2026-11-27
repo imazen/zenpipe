@@ -9,12 +9,10 @@
 
 #![cfg(all(feature = "bitmaps", feature = "png"))]
 
-use std::sync::Arc;
-
 use zencodec::Metadata;
 use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat};
-use zenpixels::{Cicp, ColorContext, ColorOrigin, PixelBuffer, PixelDescriptor, PixelSlice};
-use zenpixels_convert::{OutputProfile, finalize_for_output_with};
+use zenpixels::{Cicp, PeakSource, PixelBuf, PixelFormat, PixelView, Primaries};
+use zenpixels_convert::{ConvertPolicy, OutputPlan, OutputSignaling};
 
 const W: u32 = 9;
 const H: u32 = 5;
@@ -33,8 +31,8 @@ fn pixels() -> Vec<u8> {
         .collect()
 }
 
-fn slice(px: &[u8]) -> PixelSlice<'_> {
-    PixelSlice::new(px, W, H, W as usize * 3, PixelDescriptor::RGB8_SRGB).unwrap()
+fn slice(px: &[u8]) -> PixelView<'_> {
+    PixelView::new(px, W, H, W as usize * 3, &zenpixels::formats::RGB8_SRGB).unwrap()
 }
 
 fn encode(format: ImageFormat, px: &[u8], meta: Metadata) -> Vec<u8> {
@@ -50,11 +48,13 @@ fn encode_streaming(format: ImageFormat, px: &[u8], meta: Metadata) -> Vec<u8> {
         .with_metadata(meta)
         .build_streaming_encoder(W, H)
         .unwrap();
-    se.encoder.begin(W, H, PixelDescriptor::RGB8_SRGB).unwrap();
+    se.encoder.begin(W, H, PixelFormat::RGB8_SRGB).unwrap();
     for y in 0..H {
         let row = &px[(y * W * 3) as usize..((y + 1) * W * 3) as usize];
         se.encoder
-            .push_rows(PixelSlice::new(row, W, 1, row.len(), PixelDescriptor::RGB8_SRGB).unwrap())
+            .push_rows(
+                PixelView::new(row, W, 1, row.len(), &zenpixels::formats::RGB8_SRGB).unwrap(),
+            )
             .unwrap();
     }
     let mut out = Vec::new();
@@ -65,7 +65,7 @@ fn encode_streaming(format: ImageFormat, px: &[u8], meta: Metadata) -> Vec<u8> {
 
 fn decoded_rgb(bytes: &[u8]) -> Vec<u8> {
     let d = DecodeRequest::new(bytes).decode_full_frame().unwrap();
-    assert_eq!(d.descriptor().layout(), zenpixels::ChannelLayout::Rgb);
+    assert_eq!(d.pixel_format().layout.order, zenpixels::ChannelOrder::Rgb);
     let px = d.pixels();
     (0..H)
         .flat_map(|y| px.row(y)[..(W * 3) as usize].to_vec())
@@ -74,20 +74,18 @@ fn decoded_rgb(bytes: &[u8]) -> Vec<u8> {
 
 /// What the pixels are in sRGB when they are actually Display P3.
 fn p3_to_srgb(px: &[u8]) -> Vec<u8> {
-    let desc = PixelDescriptor::RGB8_SRGB.with_primaries(zenpixels::ColorPrimaries::DisplayP3);
-    let buf = PixelBuffer::from_vec(px.to_vec(), W, H, desc)
-        .unwrap()
-        .with_color_context(Arc::new(ColorContext::from_cicp(Cicp::DISPLAY_P3)));
-    let ready = finalize_for_output_with(
-        &buf,
-        &ColorOrigin::from_cicp(Cicp::DISPLAY_P3),
-        OutputProfile::Named(Cicp::SRGB),
-        desc.pixel_format(),
-        None,
+    let src_fmt = PixelFormat::RGB8_SRGB.with_primaries(Primaries::DisplayP3);
+    let buf = PixelBuf::from_bytes(px.to_vec(), W, H, src_fmt.clone()).unwrap();
+    let plan = OutputPlan::build(
+        &src_fmt,
+        &zenpixels::formats::RGB8_SRGB,
+        &ConvertPolicy::permissive(),
+        PeakSource::Declared,
+        OutputSignaling::Strip,
     )
     .unwrap();
-    let (out, _) = ready.into_parts();
-    let s = out.as_slice();
+    let ready = plan.execute_buf(buf).unwrap();
+    let s = ready.pixels.as_view();
     (0..H)
         .flat_map(|y| s.row(y)[..(W * 3) as usize].to_vec())
         .collect()
@@ -211,10 +209,7 @@ fn strict_allows_fits_that_lose_nothing() {
         .with_encode_policy(strict())
         .build_streaming_encoder(W, H)
         .unwrap();
-    encoder
-        .encoder
-        .begin(W, H, PixelDescriptor::RGB8_SRGB)
-        .unwrap();
+    encoder.encoder.begin(W, H, PixelFormat::RGB8_SRGB).unwrap();
     encoder.encoder.push_rows(slice(&px)).unwrap();
     let streamed = encoder.encoder.finish().unwrap().into_vec();
     assert_eq!(decoded_rgb(&streamed), px);
@@ -229,9 +224,8 @@ fn strict_allows_fits_that_lose_nothing() {
 #[test]
 fn strict_refuses_conversion_when_descriptor_matches_source_color() {
     let px = pixels();
-    let descriptor =
-        PixelDescriptor::RGB8_SRGB.with_primaries(zenpixels::ColorPrimaries::DisplayP3);
-    let source = PixelSlice::new(&px, W, H, W as usize * 3, descriptor).unwrap();
+    let descriptor = PixelFormat::RGB8_SRGB.with_primaries(Primaries::DisplayP3);
+    let source = PixelView::new(&px, W, H, W as usize * 3, &descriptor).unwrap();
     let make = || {
         EncodeRequest::new(ImageFormat::Pnm)
             .with_metadata(Metadata::none().with_cicp(Cicp::DISPLAY_P3))

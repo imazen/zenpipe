@@ -379,10 +379,8 @@ impl Filter for FilmLook {
             return;
         }
 
-        use zenpixels_convert::oklab;
-        let m1_inv = oklab::lms_to_rgb_matrix(zenpixels::ColorPrimaries::Bt709)
-            .expect("BT.709 always supported");
-        let m1 = oklab::rgb_to_lms_matrix(zenpixels::ColorPrimaries::Bt709)
+        use zenpixels_convert::oklab::OklabSpace;
+        let space = OklabSpace::for_primaries(zenpixels::Primaries::Bt709)
             .expect("BT.709 always supported");
 
         let n = planes.pixel_count();
@@ -390,7 +388,7 @@ impl Filter for FilmLook {
         let inv_blend = 1.0 - blend;
 
         for i in 0..n {
-            let [r, g, b] = oklab::oklab_to_rgb(planes.l[i], planes.a[i], planes.b[i], &m1_inv);
+            let [r, g, b] = space.to_rgb([planes.l[i], planes.a[i], planes.b[i]]);
             let rgb = [r.max(0.0), g.max(0.0), b.max(0.0)];
             let lut_rgb = self.tensor.lookup(rgb);
 
@@ -398,7 +396,7 @@ impl Filter for FilmLook {
             let g2 = inv_blend * g + blend * lut_rgb[1];
             let b2 = inv_blend * b + blend * lut_rgb[2];
 
-            let [l, oa, ob] = oklab::rgb_to_oklab(r2.max(0.0), g2.max(0.0), b2.max(0.0), &m1);
+            let [l, oa, ob] = space.from_rgb([r2.max(0.0), g2.max(0.0), b2.max(0.0)]);
             planes.l[i] = l;
             planes.a[i] = oa;
             planes.b[i] = ob;
@@ -1240,9 +1238,10 @@ mod tests {
     fn all_presets_visibly_change_pixels() {
         // Feed colorful sRGB pixels through scatter→filter→gather and verify
         // the output differs from input for every preset.
-        use zenpixels_convert::oklab;
+        use zenpixels_convert::oklab::OklabSpace;
 
-        let m1 = oklab::rgb_to_lms_matrix(zenpixels::ColorPrimaries::Bt709).unwrap();
+        let space = OklabSpace::for_primaries(zenpixels::Primaries::Bt709).unwrap();
+        let m1 = *space.rgb_to_lms();
         let srgb: Vec<u8> = vec![
             200, 50, 50, // red
             50, 200, 50, // green

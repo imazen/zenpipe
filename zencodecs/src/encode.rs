@@ -2,7 +2,7 @@
 //!
 //! Uses [`dispatch::build_encoder`](crate::dispatch::build_encoder) for format dispatch.
 //! Each codec's `Encoder` trait impl handles pixel format dispatch internally;
-//! pixel format negotiation is handled by [`zenpixels_convert::adapt::adapt_for_encode_cow`].
+//! pixel format negotiation is handled by [`zenpixels_convert::adapt_for_encode`].
 
 use crate::config::CodecConfig;
 use crate::dispatch::EncodeParams;
@@ -21,7 +21,7 @@ use crate::{AllowedFormats, CodecError, ImageFormat, Limits, Metadata, SharedPul
 use whereat::at;
 use zencodec::encode::EncodePolicy;
 use zencodec::{ColorEmitPolicy, MetadataPolicy};
-use zenpixels::PixelDescriptor;
+use zenpixels::{ColorSpace, PixelFormat, PixelView};
 
 pub use zencodec::encode::EncodeOutput;
 
@@ -31,12 +31,12 @@ pub use zencodec::encode::EncodeOutput;
 ///
 /// ```no_run
 /// use zencodecs::{EncodeRequest, ImageFormat};
-/// use zenpixels::{PixelBuffer, PixelDescriptor};
+/// use zenpixels::{PixelBuf, PixelFormat};
 ///
-/// let buf = PixelBuffer::from_vec(vec![0u8; 100 * 100 * 4], 100, 100, PixelDescriptor::RGBA8_SRGB).unwrap();
+/// let buf = PixelBuf::from_bytes(vec![0u8; 100 * 100 * 4], 100, 100, PixelFormat::RGBA8_SRGB).unwrap();
 /// let output = EncodeRequest::new(ImageFormat::WebP)
 ///     .with_quality(85.0)
-///     .encode(buf.as_slice(), false)?;
+///     .encode(buf.as_view(), false)?;
 /// # Ok::<(), whereat::At<zencodecs::CodecError>>(())
 /// ```
 pub struct EncodeRequest<'a> {
@@ -253,8 +253,7 @@ impl<'a> EncodeRequest<'a> {
     /// only a stale EXIF orientation tag (the double-rotation guard). For web
     /// publishing prefer [`MetadataPolicy::Web`], which strips
     /// GPS/camera/timestamps/XMP while keeping orientation, rights, and color
-    /// signaling. The policy is applied at the codec boundary via
-    /// [`zencodec::encode::EncodeJob::with_metadata_policy`].
+    /// signaling. The policy is applied before handing the metadata to the codec.
     pub fn with_metadata_policy(mut self, policy: MetadataPolicy) -> Self {
         self.metadata_policy = policy;
         self
@@ -483,7 +482,6 @@ impl<'a> EncodeRequest<'a> {
     ///
     /// ```no_run
     /// use zencodecs::{EncodeRequest, ImageFormat};
-    /// use zenpixels::PixelSlice;
     ///
     /// let mut encoder = EncodeRequest::new(ImageFormat::Gif)
     ///     .with_quality(80.0)
@@ -556,35 +554,40 @@ impl<'a> EncodeRequest<'a> {
     ///
     /// Returns a [`StreamingEncoder`] containing:
     /// - A `DynEncoder` that accepts rows via `push_rows()` / `finish()`
-    /// - The encoder's `supported` pixel descriptors (for `adapt_for_encode_cow`)
+    /// - The encoder's `supported` pixel formats (for `adapt_for_encode`)
     /// - The resolved output `format`
     ///
     /// The caller is responsible for pixel format conversion per-strip via
-    /// [`adapt_for_encode_cow`]. This avoids materializing the full image for
+    /// [`adapt_for_encode`]. This avoids materializing the full image for
     /// format conversion — only a strip-sized buffer is needed.
     ///
     /// Codecs that require the full image (WebP, AVIF) buffer internally
     /// inside their `push_rows()` implementation. That's the codec's
     /// decision — the pipeline never buffers.
     ///
-    /// [`adapt_for_encode_cow`]: zenpixels_convert::adapt::adapt_for_encode_cow
+    /// [`adapt_for_encode`]: zenpixels_convert::adapt_for_encode
     ///
     /// # Example
     ///
     /// ```rust,ignore
     /// use zencodecs::{EncodeRequest, ImageFormat};
-    /// use zenpixels_convert::adapt::adapt_for_encode_cow;
+    /// use zenpixels::{ColorOrigin, PeakSource};
+    /// use zenpixels_convert::{ConvertPolicy, OutputSignaling, adapt_for_encode};
     ///
     /// let se = EncodeRequest::new(ImageFormat::Jpeg)
     ///     .with_quality(85.0)
     ///     .build_streaming_encoder(1920, 1080)?;
     ///
     /// // Per strip:
-    /// let adapted = adapt_for_encode_cow(
-    ///     strip_bytes, descriptor, width, strip_rows, stride,
+    /// let (_, ready) = adapt_for_encode(
+    ///     strip_view,
+    ///     &ColorOrigin::assumed(),
     ///     se.supported,
+    ///     &ConvertPolicy::permissive(),
+    ///     PeakSource::Declared,
+    ///     OutputSignaling::Strip,
     /// )?;
-    /// se.encoder.push_rows(adapted.as_slice())?;
+    /// se.encoder.push_rows(ready.pixels.as_view())?;
     ///
     /// // Finalize:
     /// let output = se.encoder.finish()?;
@@ -678,8 +681,8 @@ impl<'a> EncodeRequest<'a> {
 
     /// Encode pixels (one-shot, full materialization).
     ///
-    /// `pixels` is a type-erased pixel buffer with descriptor, dimensions,
-    /// and stride. Construct via [`PixelSlice::new()`](zenpixels::PixelSlice::new).
+    /// `pixels` is a type-erased pixel view with format, dimensions,
+    /// and stride. Construct via [`PixelView::new()`](zenpixels::PixelView::new).
     ///
     /// `has_meaningful_alpha` tells the auto-format selector whether the image
     /// has alpha that must be preserved. When `true`, JPEG (which doesn't support
@@ -688,23 +691,19 @@ impl<'a> EncodeRequest<'a> {
     /// explicitly set.
     ///
     /// For streaming encode, use [`build_streaming_encoder`](Self::build_streaming_encoder).
-    pub fn encode(
-        self,
-        pixels: zenpixels::PixelSlice<'_>,
-        has_meaningful_alpha: bool,
-    ) -> Result<EncodeOutput> {
+    pub fn encode(self, pixels: PixelView<'_>, has_meaningful_alpha: bool) -> Result<EncodeOutput> {
         self.encode_dispatch(pixels, has_meaningful_alpha)
     }
 
     // ═══════════════════════════════════════════════════════════════════
     // Typed convenience: full-frame encode from imgref::ImgRef
     //
-    // Each method picks the right `PixelDescriptor` from the typed pixel
+    // Each method picks the right `PixelFormat` from the typed pixel
     // and calls [`encode`](Self::encode). RGB/Gray paths set
     // `has_meaningful_alpha=false`; RGBA/BGRA paths set `true`.
     //
     // These are restored convenience wrappers — the canonical entry point
-    // is [`encode`](Self::encode) with a hand-built `PixelSlice`.
+    // is [`encode`](Self::encode) with a hand-built `PixelView`.
     // ═══════════════════════════════════════════════════════════════════
 
     /// Encode a full RGB8 (sRGB) frame from an `imgref::ImgRef<rgb::Rgb<u8>>`.
@@ -712,8 +711,9 @@ impl<'a> EncodeRequest<'a> {
         self,
         img: imgref::ImgRef<'_, rgb::Rgb<u8>>,
     ) -> Result<EncodeOutput> {
-        let typed: zenpixels::PixelSlice<'_, rgb::Rgb<u8>> = zenpixels::PixelSlice::from(img);
-        self.encode(typed.erase(), false)
+        let pixels = PixelView::from_imgref(img, ColorSpace::SRGB)
+            .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
+        self.encode(pixels, false)
     }
 
     /// Encode a full RGBA8 (sRGB, straight alpha) frame.
@@ -721,8 +721,9 @@ impl<'a> EncodeRequest<'a> {
         self,
         img: imgref::ImgRef<'_, rgb::Rgba<u8>>,
     ) -> Result<EncodeOutput> {
-        let typed: zenpixels::PixelSlice<'_, rgb::Rgba<u8>> = zenpixels::PixelSlice::from(img);
-        self.encode(typed.erase(), true)
+        let pixels = PixelView::from_imgref(img, ColorSpace::SRGB_ALPHA)
+            .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
+        self.encode(pixels, true)
     }
 
     /// Encode a full BGRA8 (sRGB) frame.
@@ -730,8 +731,9 @@ impl<'a> EncodeRequest<'a> {
         self,
         img: imgref::ImgRef<'_, rgb::Bgra<u8>>,
     ) -> Result<EncodeOutput> {
-        let typed: zenpixels::PixelSlice<'_, rgb::Bgra<u8>> = zenpixels::PixelSlice::from(img);
-        self.encode(typed.erase(), true)
+        let pixels = PixelView::from_imgref(img, ColorSpace::SRGB_ALPHA)
+            .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
+        self.encode(pixels, true)
     }
 
     /// Encode a full BGRX8 frame — alpha byte present but treated as padding.
@@ -739,8 +741,26 @@ impl<'a> EncodeRequest<'a> {
         self,
         img: imgref::ImgRef<'_, rgb::Bgra<u8>>,
     ) -> Result<EncodeOutput> {
-        let typed: zenpixels::PixelSlice<'_, rgb::Bgra<u8>> = zenpixels::PixelSlice::from(img);
-        let pixels = typed.with_descriptor(PixelDescriptor::BGRX8_SRGB).erase();
+        let width = u32::try_from(img.width())
+            .map_err(|_| at!(CodecError::InvalidInput("image width overflows u32".into())))?;
+        let height = u32::try_from(img.height()).map_err(|_| {
+            at!(CodecError::InvalidInput(
+                "image height overflows u32".into()
+            ))
+        })?;
+        let stride = img.stride().checked_mul(4).ok_or_else(|| {
+            at!(CodecError::InvalidInput(
+                "image stride overflows usize".into()
+            ))
+        })?;
+        let pixels = PixelView::new(
+            bytemuck::cast_slice(img.buf()),
+            width,
+            height,
+            stride,
+            &zenpixels::formats::BGRX8_SRGB,
+        )
+        .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
         self.encode(pixels, false)
     }
 
@@ -749,8 +769,9 @@ impl<'a> EncodeRequest<'a> {
         self,
         img: imgref::ImgRef<'_, rgb::Gray<u8>>,
     ) -> Result<EncodeOutput> {
-        let typed: zenpixels::PixelSlice<'_, rgb::Gray<u8>> = zenpixels::PixelSlice::from(img);
-        self.encode(typed.erase(), false)
+        let pixels = PixelView::from_imgref(img, ColorSpace::GRAY_SRGB)
+            .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
+        self.encode(pixels, false)
     }
 
     /// Encode a full RGB f32 (linear light) frame.
@@ -758,8 +779,9 @@ impl<'a> EncodeRequest<'a> {
         self,
         img: imgref::ImgRef<'_, rgb::Rgb<f32>>,
     ) -> Result<EncodeOutput> {
-        let typed: zenpixels::PixelSlice<'_, rgb::Rgb<f32>> = zenpixels::PixelSlice::from(img);
-        self.encode(typed.erase(), false)
+        let pixels = PixelView::from_imgref(img, ColorSpace::LINEAR_SRGB)
+            .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
+        self.encode(pixels, false)
     }
 
     /// Encode a full RGBA f32 (linear light, straight alpha) frame.
@@ -767,8 +789,9 @@ impl<'a> EncodeRequest<'a> {
         self,
         img: imgref::ImgRef<'_, rgb::Rgba<f32>>,
     ) -> Result<EncodeOutput> {
-        let typed: zenpixels::PixelSlice<'_, rgb::Rgba<f32>> = zenpixels::PixelSlice::from(img);
-        self.encode(typed.erase(), true)
+        let pixels = PixelView::from_imgref(img, ColorSpace::LINEAR_SRGB_ALPHA)
+            .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
+        self.encode(pixels, true)
     }
 
     /// Encode a full grayscale f32 (linear light) frame.
@@ -776,8 +799,9 @@ impl<'a> EncodeRequest<'a> {
         self,
         img: imgref::ImgRef<'_, rgb::Gray<f32>>,
     ) -> Result<EncodeOutput> {
-        let typed: zenpixels::PixelSlice<'_, rgb::Gray<f32>> = zenpixels::PixelSlice::from(img);
-        self.encode(typed.erase(), false)
+        let pixels = PixelView::from_imgref(img, ColorSpace::GRAY_LINEAR)
+            .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
+        self.encode(pixels, false)
     }
 
     /// Legacy spelling: same as [`encode_full_frame_rgba8`](Self::encode_full_frame_rgba8)
@@ -786,12 +810,8 @@ impl<'a> EncodeRequest<'a> {
         self,
         img: imgref::ImgRef<'_, rgb::Rgba<u8>>,
     ) -> Result<EncodeOutput> {
-        let typed: zenpixels::PixelSlice<'_, rgb::Rgba<u8>> = zenpixels::PixelSlice::from(img);
-        let pixels = typed
-            .with_descriptor(
-                PixelDescriptor::RGBA8_SRGB.with_alpha(Some(zenpixels::AlphaMode::Straight)),
-            )
-            .erase();
+        let pixels = PixelView::from_imgref(img, ColorSpace::SRGB_ALPHA)
+            .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
         self.encode(pixels, true)
     }
 
@@ -855,10 +875,14 @@ impl<'a> EncodeRequest<'a> {
         &self,
         width: u32,
         height: u32,
-        descriptor: PixelDescriptor,
+        pixel_format: PixelFormat,
     ) -> Result<ResourceEstimate> {
-        let format = self.resolve_encode_format(width, height, descriptor.has_alpha())?;
-        let image = ImageCharacteristics::new(width, height, descriptor);
+        let has_alpha = matches!(
+            pixel_format.color.alpha(),
+            zenpixels::AlphaMode::Straight | zenpixels::AlphaMode::Premultiplied
+        );
+        let format = self.resolve_encode_format(width, height, has_alpha)?;
+        let image = ImageCharacteristics::new(width, height, pixel_format);
         estimate_encode(
             format,
             &self.quality_intent(),
@@ -910,14 +934,10 @@ impl<'a> EncodeRequest<'a> {
 
     /// Internal: resolve format → validate → build encoder →
     /// negotiate pixel format via zenpixels → encode.
-    fn encode_dispatch(
-        self,
-        pixels: zenpixels::PixelSlice<'_>,
-        has_alpha: bool,
-    ) -> Result<EncodeOutput> {
-        let descriptor = pixels.descriptor();
+    fn encode_dispatch(self, pixels: PixelView<'_>, has_alpha: bool) -> Result<EncodeOutput> {
+        let pixel_format = pixels.format().clone();
         let width = pixels.width();
-        let height = pixels.rows();
+        let height = pixels.height();
         let format = self.resolve_encode_format(width, height, has_alpha)?;
         #[cfg(feature = "jpeg-ultrahdr")]
         if self.orientation_mode.is_some() && self.gain_map_source.is_some() {
@@ -934,7 +954,7 @@ impl<'a> EncodeRequest<'a> {
         if let Some(limits) = self.limits
             && limits.max_memory_bytes.is_some()
         {
-            let image = ImageCharacteristics::new(width, height, descriptor);
+            let image = ImageCharacteristics::new(width, height, pixel_format);
             let est = estimate_encode(
                 format,
                 &self.quality_intent(),
@@ -1015,37 +1035,39 @@ impl<'a> EncodeRequest<'a> {
                 )))
             })?;
             // Use zenpixels to negotiate the cheapest pixel format conversion.
-            // The adaptation helper owns a complete rectangular buffer;
-            // pack strided views first, borrowing the tightly packed case.
-            let data = pixels.contiguous_bytes();
-            let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
-                &data,
-                descriptor,
-                width,
-                height,
-                descriptor.aligned_stride(width),
+            let (_, ready) = zenpixels_convert::adapt_for_encode(
+                pixels,
+                &zenpixels::ColorOrigin::assumed(),
                 built.supported,
+                &zenpixels_convert::ConvertPolicy::permissive(),
+                zenpixels::PeakSource::Declared,
+                zenpixels_convert::OutputSignaling::Strip,
             )
             .map_err(|e| {
                 at!(CodecError::InvalidInput(alloc::format!(
                     "pixel format negotiation: {e}"
                 )))
             })?;
-            let pixel_slice = adapted.as_slice();
+            let pixel_view = ready.pixels.as_view();
+            let contiguous = pixel_view.to_contiguous_bytes().map_err(|e| {
+                at!(CodecError::InvalidInput(alloc::format!(
+                    "contiguous pixel bytes: {e}"
+                )))
+            })?;
 
             if format == ImageFormat::Jpeg {
                 // For JPEG: use the specialized gain map encoder that produces
                 // UltraHDR JPEG (base + gain map + XMP metadata)
-                let channels =
-                    if pixel_slice.descriptor().layout() == zenpixels::ChannelLayout::Rgba {
-                        4u8
-                    } else {
-                        3u8
-                    };
+                let channels = if pixel_view.format().layout.order == zenpixels::ChannelOrder::Rgba
+                {
+                    4u8
+                } else {
+                    3u8
+                };
                 return crate::codecs::jpeg::encode_with_precomputed_gainmap(
-                    &pixel_slice.contiguous_bytes(),
-                    pixel_slice.width(),
-                    pixel_slice.rows(),
+                    &contiguous,
+                    pixel_view.width(),
+                    pixel_view.height(),
                     channels,
                     Some(resolved_quality),
                     self.codec_config,
@@ -1058,10 +1080,10 @@ impl<'a> EncodeRequest<'a> {
             #[cfg(all(feature = "jxl-encode", feature = "jxl-decode"))]
             if format == ImageFormat::Jxl {
                 return crate::codecs::jxl_enc::encode_with_precomputed_gainmap(
-                    &pixel_slice.contiguous_bytes(),
-                    pixel_slice.width(),
-                    pixel_slice.rows(),
-                    pixel_slice.descriptor(),
+                    &contiguous,
+                    pixel_view.width(),
+                    pixel_view.height(),
+                    pixel_view.format().clone(),
                     Some(resolved_quality),
                     gain_map,
                     metadata,
@@ -1072,10 +1094,10 @@ impl<'a> EncodeRequest<'a> {
             #[cfg(all(feature = "avif-encode", feature = "avif-decode"))]
             if format == ImageFormat::Avif {
                 return crate::codecs::avif_enc::encode_with_precomputed_gainmap(
-                    &pixel_slice.contiguous_bytes(),
-                    pixel_slice.width(),
-                    pixel_slice.rows(),
-                    pixel_slice.descriptor(),
+                    &contiguous,
+                    pixel_view.width(),
+                    pixel_view.height(),
+                    pixel_view.format().clone(),
                     Some(resolved_quality),
                     effort,
                     self.codec_config,
@@ -1132,7 +1154,7 @@ mod tests {
             100,
             100,
         );
-        let ps = zenpixels::PixelSlice::from(img.as_ref()).erase();
+        let ps = PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB).unwrap();
         let result = EncodeRequest::new(ImageFormat::Jpeg)
             .with_lossless(true)
             .encode(ps, false);
@@ -1174,7 +1196,7 @@ mod tests {
             10,
             10,
         );
-        let ps = zenpixels::PixelSlice::from(img.as_ref()).erase();
+        let ps = PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB_ALPHA).unwrap();
         let output = EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality(75.0)
             .encode(ps, false)
@@ -1199,7 +1221,7 @@ mod tests {
             10,
         );
         // WebP supports alpha
-        let ps = zenpixels::PixelSlice::from(img.as_ref()).erase();
+        let ps = PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB_ALPHA).unwrap();
         let output = EncodeRequest::new(ImageFormat::WebP)
             .with_quality(75.0)
             .encode(ps, true)
@@ -1260,7 +1282,7 @@ mod tests {
             10,
             10,
         );
-        let ps = zenpixels::PixelSlice::from(img.as_ref()).erase();
+        let ps = PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB).unwrap();
         let output = EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality_profile(QualityProfile::Good)
             .encode(ps, false)
@@ -1287,13 +1309,19 @@ mod tests {
         let high = EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality_profile(QualityProfile::Good)
             .with_dpr(1.0)
-            .encode(zenpixels::PixelSlice::from(img.as_ref()).erase(), false)
+            .encode(
+                PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB).unwrap(),
+                false,
+            )
             .unwrap();
         // DPR 6.0 should decrease quality (smaller output)
         let low = EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality_profile(QualityProfile::Good)
             .with_dpr(6.0)
-            .encode(zenpixels::PixelSlice::from(img.as_ref()).erase(), false)
+            .encode(
+                PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB).unwrap(),
+                false,
+            )
             .unwrap();
         // Higher quality should generally produce more bytes
         assert!(
@@ -1377,17 +1405,27 @@ mod tests {
                 ]
             })
             .collect();
-        let ps =
-            zenpixels::PixelSlice::new(&px, w as u32, h as u32, w * 3, PixelDescriptor::RGB8_SRGB)
-                .unwrap();
+        let ps = PixelView::new(
+            &px,
+            w as u32,
+            h as u32,
+            w * 3,
+            &zenpixels::formats::RGB8_SRGB,
+        )
+        .unwrap();
         let fast = EncodeRequest::new(ImageFormat::Png)
             .with_lossless(true)
             .with_speed(EncodeSpeed::Fastest)
             .encode(ps, false)
             .unwrap();
-        let ps =
-            zenpixels::PixelSlice::new(&px, w as u32, h as u32, w * 3, PixelDescriptor::RGB8_SRGB)
-                .unwrap();
+        let ps = PixelView::new(
+            &px,
+            w as u32,
+            h as u32,
+            w * 3,
+            &zenpixels::formats::RGB8_SRGB,
+        )
+        .unwrap();
         let max = EncodeRequest::new(ImageFormat::Png)
             .with_lossless(true)
             .with_speed(EncodeSpeed::OfflineMax)
@@ -1428,7 +1466,7 @@ mod tests {
             10,
             10,
         );
-        let ps = zenpixels::PixelSlice::from(img.as_ref()).erase();
+        let ps = PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB).unwrap();
         let output = EncodeRequest::auto()
             .with_quality(75.0)
             .with_policy(CodecPolicy::web_safe_output())
@@ -1459,7 +1497,7 @@ mod tests {
             pixel_count: 100,
             ..Default::default()
         };
-        let ps = zenpixels::PixelSlice::from(img.as_ref()).erase();
+        let ps = PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB_ALPHA).unwrap();
         let output = EncodeRequest::auto()
             .with_quality(75.0)
             .with_image_facts(facts)

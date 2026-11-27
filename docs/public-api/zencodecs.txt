@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodecs.txt 783 lines (supported surface) | zencodecs.features.txt 163 added (features: all,jp2-decode,metadata,tonemap,checked-transcode-async) | zencodecs.internal.txt 21 lines (21 hidden + 0 excluded-feature)
+# files: zencodecs.txt 785 lines (supported surface) | zencodecs.features.txt 164 added (features: all,jp2-decode,metadata,tonemap,checked-transcode-async) | zencodecs.internal.txt 21 lines (21 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -17,14 +17,14 @@
 #   inherent methods                          268
 #   struct fields                             131
 #   enum variants                             121
-#   re-exports                                129
+#   re-exports                                131
 #   trait roster entries (type × trait)       108
 #   conditional trait impls (verbatim)          1
 #   auto-trait-complete types                  25
 #   auto-trait exceptions                       7
 #
 # per-module pub lines:
-#   (root)                          347
+#   (root)                          349
 #   codec_id                         34
 #   color                             3
 #   config                           69
@@ -41,7 +41,7 @@
 #   trace                            48
 #   transcode                        54
 
-## items (746 lines)
+## items (748 lines)
 
 pub mod zencodecs
 pub use AnimationFrame
@@ -94,8 +94,6 @@ pub use Orientation
 pub use OrientationHint
 pub use OutputInfo
 pub use OwnedAnimationFrame
-pub use PixelBufferConvertExt
-pub use PixelBufferConvertTypedExt
 pub use PngDecodeJob
 pub use PngDecoderConfig
 pub use PngEncodeJob
@@ -113,6 +111,10 @@ pub use WebpDecodeJob
 pub use WebpDecoderConfig
 pub use WebpEncodeJob
 pub use WebpEncoderConfig
+pub use to_bgra8
+pub use to_gray8_if_opaque
+pub use to_rgb8_if_opaque
+pub use to_rgba8
 pub mod codec_id
 pub codec_id::CodecId::BmpDecode
 pub codec_id::CodecId::BmpEncode
@@ -436,7 +438,7 @@ pub transcode::TranscodeOutput::format: zencodec::format::ImageFormat
 pub transcode::TranscodeOutput::mime_type: &'static str
 pub fn transcode::TranscodeSink<'a>::consume_output(&mut self, usize)
 pub fn transcode::TranscodeSink<'a>::finish_encode(self) -> core::result::Result<zencodec::output::EncodeOutput, alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>>
-pub fn transcode::TranscodeSink<'a>::new(alloc::boxed::Box<(dyn zencodec::traits::dyn_encoding::DynEncoder + 'a)>, &'static [zenpixels::descriptor::PixelDescriptor]) -> Self
+pub fn transcode::TranscodeSink<'a>::new(alloc::boxed::Box<(dyn zencodec::traits::dyn_encoding::DynEncoder + 'a)>, &'static [zenpixels::color::PixelFormat]) -> Self
 pub fn transcode::TranscodeSink<'a>::output_timing(&self) -> core::option::Option<zencodec::output::OutputTiming>
 pub fn transcode::TranscodeSink<'a>::pending_output(&self) -> &[u8]
 pub fn transcode::TranscodeSink<'a>::take_pending_output(&mut self, &mut alloc::vec::Vec<u8>)
@@ -577,7 +579,7 @@ pub fn policy::CodecPolicy::with_preference(self, zencodec::format::ImageFormat,
 pub struct ConfiguredJob
 pub ConfiguredJob::format: zencodec::format::ImageFormat
 pub ConfiguredJob::job: alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynEncodeJob>
-pub ConfiguredJob::supported: &'static [zenpixels::descriptor::PixelDescriptor]
+pub ConfiguredJob::supported: &'static [zenpixels::color::PixelFormat]
 pub struct DecodeRequest<'a>
 pub fn DecodeRequest<'a>::animation_frame_decoder(self) -> Result<alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>>
 pub fn DecodeRequest<'a>::build_streaming_decoder(self) -> Result<alloc::boxed::Box<(dyn zencodec::traits::dyn_decoding::DynStreamingDecoder + 'static)>>
@@ -611,7 +613,7 @@ pub fn EncodeRequest<'a>::animation_frame_encoder(self, u32, u32) -> Result<allo
 pub fn EncodeRequest<'a>::auto() -> Self
 pub fn EncodeRequest<'a>::build_job(self, u32, u32) -> Result<ConfiguredJob>
 pub fn EncodeRequest<'a>::build_streaming_encoder(self, u32, u32) -> Result<StreamingEncoder>
-pub fn EncodeRequest<'a>::encode(self, zenpixels::buffer::PixelSlice<'_>, bool) -> Result<zencodec::output::EncodeOutput>
+pub fn EncodeRequest<'a>::encode(self, zenpixels::buffer::PixelView<'_>, bool) -> Result<zencodec::output::EncodeOutput>
 pub fn EncodeRequest<'a>::encode_full_frame_bgra8(self, imgref::ImgRef<'_, rgb::formats::bgra::Bgra<u8>>) -> Result<zencodec::output::EncodeOutput>
 pub fn EncodeRequest<'a>::encode_full_frame_bgrx8(self, imgref::ImgRef<'_, rgb::formats::bgra::Bgra<u8>>) -> Result<zencodec::output::EncodeOutput>
 pub fn EncodeRequest<'a>::encode_full_frame_gray8(self, imgref::ImgRef<'_, rgb::formats::gray::Gray_v08<u8>>) -> Result<zencodec::output::EncodeOutput>
@@ -621,7 +623,7 @@ pub fn EncodeRequest<'a>::encode_full_frame_rgb_f32(self, imgref::ImgRef<'_, rgb
 pub fn EncodeRequest<'a>::encode_full_frame_rgba8(self, imgref::ImgRef<'_, rgb::formats::rgba::Rgba<u8>>) -> Result<zencodec::output::EncodeOutput>
 pub fn EncodeRequest<'a>::encode_full_frame_rgba_f32(self, imgref::ImgRef<'_, rgb::formats::rgba::Rgba<f32>>) -> Result<zencodec::output::EncodeOutput>
 pub fn EncodeRequest<'a>::encode_full_frame_srgba8_imgref(self, imgref::ImgRef<'_, rgb::formats::rgba::Rgba<u8>>) -> Result<zencodec::output::EncodeOutput>
-pub fn EncodeRequest<'a>::estimate(&self, u32, u32, zenpixels::descriptor::PixelDescriptor) -> Result<zencodec::estimate::ResourceEstimate>
+pub fn EncodeRequest<'a>::estimate(&self, u32, u32, zenpixels::color::PixelFormat) -> Result<zencodec::estimate::ResourceEstimate>
 pub fn EncodeRequest<'a>::new(zencodec::format::ImageFormat) -> Self
 pub fn EncodeRequest<'a>::quality_intent(&self) -> quality::QualityIntent
 pub fn EncodeRequest<'a>::speed(&self) -> core::option::Option<speed::EncodeSpeed>
@@ -729,7 +731,7 @@ pub fn trace::SelectionTrace::steps(&self) -> &[trace::SelectionStep]
 pub struct StreamingEncoder
 pub StreamingEncoder::encoder: alloc::boxed::Box<(dyn zencodec::traits::dyn_encoding::DynEncoder + core::marker::Send)>
 pub StreamingEncoder::format: zencodec::format::ImageFormat
-pub StreamingEncoder::supported: &'static [zenpixels::descriptor::PixelDescriptor]
+pub StreamingEncoder::supported: &'static [zenpixels::color::PixelFormat]
 pub struct SupplementSet(_) [also: transcode]
 pub const transcode::SupplementSet::DEPTH_MAP: Self
 pub const transcode::SupplementSet::GAIN_MAP: Self
@@ -751,16 +753,16 @@ pub TranscodeOutput::mime_type: &'static str
 pub struct TranscodeSink<'a> [also: transcode]
 pub fn transcode::TranscodeSink<'a>::consume_output(&mut self, usize)
 pub fn transcode::TranscodeSink<'a>::finish_encode(self) -> core::result::Result<zencodec::output::EncodeOutput, alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>>
-pub fn transcode::TranscodeSink<'a>::new(alloc::boxed::Box<(dyn zencodec::traits::dyn_encoding::DynEncoder + 'a)>, &'static [zenpixels::descriptor::PixelDescriptor]) -> Self
+pub fn transcode::TranscodeSink<'a>::new(alloc::boxed::Box<(dyn zencodec::traits::dyn_encoding::DynEncoder + 'a)>, &'static [zenpixels::color::PixelFormat]) -> Self
 pub fn transcode::TranscodeSink<'a>::output_timing(&self) -> core::option::Option<zencodec::output::OutputTiming>
 pub fn transcode::TranscodeSink<'a>::pending_output(&self) -> &[u8]
 pub fn transcode::TranscodeSink<'a>::take_pending_output(&mut self, &mut alloc::vec::Vec<u8>)
 pub fn transcode::TranscodeSink<'a>::with_writer(self, impl core::ops::function::FnMut(&[u8]) -> core::result::Result<(), zencodec::sink::SinkError> + core::marker::Send + 'a) -> Self
 pub trait AnyEncoder: core::marker::Send + core::marker::Sync
-pub fn AnyEncoder::encode_pixels(&self, zenpixels::buffer::PixelSlice<'_>, core::option::Option<zencodec::metadata::Metadata>, core::option::Option<&zencodec::limits::ResourceLimits>, how_far::pulse::SharedPulse) -> Result<zencodec::output::EncodeOutput>
+pub fn AnyEncoder::encode_pixels(&self, zenpixels::buffer::PixelView<'_>, core::option::Option<zencodec::metadata::Metadata>, core::option::Option<&zencodec::limits::ResourceLimits>, how_far::pulse::SharedPulse) -> Result<zencodec::output::EncodeOutput>
 pub fn AnyEncoder::encode_srgba8_imgref(&self, imgref::ImgRef<'_, rgb::formats::rgba::Rgba<u8>>, bool) -> Result<zencodec::output::EncodeOutput>
 pub fn AnyEncoder::format(&self) -> zencodec::format::ImageFormat
-pub fn AnyEncoder::supported_descriptors(&self) -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub fn AnyEncoder::supported_pixel_formats(&self) -> &'static [zenpixels::color::PixelFormat]
 pub trait FormatPicker [also: select]
 pub fn FormatPicker::pick(&self, &[f32], &[zencodec::format::ImageFormat]) -> core::option::Option<zencodec::format::ImageFormat>
 pub fn FormatPicker::pick_with_penalties(&self, &[f32], &[zencodec::format::ImageFormat], &[f32]) -> core::option::Option<zencodec::format::ImageFormat>

@@ -5,7 +5,7 @@
 //!
 //! Run: `cargo run --example metadata_roundtrip --features all,std`
 
-use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, PixelBufferConvertTypedExt as _};
+use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat};
 
 fn main() {
     let jpeg_data = include_bytes!("../tests/images/ultrahdr_sample.jpg");
@@ -48,8 +48,15 @@ fn main() {
     );
 
     // Convert to RGB8 for encoding
-    let rgb8 = decoded.into_buffer().to_rgb8();
-    let img = rgb8.as_imgref();
+    let rgb_buf = zenpixels_convert::convert_to_buf(
+        &decoded.pixels(),
+        zenpixels::PixelFormat::RGB8_SRGB,
+        &zenpixels_convert::ConvertPolicy::permissive(),
+    )
+    .unwrap();
+    let (w, h) = (rgb_buf.width() as usize, rgb_buf.height() as usize);
+    let rgb8 = imgref::ImgVec::new(rgb_buf.into_vec().unwrap(), w, h);
+    let img = rgb8.as_ref();
 
     // Re-encode to each format that supports metadata
     let formats = [

@@ -26,11 +26,12 @@ use zenfilters::filters::cat16;
 use zenfilters::filters::dt_sigmoid;
 use zenfilters::regional::{RegionalComparison, RegionalFeatures};
 use zenfilters::{OklabPlanes, scatter_srgb_u8_to_oklab};
-use zenpixels::ColorPrimaries;
+use zenpixels::Primaries;
 use zenpixels_convert::gamut::GamutMatrix;
 use zenpixels_convert::oklab;
+use zenpixels_convert::{ConvertPolicy, convert_to_buf};
 use zenraw::darktable::{self, DtConfig};
-use zenresize::{Filter, PixelDescriptor, ResizeConfig, Resizer};
+use zenresize::{Filter, PixelFormat, ResizeConfig, Resizer};
 use zensim::{RgbSlice, Zensim, ZensimProfile};
 
 const OUTPUT_DIR: &str = "/mnt/v/output/zenfilters/mobile_parity";
@@ -83,7 +84,9 @@ fn main() {
         println!("WARNING: darktable-cli not found — standard DNG files will be skipped");
     }
 
-    let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
+    let m1 = oklab::OklabSpace::for_primaries(Primaries::Bt709)
+        .unwrap()
+        .rgb_to_lms();
     let zs = Zensim::new(ZensimProfile::latest());
     let dt_config = DtConfig::new();
 
@@ -165,11 +168,16 @@ fn process_appledng(
     let decoded_preview = DecodeRequest::new(&preview_jpeg).decode().ok()?;
     let pw = decoded_preview.width();
     let ph = decoded_preview.height();
-    use zenpixels_convert::PixelBufferConvertTypedExt;
-    let preview_rgb8 = decoded_preview
-        .into_buffer()
-        .to_rgb8()
-        .copy_to_contiguous_bytes();
+    let preview_rgb8 = convert_to_buf(
+        &decoded_preview.into_buffer().as_view(),
+        zenpixels::PixelFormat::RGB8_SRGB,
+        &ConvertPolicy::permissive(),
+    )
+    .ok()?
+    .as_view()
+    .to_contiguous_bytes()
+    .ok()?
+    .into_owned();
     println!(
         "  Preview: {}x{} ({} bytes JPEG) ({:.1}s)",
         pw,
@@ -188,7 +196,7 @@ fn process_appledng(
     if let Ok(cam_output) = zenraw::decode(dng_bytes, &cam_config, &Unstoppable) {
         let cam_w = cam_output.pixels.width();
         let cam_h = cam_output.pixels.height();
-        let cam_bytes = cam_output.pixels.copy_to_contiguous_bytes();
+        let cam_bytes = cam_output.pixels.as_view().to_contiguous_bytes().unwrap();
         let cam_raw: &[f32] = bytemuck::cast_slice(&cam_bytes);
 
         let dng_profile = zenraw::apple::extract_dng_profile(dng_bytes);
@@ -285,7 +293,11 @@ fn process_appledng(
     let raw_pixels = output.pixels;
     let dw = raw_pixels.width();
     let dh = raw_pixels.height();
-    let mut raw_bytes = raw_pixels.copy_to_contiguous_bytes();
+    let mut raw_bytes = raw_pixels
+        .as_view()
+        .to_contiguous_bytes()
+        .ok()?
+        .into_owned();
     println!(
         "  Raw decode: {}x{} ({:.1}s)",
         dw,
@@ -709,7 +721,7 @@ fn process_standard_dng(
     let pixels = output.pixels;
     let dw = pixels.width();
     let dh = pixels.height();
-    let raw_bytes = pixels.copy_to_contiguous_bytes();
+    let raw_bytes = pixels.as_view().to_contiguous_bytes().ok()?;
     let linear_f32: &[f32] = bytemuck::cast_slice(&raw_bytes);
     println!(
         "  darktable linear: {}x{} ({:.1}s)",
@@ -1003,7 +1015,7 @@ fn downscale_linear_f32(data: &[f32], w: u32, h: u32, max_dim: u32) -> (Vec<f32>
     let nh = ((h as f64 * scale) as u32).max(1);
     let config = ResizeConfig::builder(w, h, nw, nh)
         .filter(Filter::Lanczos)
-        .format(PixelDescriptor::RGBF32_LINEAR)
+        .format(PixelFormat::RGBF32_LINEAR)
         .build();
     let mut resizer = Resizer::new(&config);
     (resizer.resize_f32(data), nw, nh)
@@ -1018,7 +1030,7 @@ fn downscale_rgb8(data: &[u8], w: u32, h: u32, max_dim: u32) -> (Vec<u8>, u32, u
     let nh = ((h as f64 * scale) as u32).max(1);
     let config = ResizeConfig::builder(w, h, nw, nh)
         .filter(Filter::Lanczos)
-        .format(PixelDescriptor::RGB8_SRGB)
+        .format(PixelFormat::RGB8_SRGB)
         .build();
     let mut resizer = Resizer::new(&config);
     (resizer.resize(data), nw, nh)
@@ -1094,9 +1106,17 @@ fn darktable_render_png(dng_path: &Path, workflow: &str) -> Option<(Vec<u8>, u32
     let decoded = DecodeRequest::new(&png_bytes).decode().ok()?;
     let w = decoded.width();
     let h = decoded.height();
-    use zenpixels_convert::PixelBufferConvertTypedExt;
-    let rgb8_buf = decoded.into_buffer().to_rgb8();
-    Some((rgb8_buf.copy_to_contiguous_bytes(), w, h))
+    let rgb8_buf = convert_to_buf(
+        &decoded.into_buffer().as_view(),
+        zenpixels::PixelFormat::RGB8_SRGB,
+        &ConvertPolicy::permissive(),
+    )
+    .ok()?;
+    Some((
+        rgb8_buf.as_view().to_contiguous_bytes().ok()?.into_owned(),
+        w,
+        h,
+    ))
 }
 
 // ── dt_sigmoid pipeline ─────────────────────────────────────────────────

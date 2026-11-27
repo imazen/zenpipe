@@ -128,8 +128,8 @@ fn drain_f32(
 /// Working formats [`ResizeSource`] accepts: 4-byte/pixel RGBA, sRGB or
 /// Linear transfer. The transfer tag tells zenresize whether to gamma-decode
 /// (sRGB) or pass values through raw (Linear).
-fn accepted_format(fmt: PixelFormat) -> bool {
-    fmt == format::RGBA8_SRGB || fmt == format::RGBA8_LINEAR
+fn accepted_format(fmt: &PixelFormat) -> bool {
+    *fmt == format::RGBA8_SRGB || *fmt == format::RGBA8_LINEAR
 }
 
 impl ResizeSource {
@@ -142,10 +142,11 @@ impl ResizeSource {
         config: &zenresize::ResizeConfig,
         strip_height: u32,
     ) -> crate::PipeResult<Self> {
-        if !accepted_format(upstream.format()) {
+        let fmt = upstream.format();
+        if !accepted_format(&fmt) {
             return Err(at!(PipeError::FormatMismatch {
-                expected: format::RGBA8_SRGB,
-                got: upstream.format(),
+                expected: Box::new(format::RGBA8_SRGB),
+                got: Box::new(fmt),
             }));
         }
         if upstream.width() != config.in_width || upstream.height() != config.in_height {
@@ -166,14 +167,14 @@ impl ResizeSource {
         // must hold at least that many extra rows beyond the filter taps.
         let resizer = zenresize::StreamingResize::with_batch_hint(config, strip_height);
 
-        let fmt = upstream.format();
+        let buf = StripBuf::new(out_w, sh, fmt.clone());
         Ok(Self {
             upstream,
             resizer,
             out_width: out_w,
             out_height: out_h,
             strip_height: sh,
-            buf: StripBuf::new(out_w, sh, fmt),
+            buf,
             format: fmt,
             y: 0,
             pending: PendingRows::new(),
@@ -194,24 +195,25 @@ impl ResizeSource {
         resizer: zenresize::StreamingResize,
         strip_height: u32,
     ) -> crate::PipeResult<Self> {
-        if !accepted_format(upstream.format()) {
+        let fmt = upstream.format();
+        if !accepted_format(&fmt) {
             return Err(at!(PipeError::FormatMismatch {
-                expected: format::RGBA8_SRGB,
-                got: upstream.format(),
+                expected: Box::new(format::RGBA8_SRGB),
+                got: Box::new(fmt),
             }));
         }
         // output_row_len is in bytes; RGBA8 = 4 bytes/pixel
         let out_w = (resizer.output_row_len() / 4) as u32;
         let out_h = resizer.total_output_height();
         let sh = strip_height.min(out_h);
-        let fmt = upstream.format();
+        let buf = StripBuf::new(out_w, sh, fmt.clone());
         Ok(Self {
             upstream,
             resizer,
             out_width: out_w,
             out_height: out_h,
             strip_height: sh,
-            buf: StripBuf::new(out_w, sh, fmt),
+            buf,
             format: fmt,
             y: 0,
             pending: PendingRows::new(),
@@ -247,9 +249,10 @@ impl ResizeSource {
             return Ok(false);
         };
 
-        for r in 0..strip.rows() {
+        for r in 0..strip.height() {
             if !drain_u8(&mut self.resizer, &mut self.buf, self.strip_height) {
-                self.pending.stash((r..strip.rows()).map(|r| strip.row(r)));
+                self.pending
+                    .stash((r..strip.height()).map(|r| strip.row(r)));
                 break;
             }
             self.resizer
@@ -274,7 +277,7 @@ impl Source for ResizeSource {
 
         let rows_wanted = self.strip_height.min(self.out_height - self.y);
         self.buf
-            .reconfigure(self.out_width, rows_wanted, self.format);
+            .reconfigure(self.out_width, rows_wanted, self.format.clone());
         self.buf.reset();
 
         // Feed input rows and drain output until we have enough
@@ -322,10 +325,10 @@ impl Source for ResizeSource {
         self.out_height
     }
     fn format(&self) -> PixelFormat {
-        self.format
+        self.format.clone()
     }
-    fn color_context(&self) -> Option<alloc::sync::Arc<zenpixels::ColorContext>> {
-        self.upstream.color_context()
+    fn color_origin(&self) -> Option<zenpixels::ColorOrigin> {
+        self.upstream.color_origin()
     }
 }
 
@@ -369,8 +372,8 @@ impl ResizeF32Source {
     ) -> crate::PipeResult<Self> {
         if upstream.format() != format::RGBAF32_LINEAR {
             return Err(at!(PipeError::FormatMismatch {
-                expected: format::RGBAF32_LINEAR,
-                got: upstream.format(),
+                expected: Box::new(format::RGBAF32_LINEAR),
+                got: Box::new(upstream.format()),
             }));
         }
 
@@ -420,10 +423,10 @@ impl ResizeF32Source {
             return Ok(false);
         };
 
-        for r in 0..strip.rows() {
+        for r in 0..strip.height() {
             if !drain_f32(&mut self.resizer, &mut self.buf, self.strip_height) {
                 self.pending
-                    .stash((r..strip.rows()).map(|r| bytemuck::cast_slice(strip.row(r))));
+                    .stash((r..strip.height()).map(|r| bytemuck::cast_slice(strip.row(r))));
                 break;
             }
             self.resizer

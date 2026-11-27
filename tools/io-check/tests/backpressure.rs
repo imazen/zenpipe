@@ -10,13 +10,13 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use zencodec::encode::{EncodeJob, EncoderConfig};
-use zencodec::operation::{OutputSchedule, PolicyRequirement, PolicySet, RequirementEvidence};
+use zencodec::operation::{OutputSchedule, PolicyRequirement, PolicySet};
 use zencodec::storage::StorageBudget;
 use zencodec::{CodecSet, NoPulse};
 use zencodec_io::row_encode::{self, Options, Refusal, Stage};
 use zenpipe::io::{DecodeOptions, DecodeSource, PipelineRows};
 use zenpipe::{PipeResult, Source, Strip};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::PixelView;
 
 const W: u32 = 97;
 const H: u32 = 65;
@@ -28,8 +28,14 @@ fn png() -> Vec<u8> {
             samples.extend_from_slice(&[(x * 2) as u8, (y * 3) as u8, ((x * 7) ^ (y * 5)) as u8]);
         }
     }
-    let pixels =
-        PixelSlice::new(&samples, W, H, (W * 3) as usize, PixelDescriptor::RGB8_SRGB).unwrap();
+    let pixels = PixelView::new(
+        &samples,
+        W,
+        H,
+        (W * 3) as usize,
+        &zenpixels::formats::RGB8_SRGB,
+    )
+    .unwrap();
     zenpng::PngEncoderConfig::new()
         .job()
         .encode(pixels)
@@ -57,7 +63,7 @@ impl<S: Source> Source for Counted<S> {
         let strip = self.inner.next()?;
         if let Some(strip) = &strip {
             self.rows
-                .fetch_add(u64::from(strip.rows()), Ordering::SeqCst);
+                .fetch_add(u64::from(strip.height()), Ordering::SeqCst);
         }
         Ok(strip)
     }
@@ -70,8 +76,8 @@ impl<S: Source> Source for Counted<S> {
     fn format(&self) -> zenpipe::PixelFormat {
         self.inner.format()
     }
-    fn color_context(&self) -> Option<std::sync::Arc<zenpixels::ColorContext>> {
-        self.inner.color_context()
+    fn color_origin(&self) -> Option<zenpixels::ColorOrigin> {
+        self.inner.color_origin()
     }
 }
 
@@ -335,46 +341,6 @@ fn a_required_wait_bound_is_unknown_and_refuses_before_any_effect() {
         unmet
             .iter()
             .any(|(r, _)| *r == PolicyRequirement::OutputWait),
-        "{unmet:?}"
-    );
-}
-
-/// The compatibility placement: the requirement also in the driver's deprecated
-/// preset (and the same set as the operation policy). The two sets are ANDed;
-/// the operation still refuses before any effect and names `OutputWait` with
-/// `Unknown` evidence.
-#[test]
-fn a_required_wait_bound_in_the_preset_is_named_before_any_effect() {
-    let file = png();
-    let counter = Arc::new(AtomicU64::new(0));
-    let budget = StorageBudget::new(16 << 20, 1024);
-    let mut sink = probe(&budget, &counter, None);
-    let bound = PolicySet::new().with_output_wait_limit(1 << 30);
-    #[allow(
-        deprecated,
-        reason = "exercises the migration path: a preset still ANDs its requirements"
-    )]
-    let preset = options(&budget, 16 << 20).with_policy_set(bound);
-    let error = row_encode::encode_job(
-        zenpng::PngEncoderConfig::new().with_generic_effort(0).job(),
-        rows(&file, counter.clone(), false),
-        &mut sink,
-        bound,
-        preset,
-        Some(&NoPulse),
-    )
-    .unwrap_err();
-    assert_eq!(error.error().stage, Stage::Policy);
-    assert!(sink.out.is_empty());
-    assert_eq!(counter.load(Ordering::SeqCst), 0);
-    let unmet: Vec<_> = error
-        .error()
-        .report
-        .decisions()
-        .flat_map(|d| d.unmet_requirements.iter())
-        .collect();
-    assert!(
-        unmet.contains(&(PolicyRequirement::OutputWait, RequirementEvidence::Unknown)),
         "{unmet:?}"
     );
 }

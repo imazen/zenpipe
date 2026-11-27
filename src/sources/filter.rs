@@ -46,8 +46,8 @@ impl FilterSource {
     ) -> crate::PipeResult<Self> {
         if upstream.format() != format::RGBAF32_LINEAR {
             return Err(at!(PipeError::FormatMismatch {
-                expected: format::RGBAF32_LINEAR,
-                got: upstream.format(),
+                expected: Box::new(format::RGBAF32_LINEAR),
+                got: Box::new(upstream.format()),
             }));
         }
         assert!(
@@ -77,7 +77,7 @@ impl Source for FilterSource {
         };
 
         let w = strip.width();
-        let h = strip.rows();
+        let h = strip.height();
         let pixels = w as usize * h as usize;
 
         // Apply filter pipeline directly from upstream strip data.
@@ -88,12 +88,11 @@ impl Source for FilterSource {
             .apply(in_f32, &mut self.dst_buf, w, h, 4, &mut self.ctx)
             .map_err(|e| at!(PipeError::Op(e.to_string())))?;
 
-        let stride = format::RGBAF32_LINEAR.aligned_stride(w);
+        static FMT: PixelFormat = format::RGBAF32_LINEAR;
+        let stride = crate::format::aligned_stride(&FMT, w);
         let data: &[u8] = bytemuck::cast_slice(&self.dst_buf);
 
-        Ok(Some(
-            Strip::new(data, w, h, stride, format::RGBAF32_LINEAR).pipe_err()?,
-        ))
+        Ok(Some(Strip::new(data, w, h, stride, &FMT).pipe_err()?))
     }
 
     fn width(&self) -> u32 {

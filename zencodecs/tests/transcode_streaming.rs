@@ -13,7 +13,7 @@ use zencodec::encode::{EncodeJob, Encoder, EncoderConfig, OutputTiming};
 use zencodecs::TranscodeSink;
 use zenjpeg::JpegEncoderConfig;
 use zenjpeg::encoder::ChromaSubsampling;
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelFormat, PixelView};
 
 const W: u32 = 200;
 const H: u32 = 120;
@@ -29,7 +29,7 @@ fn rgb() -> Vec<u8> {
 
 fn png() -> Vec<u8> {
     let px = rgb();
-    let s = PixelSlice::new(&px, W, H, W as usize * 3, PixelDescriptor::RGB8_SRGB).unwrap();
+    let s = PixelView::new(&px, W, H, W as usize * 3, &zenpixels::formats::RGB8_SRGB).unwrap();
     zenpng::PngEncoderConfig::new()
         .job()
         .encoder()
@@ -52,7 +52,7 @@ fn transcode_streams_while_decoding() {
     let w = writes.clone();
     let mut sink = TranscodeSink::new(
         cfg().job().dyn_encoder().unwrap(),
-        JpegEncoderConfig::supported_descriptors(),
+        JpegEncoderConfig::supported_pixel_formats(),
     )
     .with_writer(move |b| {
         w.lock().unwrap().push(b.to_vec());
@@ -60,11 +60,7 @@ fn transcode_streams_while_decoding() {
     });
     zenpng::PngDecoderConfig::new()
         .job()
-        .push_decoder(
-            Cow::Borrowed(&file),
-            &mut sink,
-            &[PixelDescriptor::RGB8_SRGB],
-        )
+        .push_decoder(Cow::Borrowed(&file), &mut sink, &[PixelFormat::RGB8_SRGB])
         .unwrap();
     let timing = sink
         .output_timing()
@@ -75,7 +71,7 @@ fn transcode_streams_while_decoding() {
     assert!(sink.finish_encode().unwrap().is_empty());
 
     let px = rgb();
-    let s = PixelSlice::new(&px, W, H, W as usize * 3, PixelDescriptor::RGB8_SRGB).unwrap();
+    let s = PixelView::new(&px, W, H, W as usize * 3, &zenpixels::formats::RGB8_SRGB).unwrap();
     let want = cfg().job().encoder().unwrap().encode(s).unwrap().into_vec();
     assert_eq!(writes.lock().unwrap().concat(), want);
 }
@@ -88,15 +84,11 @@ fn without_a_streaming_encoder_everything_arrives_at_finish() {
             .job()
             .dyn_encoder()
             .unwrap(),
-        JpegEncoderConfig::supported_descriptors(),
+        JpegEncoderConfig::supported_pixel_formats(),
     );
     zenpng::PngDecoderConfig::new()
         .job()
-        .push_decoder(
-            Cow::Borrowed(&file),
-            &mut sink,
-            &[PixelDescriptor::RGB8_SRGB],
-        )
+        .push_decoder(Cow::Borrowed(&file), &mut sink, &[PixelFormat::RGB8_SRGB])
         .unwrap();
     assert_eq!(sink.output_timing(), Some(OutputTiming::AT_FINISH));
     assert!(sink.pending_output().is_empty());

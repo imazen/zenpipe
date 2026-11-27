@@ -43,7 +43,7 @@ use alloc::vec::Vec;
 
 use zencodec::decode::DynAnimationFrameDecoder;
 use zencodec::encode::{DynAnimationFrameEncoder, EncodeOutput};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::PixelView;
 
 use crate::Source;
 #[allow(unused_imports)]
@@ -115,7 +115,8 @@ impl FrameSource {
         let info = decoder.info().clone();
         let w = info.width;
         let h = info.height;
-        let format = PixelDescriptor::RGBA8_SRGB; // animation decoders typically produce RGBA8
+        let format = PixelFormat::RGBA8_SRGB; // animation decoders typically produce RGBA8
+        let stride = crate::format::aligned_stride(&format, w);
 
         let mut source = Self {
             decoder,
@@ -123,7 +124,7 @@ impl FrameSource {
             width: w,
             height: h,
             format,
-            stride: format.aligned_stride(w),
+            stride,
             strip_height: 16.min(h),
             y: 0,
             frame_info: None,
@@ -185,13 +186,13 @@ impl FrameSource {
             Some(owned) => {
                 let pixels = owned.pixels();
                 let w = pixels.width();
-                let h = pixels.rows();
-                let desc = pixels.descriptor();
+                let h = pixels.height();
+                let fmt = pixels.format().clone();
 
                 self.width = w;
                 self.height = h;
-                self.format = desc;
-                self.stride = desc.aligned_stride(w);
+                self.stride = crate::format::aligned_stride(&fmt, w);
+                self.format = fmt;
                 self.strip_height = 16.min(h);
 
                 // Copy frame data into our buffer.
@@ -205,9 +206,10 @@ impl FrameSource {
                 }
 
                 self.y = 0;
-                // This legacy FrameInfo still represents integer milliseconds.
-                #[allow(deprecated)]
-                let duration_ms = owned.duration_ms();
+                // Legacy FrameInfo still represents integer milliseconds.
+                let dur = owned.duration();
+                let duration_ms =
+                    dur.ticks_at(1000).unwrap_or(u64::MAX).min(u32::MAX as u64) as u32;
                 self.frame_info = Some(FrameInfo {
                     index: owned.frame_index(),
                     duration_ms,
@@ -243,7 +245,7 @@ impl Source for FrameSource {
                 self.width,
                 rows,
                 self.stride,
-                self.format,
+                &self.format,
             )
             .pipe_err()?,
         ))
@@ -258,7 +260,7 @@ impl Source for FrameSource {
     }
 
     fn format(&self) -> PixelFormat {
-        self.format
+        self.format.clone()
     }
 }
 
@@ -297,7 +299,7 @@ impl FrameSink {
         height: u32,
         format: PixelFormat,
     ) -> Self {
-        let stride = format.aligned_stride(width);
+        let stride = crate::format::aligned_stride(&format, width);
         // Saturating fallback for the infallible-`new` ABI: try checked,
         // and on overflow fall through to a zero-length buffer that the
         // first frame copy will explicitly reject. New code should prefer
@@ -340,19 +342,19 @@ impl FrameSink {
             .as_mut()
             .ok_or_else(|| at!(PipeError::Op("encoder already finished".to_string())))?;
 
-        let stride = self.format.aligned_stride(self.width);
+        let stride = crate::format::aligned_stride(&self.format, self.width);
         let total = stride * self.rows_accumulated as usize;
 
-        let pixels = PixelSlice::new(
+        let pixels = PixelView::new(
             &self.frame_buf[..total],
             self.width,
             self.rows_accumulated,
             stride,
-            self.format,
+            &self.format,
         )
         .map_err(|e| {
             at!(PipeError::Op(alloc::format!(
-                "PixelSlice construction failed: {e}"
+                "PixelView construction failed: {e}"
             )))
         })?;
 
@@ -391,10 +393,10 @@ impl FrameSink {
 
 impl crate::Sink for FrameSink {
     fn consume(&mut self, strip: &Strip<'_>) -> crate::PipeResult<()> {
-        if strip.descriptor() != self.format {
+        if *strip.format() != self.format {
             return Err(at!(PipeError::FormatMismatch {
-                expected: self.format,
-                got: strip.descriptor(),
+                expected: Box::new(self.format.clone()),
+                got: Box::new(strip.format().clone()),
             }));
         }
         if strip.width() != self.width {
@@ -404,8 +406,8 @@ impl crate::Sink for FrameSink {
                 strip.width()
             ))));
         }
-        let stride = self.format.aligned_stride(self.width);
-        for r in 0..strip.rows() {
+        let stride = crate::format::aligned_stride(&self.format, self.width);
+        for r in 0..strip.height() {
             if self.rows_accumulated >= self.height {
                 return Err(at!(PipeError::DimensionMismatch(alloc::format!(
                     "frame sink received more than {} rows",
@@ -508,12 +510,13 @@ fn in_format(pipeline: Box<dyn Source>, format: PixelFormat) -> crate::PipeResul
     if from == format {
         return Ok(pipeline);
     }
-    let convert = crate::ops::RowConverterOp::new(from, format).ok_or_else(|| {
-        at!(PipeError::FormatMismatch {
-            expected: format,
-            got: from,
-        })
-    })?;
+    let convert =
+        crate::ops::RowConverterOp::new(from.clone(), format.clone()).ok_or_else(|| {
+            at!(PipeError::FormatMismatch {
+                expected: Box::new(format),
+                got: Box::new(from),
+            })
+        })?;
     Ok(Box::new(
         crate::sources::TransformSource::new(pipeline).push(convert),
     ))
@@ -545,7 +548,7 @@ pub fn transcode_with_pulse_and_limits(
 ) -> crate::PipeResult<EncodeOutput> {
     check_pulse(pulse)?;
     let mut frame_source = FrameSource::new_with_pulse(decoder, pulse)?;
-    let mut frame_sink = FrameSink::new(encoder, out_width, out_height, out_format);
+    let mut frame_sink = FrameSink::new(encoder, out_width, out_height, out_format.clone());
 
     let mut frames_seen: u32 = 0;
     while let Some(info) = frame_source.frame_info() {
@@ -569,10 +572,13 @@ pub fn transcode_with_pulse_and_limits(
         let frame_data = frame_source.data.clone();
         let w = frame_source.width;
         let h = frame_source.height;
-        let fmt = frame_source.format;
+        let fmt = frame_source.format.clone();
         let mem = crate::sources::MaterializedSource::from_data(frame_data, w, h, fmt);
 
-        let mut pipeline = in_format(build_pipeline(Box::new(mem), info.index)?, out_format)?;
+        let mut pipeline = in_format(
+            build_pipeline(Box::new(mem), info.index)?,
+            out_format.clone(),
+        )?;
 
         // Drain pipeline into frame sink.
         frame_sink.begin_frame();

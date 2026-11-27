@@ -229,7 +229,7 @@ impl Limits {
         }
 
         if let Some(max_mem) = self.max_memory_bytes {
-            let mem = pixels * format.bytes_per_pixel() as u64;
+            let mem = pixels * format.layout.bytes_per_pixel() as u64;
             if mem > max_mem {
                 return Err(at!(PipeError::LimitExceeded(alloc::format!(
                     "estimated memory {mem} bytes exceeds max {max_mem}"

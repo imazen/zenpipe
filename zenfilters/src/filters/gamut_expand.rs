@@ -4,7 +4,7 @@ use crate::filter::Filter;
 use crate::param_schema::*;
 use crate::planes::OklabPlanes;
 use crate::prelude::*;
-use zenpixels_convert::gamut::GamutMatrix;
+type Mat3 = [[f32; 3]; 3];
 
 /// Gamut expansion: hue-selective chroma boost simulating wider color gamuts.
 ///
@@ -257,23 +257,23 @@ fn linear_srgb_to_linear_p3(rgb: [f32; 3]) -> [f32; 3] {
 // ============================================================================
 
 // BT.709/sRGB → LMS combined matrix.
-// Matches zenpixels_convert::oklab::rgb_to_lms_matrix(Bt709).
-const SRGB_TO_LMS: GamutMatrix = [
+// Matches zenpixels_convert::oklab::OklabSpace::for_primaries(Bt709).rgb_to_lms().
+const SRGB_TO_LMS: Mat3 = [
     [0.412_221_46, 0.536_332_55, 0.051_445_995],
     [0.211_903_5, 0.680_699_5, 0.107_396_96],
     [0.088_302_46, 0.281_718_85, 0.629_978_7],
 ];
 
 // LMS → BT.709/sRGB combined matrix.
-// Matches zenpixels_convert::oklab::lms_to_rgb_matrix(Bt709).
-const SRGB_FROM_LMS: GamutMatrix = [
+// Matches zenpixels_convert::oklab::OklabSpace::for_primaries(Bt709).lms_to_rgb().
+const SRGB_FROM_LMS: Mat3 = [
     [4.076_741_7, -3.307_711_6, 0.230_969_94],
     [-1.268_438, 2.609_757_4, -0.341_319_38],
     [-0.004_196_086_3, -0.703_418_6, 1.707_614_7],
 ];
 
 // BT.709 → Display P3 gamut matrix.
-const SRGB_TO_P3: GamutMatrix = [
+const SRGB_TO_P3: Mat3 = [
     [0.822_462_1, 0.177_538, 0.0],
     [0.033_194_2, 0.966_805_8, 0.0],
     [0.017_082_6, 0.072_397_4, 0.910_519_9],

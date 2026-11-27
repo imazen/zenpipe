@@ -175,7 +175,7 @@ fn raw_encode(t: TileRef<'_>) -> PipeResult<Vec<u8>> {
 fn jpeg_encode(t: TileRef<'_>) -> PipeResult<Vec<u8>> {
     use enough::Unstoppable;
     use zenjpeg::encoder::{ChromaSubsampling, EncoderConfig, PixelLayout};
-    let stride = t.width as usize * t.format.bytes_per_pixel();
+    let stride = t.width as usize * t.format.layout.bytes_per_pixel();
     let mut enc = EncoderConfig::ycbcr(80.0, ChromaSubsampling::Quarter)
         .progressive(false)
         .optimize_huffman(false)
@@ -304,7 +304,7 @@ fn jpeg_source(width: u32, height: u32) -> Box<dyn Source> {
     use std::borrow::Cow;
     use zencodec::decode::{DecodeJob, DecoderConfig};
     use zenjpeg::encoder::{ChromaSubsampling, EncoderConfig, PixelLayout};
-    use zenpixels::PixelDescriptor;
+    use zenpixels::PixelFormat;
 
     let stride = width as usize * 4;
     let mut enc = EncoderConfig::ycbcr(85.0, ChromaSubsampling::Quarter)
@@ -341,7 +341,7 @@ fn jpeg_source(width: u32, height: u32) -> Box<dyn Source> {
     let bytes = enc.finish().expect("jpeg finish");
     let decoder = zenjpeg::JpegDecoderConfig::default()
         .job()
-        .dyn_streaming_decoder(Cow::Owned(bytes), &[PixelDescriptor::RGBA8_SRGB])
+        .dyn_streaming_decoder(Cow::Owned(bytes), &[PixelFormat::RGBA8_SRGB])
         .expect("jpeg streaming decoder");
     Box::new(zenpipe::codec::DecoderSource::new(decoder).expect("DecoderSource"))
 }

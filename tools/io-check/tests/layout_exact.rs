@@ -79,7 +79,7 @@ fn run_layout(plan: LayoutPlan, w: u32, h: u32, data: Vec<u8>) -> (u32, u32, Vec
     let (ow, oh) = (pipeline.width(), pipeline.height());
     let mut pixels = Vec::new();
     while let Some(strip) = pipeline.next().unwrap() {
-        for r in 0..strip.rows() {
+        for r in 0..strip.height() {
             pixels.extend_from_slice(strip.row(r));
         }
     }

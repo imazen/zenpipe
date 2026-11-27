@@ -10,14 +10,16 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use zencodec::encode::{EncodeJob, EncoderConfig};
-use zencodec::operation::{DecodeRequest, OutputSchedule, PolicyRequirement, PolicySet};
+use zencodec::operation::{
+    DecodeOptions as CodecDecodeOptions, OutputSchedule, PolicyRequirement, PolicySet,
+};
 use zencodec::storage::StorageBudget;
 use zencodec::{CodecSet, ImageFormat, NoPulse};
 use zencodec_io::row_encode::{self, Options, Stage};
 use zencodec_io::{DriveOptions, FileReadAt};
 use zenpipe::io::{DecodeOptions, DecodeSource, PipelineRows};
 use zenpipe::{PipeResult, Source, Strip};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelFormat, PixelView};
 
 const W: u32 = 97;
 const H: u32 = 65;
@@ -39,19 +41,13 @@ fn pattern(width: u32, height: u32, channels: u32) -> Vec<u8> {
 
 fn png_fixture(width: u32, height: u32, channels: u32) -> (Vec<u8>, Vec<u8>) {
     let samples = pattern(width, height, channels);
-    let descriptor = if channels == 4 {
-        PixelDescriptor::RGBA8_SRGB
+    let format = if channels == 4 {
+        &zenpixels::formats::RGBA8_SRGB
     } else {
-        PixelDescriptor::RGB8_SRGB
+        &zenpixels::formats::RGB8_SRGB
     };
-    let pixels = PixelSlice::new(
-        &samples,
-        width,
-        height,
-        (width * channels) as usize,
-        descriptor,
-    )
-    .unwrap();
+    let pixels =
+        PixelView::new(&samples, width, height, (width * channels) as usize, format).unwrap();
     let file = zenpng::PngEncoderConfig::new()
         .job()
         .encode(pixels)
@@ -95,7 +91,7 @@ fn read_png(bytes: &[u8]) -> (u32, u32, usize, Vec<u8>) {
 fn collect(source: &mut dyn Source) -> Vec<u8> {
     let mut out = Vec::new();
     while let Some(strip) = source.next().unwrap() {
-        for r in 0..strip.rows() {
+        for r in 0..strip.height() {
             out.extend_from_slice(strip.row(r));
         }
     }
@@ -122,8 +118,8 @@ impl<S: Source> Source for Counted<S> {
     fn format(&self) -> zenpipe::PixelFormat {
         self.inner.format()
     }
-    fn color_context(&self) -> Option<std::sync::Arc<zenpixels::ColorContext>> {
-        self.inner.color_context()
+    fn color_origin(&self) -> Option<zenpixels::ColorOrigin> {
+        self.inner.color_origin()
     }
 }
 
@@ -138,7 +134,7 @@ fn png_rows_equal_authored_samples_and_the_queue_never_grows() {
             DecodeSource::from_slice(&codecs, &file, opts().with_queue_slots(256)).unwrap();
         assert_eq!(source.stats().strips, 0, "construction decoded rows");
         assert_eq!((source.width(), source.height()), (W, H));
-        assert_eq!(source.format(), PixelDescriptor::RGB8_SRGB);
+        assert_eq!(source.format(), PixelFormat::RGB8_SRGB);
         assert_eq!(collect(&mut source), samples, "strip_rows {strip_rows}");
         let stats = source.stats();
         eprintln!("png decode strip_rows={strip_rows}: {stats:?}");
@@ -358,54 +354,6 @@ fn required_live_schedule_refuses_a_buffered_png_before_any_pixel_work() {
     }
 }
 
-/// The compatibility placement: the requirement also in the driver's deprecated
-/// preset (and the same set as the operation policy). The two sets are ANDed;
-/// the operation still refuses before any pixel work and names
-/// `OutputSchedule`.
-#[test]
-fn required_live_schedule_in_the_preset_is_named_before_any_pixel_work() {
-    for pulse in [None, Some(&NoPulse as &dyn zencodec::Pulse)] {
-        let (file, _) = png_fixture(W, H, 3);
-        let codecs = codecs();
-        let source = DecodeSource::from_slice(&codecs, &file, options()).unwrap();
-        assert_eq!(source.stats().strips, 0);
-        let pulls = Arc::new(AtomicU64::new(0));
-        let counted = Counted {
-            inner: source,
-            pulls: pulls.clone(),
-        };
-        let rows = PipelineRows::from_source(counted).unwrap();
-        // Effort 19 buffers the image and emits at finish: no live output exists.
-        let job = zenpng::PngEncoderConfig::new()
-            .with_generic_effort(19)
-            .job();
-        let live = PolicySet::new().require_output_schedule(OutputSchedule::Live);
-        #[allow(
-            deprecated,
-            reason = "exercises the migration path: a preset still ANDs its requirements"
-        )]
-        let preset = encode_options().with_policy_set(live);
-        let mut out = Vec::new();
-        let error = row_encode::encode_job(job, rows, &mut out, live, preset, pulse).unwrap_err();
-        assert_eq!(error.error().stage, Stage::Policy);
-        assert_eq!(error.error().emitted, 0);
-        assert!(out.is_empty());
-        assert_eq!(pulls.load(Ordering::SeqCst), 0, "a row was requested");
-        let unmet: Vec<_> = error
-            .error()
-            .report
-            .decisions()
-            .flat_map(|d| d.unmet_requirements.iter())
-            .collect();
-        assert!(
-            unmet
-                .iter()
-                .any(|(r, _)| *r == PolicyRequirement::OutputSchedule),
-            "{unmet:?}"
-        );
-    }
-}
-
 #[test]
 fn erased_registry_job_matches_the_typed_job_bytes() {
     let (file, _) = png_fixture(W, H, 3);
@@ -453,7 +401,7 @@ fn file_source_to_seek_back_file_matches_the_slice_route() {
     let codecs = codecs();
     let source = DecodeSource::new(
         &codecs,
-        &DecodeRequest::new(),
+        &CodecDecodeOptions::new(),
         FileReadAt::open(&input).unwrap(),
         PolicySet::new(),
         options().with_drive(DriveOptions::new(0, 4096)),
@@ -490,9 +438,9 @@ fn rgba_png_resize_streams_through_the_planned_encoder() {
     let (file, samples) = png_fixture(W, H, 4);
     let codecs = codecs();
     let source = DecodeSource::from_bytes(&codecs, file, options().with_strip_rows(8)).unwrap();
-    assert_eq!(source.format(), PixelDescriptor::RGBA8_SRGB);
+    assert_eq!(source.format(), PixelFormat::RGBA8_SRGB);
     let config = zenresize::ResizeConfig::builder(W, H, 48, 32)
-        .format(PixelDescriptor::RGBA8_SRGB)
+        .format(PixelFormat::RGBA8_SRGB)
         .build();
     let resized = zenpipe::sources::ResizeSource::new(Box::new(source), &config, 16).unwrap();
     let rows = PipelineRows::from_source(resized).unwrap();
@@ -510,7 +458,7 @@ fn rgba_png_resize_streams_through_the_planned_encoder() {
 
     // Control: the same resize over the whole authored raster.
     let whole =
-        zenpipe::sources::MaterializedSource::from_data(samples, W, H, PixelDescriptor::RGBA8_SRGB);
+        zenpipe::sources::MaterializedSource::from_data(samples, W, H, PixelFormat::RGBA8_SRGB);
     let mut control = zenpipe::sources::ResizeSource::new(Box::new(whole), &config, 16).unwrap();
     let expected = collect(&mut control);
     let (w, h, channels, decoded) = read_png(&streamed);
@@ -530,20 +478,26 @@ fn jpeg_controlled_strips_equal_the_one_shot_decode() {
         ),
     ];
     for (label, config) in configs {
-        let pixels =
-            PixelSlice::new(&samples, W, H, (W * 3) as usize, PixelDescriptor::RGB8_SRGB).unwrap();
+        let pixels = PixelView::new(
+            &samples,
+            W,
+            H,
+            (W * 3) as usize,
+            &zenpixels::formats::RGB8_SRGB,
+        )
+        .unwrap();
         let file = config.job().encode(pixels).unwrap().into_vec();
-        let one_shot = DecodeRequest::new().decode(&codecs, &file).unwrap();
+        let one_shot = CodecDecodeOptions::new().decode(&codecs, &file).unwrap();
         let reference_pixels = one_shot.output().pixels();
         let mut reference = Vec::new();
-        for r in 0..reference_pixels.rows() {
+        for r in 0..reference_pixels.height() {
             reference.extend_from_slice(reference_pixels.row(r));
         }
         for strip_rows in [16, 64] {
             let mut source =
                 DecodeSource::from_slice(&codecs, &file, options().with_strip_rows(strip_rows))
                     .unwrap();
-            assert_eq!(source.format(), reference_pixels.descriptor(), "{label}");
+            assert_eq!(source.format(), *reference_pixels.format(), "{label}");
             let decoded = collect(&mut source);
             assert_eq!(decoded, reference, "{label} strip_rows {strip_rows}");
             eprintln!("jpeg {label} strip_rows={strip_rows}: {:?}", source.stats());
@@ -583,7 +537,7 @@ fn a_sequential_stream_through_a_bounded_window_matches_the_samples() {
     );
     let mut source = DecodeSource::new(
         &codecs(),
-        &DecodeRequest::new(),
+        &CodecDecodeOptions::new(),
         buffered,
         PolicySet::new(),
         options(),
@@ -614,7 +568,7 @@ impl<S: Source> Source for Opaque<S> {
 fn a_pipeline_that_cannot_state_its_color_must_declare_it() {
     let (file, _) = png_fixture(W, H, 3);
     let source = DecodeSource::from_bytes(&codecs(), file, options()).unwrap();
-    let known = source.color_context();
+    let known = source.color_origin();
     assert!(known.is_some());
     let error = PipelineRows::from_source(Opaque(source))
         .err()

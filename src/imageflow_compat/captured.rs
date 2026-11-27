@@ -20,7 +20,7 @@ pub struct CapturedBitmap {
 
 impl CapturedBitmap {
     pub fn bytes_per_pixel(&self) -> usize {
-        self.format.bytes_per_pixel()
+        self.format.layout.bytes_per_pixel()
     }
 
     pub fn stride(&self) -> usize {

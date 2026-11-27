@@ -246,7 +246,7 @@ mod inner {
                 source_hash,
                 width: config.source_info.width,
                 height: config.source_info.height,
-                format: config.source_info.format,
+                format: config.source_info.format.clone(),
                 exif_orientation: config.source_info.exif_orientation,
                 has_alpha: config.source_info.has_alpha,
                 has_gain_map: config.source_info.has_gain_map,
@@ -285,7 +285,7 @@ mod inner {
                     config.source_info,
                     entry.width,
                     entry.height,
-                    entry.format,
+                    entry.format.clone(),
                     entry.metadata.clone(),
                 );
                 let suffix_config = Self::segment_config(config, &nodes[split..], &suffix_info);
@@ -325,7 +325,7 @@ mod inner {
                         config.source_info,
                         entry.width,
                         entry.height,
-                        entry.format,
+                        entry.format.clone(),
                         entry.metadata.clone(),
                     );
                     let seg_sidecar = entry.sidecar.clone();
@@ -363,7 +363,7 @@ mod inner {
                         sidecar: prefix_sidecar.clone(),
                         width,
                         height,
-                        format,
+                        format: format.clone(),
                         last_used: self.generation,
                     },
                 );
@@ -488,12 +488,19 @@ mod tests {
                 return Ok(None);
             }
             let rows = 16.min(self.h - self.y);
-            let stride = RGBA8_SRGB.aligned_stride(self.w);
+            let stride = crate::format::aligned_stride(&RGBA8_SRGB, self.w);
             let data = vec![128u8; stride * rows as usize];
             self.y += rows;
             let leaked: &'static [u8] = alloc::vec::Vec::leak(data);
             Ok(Some(
-                Strip::new(leaked, self.w, rows, stride, RGBA8_SRGB).pipe_err()?,
+                Strip::new(
+                    leaked,
+                    self.w,
+                    rows,
+                    stride,
+                    &zenpixels::formats::RGBA8_SRGB,
+                )
+                .pipe_err()?,
             ))
         }
         fn width(&self) -> u32 {
@@ -922,7 +929,7 @@ mod tests {
         let (w, h) = (src.width(), src.height());
         let mut rows = 0;
         while let Some(strip) = src.next().unwrap() {
-            rows += strip.rows();
+            rows += strip.height();
         }
         assert_eq!(rows, h);
         (w, h)

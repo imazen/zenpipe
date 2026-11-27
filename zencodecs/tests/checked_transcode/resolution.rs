@@ -7,10 +7,10 @@ fn density(x: f64, y: f64, unit: ResolutionUnit) -> Resolution {
 }
 fn png_source(resolution: Resolution, metadata: Metadata) -> Vec<u8> {
     let bytes = [19, 83, 201, 23, 151, 43, 255, 255, 255].repeat(9);
-    let pixels = PixelSlice::new(&bytes, 2, 9, 9, PixelDescriptor::RGB8_SRGB).unwrap();
+    let pixels = PixelView::new(&bytes, 2, 9, 9, &zenpixels::formats::RGB8_SRGB).unwrap();
     zenpng::PngEncoderConfig::new()
         .job()
-        .with_metadata_policy(metadata, MetadataPolicy::PreserveExact)
+        .with_unfiltered_metadata(metadata.filtered(&MetadataPolicy::PreserveExact))
         .try_with_resolution(resolution)
         .unwrap()
         .encoder()
@@ -125,7 +125,7 @@ fn native_jfif_density_is_converted_exactly_to_png_units() {
             .with_segments(segments)
             .encode_bytes(&[19, 83, 201].repeat(17 * 9), 17, 9, PixelLayout::Rgb8Srgb)
             .unwrap();
-        let decoded = zencodec::operation::DecodeRequest::new()
+        let decoded = zencodec::operation::DecodeOptions::new()
             .decode(&codecs, &input)
             .unwrap();
         assert!(

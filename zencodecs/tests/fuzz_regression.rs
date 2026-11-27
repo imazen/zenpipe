@@ -117,6 +117,7 @@ struct CountingSink {
     max_rows: u32,
     width: u32,
     bpp: usize,
+    pending_format: Option<zenpixels::PixelFormat>,
 }
 
 impl zencodec::decode::DecodeRowSink for CountingSink {
@@ -124,13 +125,13 @@ impl zencodec::decode::DecodeRowSink for CountingSink {
         &mut self,
         width: u32,
         height: u32,
-        descriptor: zenpixels::PixelDescriptor,
+        pixel_format: zenpixels::PixelFormat,
     ) -> Result<(), zencodec::decode::SinkError> {
         if height > self.max_rows || width > 1024 {
             return Err("dimensions exceed fuzz limit".into());
         }
         self.width = width;
-        self.bpp = descriptor.bytes_per_pixel();
+        self.bpp = pixel_format.layout.bytes_per_pixel();
         let strip_bytes = width as usize * self.bpp * 16;
         self.buf.resize(strip_bytes.min(1024 * 1024), 0);
         Ok(())
@@ -138,22 +139,27 @@ impl zencodec::decode::DecodeRowSink for CountingSink {
 
     fn provide_next_buffer(
         &mut self,
-        _y: u32,
-        height: u32,
-        width: u32,
-        descriptor: zenpixels::PixelDescriptor,
-    ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
-        self.rows = self.rows.saturating_add(height);
+        strip: zencodec::decode::RowStrip,
+        pixel_format: zenpixels::PixelFormat,
+    ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
+        self.rows = self.rows.saturating_add(strip.height);
         if self.rows > self.max_rows {
             return Err("row count exceeds fuzz limit".into());
         }
-        let stride = width as usize * self.bpp;
-        let needed = stride * height as usize;
+        let stride = strip.width as usize * self.bpp;
+        let needed = stride * strip.height as usize;
         if needed > self.buf.len() {
             self.buf.resize(needed, 0);
         }
-        zenpixels::PixelSliceMut::new(&mut self.buf[..needed], width, height, stride, descriptor)
-            .map_err(|e| -> zencodec::decode::SinkError { format!("{e}").into() })
+        let fmt = self.pending_format.insert(pixel_format);
+        zenpixels::PixelViewMut::new(
+            &mut self.buf[..needed],
+            strip.width,
+            strip.height,
+            stride,
+            fmt,
+        )
+        .map_err(|e| -> zencodec::decode::SinkError { format!("{e}").into() })
     }
 
     fn finish(&mut self) -> Result<(), zencodec::decode::SinkError> {
@@ -169,6 +175,7 @@ fn run_push_decode(data: &[u8]) {
         max_rows: 1024,
         width: 0,
         bpp: 4,
+        pending_format: None,
     };
     let _ = DecodeRequest::new(data)
         .with_limits(&limits)

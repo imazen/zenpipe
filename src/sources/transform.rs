@@ -55,29 +55,34 @@ impl TransformSource {
         assert_eq!(
             op.input_format(),
             self.output_format,
-            "op input format {} doesn't match chain output {}",
+            "op input format {:?} doesn't match chain output {:?}",
             op.input_format(),
             self.output_format,
         );
 
-        // Try to compose with the last op if both are RowConverters.
-        if let Some(new_rc) = op.as_row_converter()
+        // Try to compose with the last op if both are RowPlan-backed converters.
+        if op.as_row_plan().is_some()
             && let Some(last) = self.ops.last()
-            && let Some(prev_rc) = last.as_row_converter()
-            && let Some(composed) = prev_rc.compose(new_rc)
+            && last.as_row_plan().is_some()
         {
-            let from = self.ops.last().unwrap().input_format();
+            let from = last.input_format();
             let to = op.output_format();
-            self.ops.pop();
-            if composed.is_identity() {
+            if from == to {
                 // Total cancellation — no op needed.
+                self.ops.pop();
                 self.output_format = from;
-            } else {
-                let composed_op = crate::ops::RowConverterOp::from_converter(composed, from, to);
-                self.output_format = to;
-                self.ops.push(Box::new(composed_op));
+                return self;
             }
-            return self;
+            if let Some(composed_op) = crate::ops::RowConverterOp::new(from.clone(), to.clone()) {
+                self.ops.pop();
+                if composed_op.as_row_plan().is_some_and(|p| p.is_identity()) {
+                    self.output_format = from;
+                } else {
+                    self.output_format = to;
+                    self.ops.push(Box::new(composed_op));
+                }
+                return self;
+            }
         }
 
         self.output_format = op.output_format();
@@ -95,7 +100,7 @@ impl Source for TransformSource {
         };
 
         let width = strip.width();
-        let height = strip.rows();
+        let height = strip.height();
 
         if self.ops.is_empty() {
             // No ops — copy to buf_a for lifetime management.
@@ -106,8 +111,8 @@ impl Source for TransformSource {
                     &self.buf_a,
                     width,
                     height,
-                    strip.stride(),
-                    self.output_format,
+                    strip.stride_bytes(),
+                    &self.output_format,
                 )
                 .pipe_err()?,
             ));
@@ -116,14 +121,16 @@ impl Source for TransformSource {
         // Apply first op directly from strip.as_strided_bytes() → buf_b, skipping the
         // buf_a copy. This saves one full memcpy per strip.
         let first_op = &mut self.ops[0];
-        let out_size = first_op.output_format().aligned_stride(width) * height as usize;
+        let out_size =
+            crate::format::aligned_stride(&first_op.output_format(), width) * height as usize;
         self.buf_b.resize(out_size, 0);
         first_op.apply(strip.as_strided_bytes(), &mut self.buf_b, width, height);
         let mut current_is_a = false;
 
         // Remaining ops ping-pong between buf_a and buf_b.
         for op in &mut self.ops[1..] {
-            let out_size = op.output_format().aligned_stride(width) * height as usize;
+            let out_size =
+                crate::format::aligned_stride(&op.output_format(), width) * height as usize;
             if current_is_a {
                 self.buf_b.resize(out_size, 0);
                 op.apply(&self.buf_a, &mut self.buf_b, width, height);
@@ -135,7 +142,7 @@ impl Source for TransformSource {
             }
         }
 
-        let stride = self.output_format.aligned_stride(width);
+        let stride = crate::format::aligned_stride(&self.output_format, width);
         let data = if current_is_a {
             &self.buf_a
         } else {
@@ -143,7 +150,7 @@ impl Source for TransformSource {
         };
 
         Ok(Some(
-            Strip::new(data, width, height, stride, self.output_format).pipe_err()?,
+            Strip::new(data, width, height, stride, &self.output_format).pipe_err()?,
         ))
     }
 
@@ -154,7 +161,7 @@ impl Source for TransformSource {
         self.upstream.height()
     }
     fn format(&self) -> PixelFormat {
-        self.output_format
+        self.output_format.clone()
     }
 }
 
@@ -174,7 +181,7 @@ mod tests {
         let w = 2u32;
         let h = 2u32;
         let fmt = RGBA8_SRGB;
-        let stride = fmt.aligned_stride(w); // 8
+        let stride = crate::format::aligned_stride(&fmt, w); // 8
 
         // Two rows of distinct RGBA pixels.
         #[rustfmt::skip]
@@ -185,7 +192,8 @@ mod tests {
             0, 0, 255, 255,   255, 255, 255, 255,
         ];
 
-        let upstream = MaterializedSource::from_data(data.clone(), w, h, fmt).with_strip_height(h);
+        let upstream =
+            MaterializedSource::from_data(data.clone(), w, h, fmt.clone()).with_strip_height(h);
 
         let mut ts = TransformSource::new(Box::new(upstream));
 
@@ -194,7 +202,7 @@ mod tests {
         assert_eq!(ts.height(), h);
 
         let strip = ts.next().unwrap().unwrap();
-        assert_eq!(strip.rows(), 2);
+        assert_eq!(strip.height(), 2);
         assert_eq!(strip.width(), 2);
         // Verify pixel data matches.
         assert_eq!(&strip.row(0)[..stride], &data[..stride]);
@@ -216,7 +224,8 @@ mod tests {
             255, 0, 0, 255,   0, 255, 0, 255,
         ];
 
-        let upstream = MaterializedSource::from_data(data, w, h, fmt_in).with_strip_height(h);
+        let upstream =
+            MaterializedSource::from_data(data, w, h, fmt_in.clone()).with_strip_height(h);
 
         let converter = RowConverterOp::must(fmt_in, RGB8_SRGB);
         let mut ts = TransformSource::new(Box::new(upstream)).push(converter);
@@ -224,11 +233,11 @@ mod tests {
         assert_eq!(ts.format(), RGB8_SRGB);
 
         let strip = ts.next().unwrap().unwrap();
-        assert_eq!(strip.rows(), 1);
+        assert_eq!(strip.height(), 1);
         assert_eq!(strip.width(), 2);
 
         let row = strip.row(0);
-        let rgb_stride = RGB8_SRGB.aligned_stride(w); // 6
+        let rgb_stride = crate::format::aligned_stride(&RGB8_SRGB, w); // 6
         // First pixel: R=255, G=0, B=0
         assert_eq!(row[0], 255);
         assert_eq!(row[1], 0);

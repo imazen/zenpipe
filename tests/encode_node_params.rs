@@ -14,8 +14,8 @@ fn small_png() -> Vec<u8> {
             pixels.extend_from_slice(&[(x * 8) as u8, (y * 8) as u8, ((x * y) % 251) as u8, 255]);
         }
     }
-    let slice =
-        zenpixels::PixelSlice::new(&pixels, 32, 32, 32 * 4, zenpipe::format::RGBA8_SRGB).unwrap();
+    let slice = zenpixels::PixelView::new(&pixels, 32, 32, 32 * 4, &zenpixels::formats::RGBA8_SRGB)
+        .unwrap();
     zencodecs::EncodeRequest::new(zencodec::ImageFormat::Png)
         .encode(slice, true)
         .expect("fixture png")

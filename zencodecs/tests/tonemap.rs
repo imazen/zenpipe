@@ -15,7 +15,7 @@
 use zencodec::Metadata;
 use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, ToneMapPolicy};
 use zenpixels::hdr::ContentLightLevel;
-use zenpixels::{Cicp, PixelDescriptor, PixelSlice, TransferFunction};
+use zenpixels::{Cicp, HlgMode, PixelFormat, PixelView, Primaries, SampleType, Transfer};
 
 /// One gray step per column, `H` rows.
 const H: u32 = 4;
@@ -24,7 +24,7 @@ const PQ_BT2020: Cicp = Cicp::new(9, 16, 0, true);
 const HLG_BT2020: Cicp = Cicp::new(9, 18, 0, true);
 
 fn pq_code(nits: f32) -> f32 {
-    linear_srgb::tf::linear_to_pq(nits / 10_000.0)
+    linear_srgb::default::linear_to_pq(nits / 10_000.0)
 }
 
 /// A gray ramp of f32 RGB code values, one column per value.
@@ -37,14 +37,14 @@ fn gray_rows(codes: &[f32]) -> Vec<u8> {
     row.repeat(H as usize)
 }
 
-fn desc(transfer: TransferFunction) -> PixelDescriptor {
-    PixelDescriptor::RGBF32_LINEAR
+fn desc(transfer: Transfer) -> PixelFormat {
+    PixelFormat::RGBF32_LINEAR
         .with_transfer(transfer)
-        .with_primaries(zenpixels::ColorPrimaries::Bt2020)
+        .with_primaries(Primaries::Bt2020)
 }
 
-fn encode(format: ImageFormat, px: &[u8], w: u32, d: PixelDescriptor, meta: Metadata) -> Vec<u8> {
-    let slice = PixelSlice::new(px, w, H, w as usize * 12, d).unwrap();
+fn encode(format: ImageFormat, px: &[u8], w: u32, d: &PixelFormat, meta: Metadata) -> Vec<u8> {
+    let slice = PixelView::new(px, w, H, w as usize * 12, d).unwrap();
     EncodeRequest::new(format)
         .with_tone_map_policy(ToneMapPolicy::Bt2408)
         .with_metadata(meta)
@@ -57,7 +57,7 @@ fn encode_streaming(
     format: ImageFormat,
     px: &[u8],
     w: u32,
-    d: PixelDescriptor,
+    d: &PixelFormat,
     meta: Metadata,
 ) -> Vec<u8> {
     encode_chunks(format, px, w, d, meta, 1)
@@ -67,7 +67,7 @@ fn encode_chunks(
     format: ImageFormat,
     px: &[u8],
     w: u32,
-    d: PixelDescriptor,
+    d: &PixelFormat,
     meta: Metadata,
     chunk: usize,
 ) -> Vec<u8> {
@@ -76,13 +76,13 @@ fn encode_chunks(
         .with_metadata(meta)
         .build_streaming_encoder(w, H)
         .unwrap();
-    se.encoder.begin(w, H, d).unwrap();
+    se.encoder.begin(w, H, d.clone()).unwrap();
     let stride = w as usize * 12;
     for y in (0..H as usize).step_by(chunk) {
         let rows = chunk.min(H as usize - y);
         let row = &px[y * stride..(y + rows) * stride];
         se.encoder
-            .push_rows(PixelSlice::new(row, w, rows as u32, stride, d).unwrap())
+            .push_rows(PixelView::new(row, w, rows as u32, stride, d).unwrap())
             .unwrap();
     }
     let mut out = Vec::new();
@@ -94,8 +94,8 @@ fn encode_chunks(
 /// The first row's red channel, after decoding to 8-bit.
 fn decoded_first_row(bytes: &[u8], w: u32) -> Vec<u8> {
     let d = DecodeRequest::new(bytes).decode_full_frame().unwrap();
-    assert_eq!(d.descriptor().channel_type(), zenpixels::ChannelType::U8);
-    let bpp = d.descriptor().bytes_per_pixel();
+    assert_eq!(d.pixel_format().layout.sample, SampleType::U8);
+    let bpp = d.pixel_format().layout.bytes_per_pixel();
     let row = d.pixels().row(0).to_vec();
     (0..w as usize).map(|x| row[x * bpp]).collect()
 }
@@ -113,8 +113,8 @@ fn pq_into_bmp_is_tone_mapped_and_streaming_matches() {
     let codes: Vec<f32> = NITS.iter().map(|&n| pq_code(n)).collect();
     let px = gray_rows(&codes);
     let w = codes.len() as u32;
-    let d = desc(TransferFunction::Pq);
-    let bytes = encode(ImageFormat::Bmp, &px, w, d, pq_meta());
+    let d = desc(Transfer::Pq);
+    let bytes = encode(ImageFormat::Bmp, &px, w, &d, pq_meta());
     let grays = decoded_first_row(&bytes, w);
     for pair in grays.windows(2) {
         assert!(pair[0] < pair[1], "gray ramp must increase: {grays:?}");
@@ -135,7 +135,7 @@ fn pq_into_bmp_is_tone_mapped_and_streaming_matches() {
 
     // Same peak (from MaxCLL) on both paths: the same file.
     assert_eq!(
-        encode_streaming(ImageFormat::Bmp, &px, w, d, pq_meta()),
+        encode_streaming(ImageFormat::Bmp, &px, w, &d, pq_meta()),
         bytes
     );
 }
@@ -145,10 +145,10 @@ fn pq_into_gif_matches_the_bmp_tone_map() {
     let codes: Vec<f32> = NITS.iter().map(|&n| pq_code(n)).collect();
     let px = gray_rows(&codes);
     let w = codes.len() as u32;
-    let d = desc(TransferFunction::Pq);
-    let bmp = decoded_first_row(&encode(ImageFormat::Bmp, &px, w, d, pq_meta()), w);
+    let d = desc(Transfer::Pq);
+    let bmp = decoded_first_row(&encode(ImageFormat::Bmp, &px, w, &d, pq_meta()), w);
     // Eight grays fit a palette exactly.
-    let gif = decoded_first_row(&encode(ImageFormat::Gif, &px, w, d, pq_meta()), w);
+    let gif = decoded_first_row(&encode(ImageFormat::Gif, &px, w, &d, pq_meta()), w);
     assert_eq!(gif, bmp);
 }
 
@@ -162,9 +162,9 @@ fn pq_into_jpeg_is_tone_mapped() {
         .collect();
     let w = codes.len() as u32;
     let px = gray_rows(&codes);
-    let d = desc(TransferFunction::Pq);
-    let bmp = decoded_first_row(&encode(ImageFormat::Bmp, &px, w, d, pq_meta()), w);
-    let jpeg = decoded_first_row(&encode(ImageFormat::Jpeg, &px, w, d, pq_meta()), w);
+    let d = desc(Transfer::Pq);
+    let bmp = decoded_first_row(&encode(ImageFormat::Bmp, &px, w, &d, pq_meta()), w);
+    let jpeg = decoded_first_row(&encode(ImageFormat::Jpeg, &px, w, &d, pq_meta()), w);
     for (i, (j, p)) in jpeg.iter().zip(&bmp).enumerate() {
         assert!(
             j.abs_diff(*p) <= 3,
@@ -178,13 +178,8 @@ fn png_keeps_pq() {
     let codes: Vec<f32> = NITS.iter().map(|&n| pq_code(n)).collect();
     let px = gray_rows(&codes);
     let w = codes.len() as u32;
-    let bytes = encode(
-        ImageFormat::Png,
-        &px,
-        w,
-        desc(TransferFunction::Pq),
-        pq_meta(),
-    );
+    let d = desc(Transfer::Pq);
+    let bytes = encode(ImageFormat::Png, &px, w, &d, pq_meta());
     let info = DecodeRequest::new(&bytes).decode_full_frame().unwrap();
     assert_eq!(info.info().source_color.cicp, Some(PQ_BT2020));
 }
@@ -194,11 +189,12 @@ fn hlg_reference_white_matches_pq_reference_white() {
     // HLG 0.75 is BT.2408's reference white (203 nits on the 1000-nit
     // reference display), as PQ 203 nits is.
     let hlg = gray_rows(&[0.0, 0.25, 0.5, 0.75, 1.0]);
+    let d_hlg = desc(Transfer::Hlg(HlgMode::Scene));
     let bytes = encode(
         ImageFormat::Bmp,
         &hlg,
         5,
-        desc(TransferFunction::Hlg),
+        &d_hlg,
         Metadata::none().with_cicp(HLG_BT2020),
     );
     let grays = decoded_first_row(&bytes, 5);
@@ -210,10 +206,8 @@ fn hlg_reference_white_matches_pq_reference_white() {
     let pq = gray_rows(&[pq_code(203.0)]);
     let mut meta = Metadata::none().with_cicp(PQ_BT2020);
     meta.content_light_level = Some(ContentLightLevel::new(1000, 400));
-    let pq_white = decoded_first_row(
-        &encode(ImageFormat::Bmp, &pq, 1, desc(TransferFunction::Pq), meta),
-        1,
-    )[0];
+    let d_pq = desc(Transfer::Pq);
+    let pq_white = decoded_first_row(&encode(ImageFormat::Bmp, &pq, 1, &d_pq, meta), 1)[0];
     assert!(
         grays[3].abs_diff(pq_white) <= 2,
         "HLG 0.75 gives {}, PQ 203 nits gives {pq_white}",
@@ -226,7 +220,7 @@ fn hlg_reference_white_matches_pq_reference_white() {
             ImageFormat::Bmp,
             &hlg,
             5,
-            desc(TransferFunction::Hlg),
+            &d_hlg,
             Metadata::none().with_cicp(HLG_BT2020)
         ),
         bytes
@@ -239,13 +233,13 @@ fn a_pq_descriptor_without_metadata_is_tone_mapped() {
     let codes: Vec<f32> = NITS.iter().map(|&n| pq_code(n)).collect();
     let px = gray_rows(&codes);
     let w = codes.len() as u32;
-    let d = desc(TransferFunction::Pq);
-    let bytes = encode(ImageFormat::Bmp, &px, w, d, Metadata::none());
+    let d = desc(Transfer::Pq);
+    let bytes = encode(ImageFormat::Bmp, &px, w, &d, Metadata::none());
     let grays = decoded_first_row(&bytes, w);
     assert_eq!(grays[7], 255);
     assert!(grays[5] >= 200, "{grays:?}");
     assert_eq!(
-        encode_streaming(ImageFormat::Bmp, &px, w, d, Metadata::none()),
+        encode_streaming(ImageFormat::Bmp, &px, w, &d, Metadata::none()),
         bytes
     );
 }
@@ -253,7 +247,7 @@ fn a_pq_descriptor_without_metadata_is_tone_mapped() {
 #[test]
 fn preserve_refuses_on_both_paths() {
     let px = gray_rows(&[pq_code(203.0), pq_code(400.0)]);
-    let d = desc(TransferFunction::Pq);
+    let d = desc(Transfer::Pq);
     for meta in [Metadata::none(), pq_meta()] {
         let request = || {
             EncodeRequest::new(ImageFormat::Bmp)
@@ -262,16 +256,16 @@ fn preserve_refuses_on_both_paths() {
         };
         assert!(
             request()
-                .encode(PixelSlice::new(&px, 2, H, 24, d).unwrap(), false)
+                .encode(PixelView::new(&px, 2, H, 24, &d).unwrap(), false)
                 .is_err()
         );
         let built = request().build_streaming_encoder(2, H);
         if let Ok(mut se) = built {
             // Buffered codecs may reject only at finalization. A successful
             // file is forbidden.
-            let result = se.encoder.begin(2, H, d).and_then(|_| {
+            let result = se.encoder.begin(2, H, d.clone()).and_then(|_| {
                 se.encoder
-                    .push_rows(PixelSlice::new(&px, 2, H, 24, d).unwrap())
+                    .push_rows(PixelView::new(&px, 2, H, 24, &d).unwrap())
             });
             let result = result.and_then(|_| se.encoder.finish().map(|_| ()));
             assert!(result.is_err());
@@ -282,11 +276,11 @@ fn preserve_refuses_on_both_paths() {
 #[test]
 fn the_default_is_bt2408_on_both_paths() {
     let px = gray_rows(&[pq_code(203.0), pq_code(400.0)]);
-    let d = desc(TransferFunction::Pq);
+    let d = desc(Transfer::Pq);
     assert_eq!(ToneMapPolicy::default(), ToneMapPolicy::Bt2408);
     for meta in [Metadata::none(), pq_meta()] {
         let request = || EncodeRequest::new(ImageFormat::Bmp).with_metadata(meta.clone());
-        let slice = || PixelSlice::new(&px, 2, H, 24, d).unwrap();
+        let slice = || PixelView::new(&px, 2, H, 24, &d).unwrap();
         let explicit = request()
             .with_tone_map_policy(ToneMapPolicy::Bt2408)
             .encode(slice(), false)
@@ -298,7 +292,7 @@ fn the_default_is_bt2408_on_both_paths() {
         );
 
         let mut se = request().build_streaming_encoder(2, H).unwrap();
-        se.encoder.begin(2, H, d).unwrap();
+        se.encoder.begin(2, H, d.clone()).unwrap();
         se.encoder.push_rows(slice()).unwrap();
         assert_eq!(se.encoder.finish().unwrap().into_vec(), explicit);
     }
@@ -307,9 +301,9 @@ fn the_default_is_bt2408_on_both_paths() {
 /// Rows with alpha into a format with none, on both paths.
 #[test]
 fn translucent_hdr_refuses_rather_than_dropping_alpha() {
-    let d = PixelDescriptor::RGBAF32_LINEAR
-        .with_transfer(TransferFunction::Pq)
-        .with_primaries(zenpixels::ColorPrimaries::Bt2020);
+    let d = PixelFormat::RGBAF32_LINEAR
+        .with_transfer(Transfer::Pq)
+        .with_primaries(Primaries::Bt2020);
     let row = |alpha: f32| -> Vec<u8> {
         [pq_code(203.0), pq_code(203.0), pq_code(203.0), alpha]
             .into_iter()
@@ -323,9 +317,9 @@ fn translucent_hdr_refuses_rather_than_dropping_alpha() {
             .with_metadata(pq_meta())
             .build_streaming_encoder(2, H)
             .unwrap();
-        se.encoder.begin(2, H, d).unwrap();
+        se.encoder.begin(2, H, d.clone()).unwrap();
         se.encoder
-            .push_rows(PixelSlice::new(px, 2, H, 32, d).unwrap())
+            .push_rows(PixelView::new(px, 2, H, 32, &d).unwrap())
             .and_then(|_| se.encoder.finish().map(|_| ()))
     };
     assert!(streamed(&row(0.5)).is_err());
@@ -333,7 +327,7 @@ fn translucent_hdr_refuses_rather_than_dropping_alpha() {
     let shot = |px: &[u8]| {
         EncodeRequest::new(ImageFormat::Jpeg)
             .with_metadata(pq_meta())
-            .encode(PixelSlice::new(px, 2, H, 32, d).unwrap(), false)
+            .encode(PixelView::new(px, 2, H, 32, &d).unwrap(), false)
     };
     assert!(shot(&row(0.5)).is_err());
     assert!(shot(&row(1.0)).is_ok());
@@ -342,13 +336,11 @@ fn translucent_hdr_refuses_rather_than_dropping_alpha() {
 #[test]
 fn the_default_still_yields_to_strict_policy() {
     let px = gray_rows(&[pq_code(203.0), pq_code(400.0)]);
+    let d = desc(Transfer::Pq);
     let result = EncodeRequest::new(ImageFormat::Bmp)
         .with_metadata(pq_meta())
         .with_encode_policy(zencodec::encode::EncodePolicy::none().with_strict(true))
-        .encode(
-            PixelSlice::new(&px, 2, H, 24, desc(TransferFunction::Pq)).unwrap(),
-            false,
-        );
+        .encode(PixelView::new(&px, 2, H, 24, &d).unwrap(), false);
     assert!(result.is_err());
 }
 
@@ -361,7 +353,7 @@ fn peak_and_chunking_do_not_change_rendering() {
         .flat_map(|n| [pq_code(n); 6])
         .flat_map(f32::to_ne_bytes)
         .collect();
-    let d = desc(TransferFunction::Pq);
+    let d = desc(Transfer::Pq);
     let mut mastering = Metadata::none();
     let mut display = zenpixels::hdr::MasteringDisplay::HDR10_REFERENCE;
     display.max_luminance = 4000.0;
@@ -372,11 +364,11 @@ fn peak_and_chunking_do_not_change_rendering() {
         pq_meta(),
         mastering,
     ] {
-        let whole = encode(ImageFormat::Bmp, &px, 2, d, meta.clone());
+        let whole = encode(ImageFormat::Bmp, &px, 2, &d, meta.clone());
         for chunk in [1, 2, 3, 4] {
             assert_eq!(
                 whole,
-                encode_chunks(ImageFormat::Bmp, &px, 2, d, meta.clone(), chunk)
+                encode_chunks(ImageFormat::Bmp, &px, 2, &d, meta.clone(), chunk)
             );
         }
     }
@@ -385,7 +377,7 @@ fn peak_and_chunking_do_not_change_rendering() {
 #[test]
 fn strict_policy_refuses_tone_mapping_on_both_paths() {
     let px = gray_rows(&[pq_code(203.0)]);
-    let d = desc(TransferFunction::Pq);
+    let d = desc(Transfer::Pq);
     for (format, meta) in [ImageFormat::Bmp, ImageFormat::Jpeg]
         .into_iter()
         .flat_map(|f| {
@@ -402,11 +394,11 @@ fn strict_policy_refuses_tone_mapping_on_both_paths() {
         };
         assert!(
             request()
-                .encode(PixelSlice::new(&px, 1, H, 12, d).unwrap(), false)
+                .encode(PixelView::new(&px, 1, H, 12, &d).unwrap(), false)
                 .is_err()
         );
         if let Ok(mut se) = request().build_streaming_encoder(1, H) {
-            assert!(se.encoder.begin(1, H, d).is_err());
+            assert!(se.encoder.begin(1, H, d.clone()).is_err());
         }
     }
 }
@@ -414,7 +406,7 @@ fn strict_policy_refuses_tone_mapping_on_both_paths() {
 #[test]
 fn unsupported_hdr_color_is_an_error_on_both_paths() {
     let px = gray_rows(&[pq_code(203.0)]);
-    let d = desc(TransferFunction::Pq);
+    let d = desc(Transfer::Pq);
     for cicp in [
         Cicp::new(11, 16, 0, true),
         Cicp::new(9, 16, 9, true),
@@ -427,11 +419,11 @@ fn unsupported_hdr_color_is_an_error_on_both_paths() {
         };
         assert!(
             request()
-                .encode(PixelSlice::new(&px, 1, H, 12, d).unwrap(), false)
+                .encode(PixelView::new(&px, 1, H, 12, &d).unwrap(), false)
                 .is_err()
         );
         let mut se = request().build_streaming_encoder(1, H).unwrap();
-        assert!(se.encoder.begin(1, H, d).is_err());
+        assert!(se.encoder.begin(1, H, d.clone()).is_err());
     }
 }
 
@@ -441,15 +433,15 @@ fn srgb_icc_takes_precedence_over_hdr_cicp() {
     let mut meta = Metadata::none().with_icc(zencodecs::cms::srgb_icc_profile());
     meta.cicp = Some(PQ_BT2020);
     let px = [30u8, 100, 200].repeat(3 * H as usize);
-    let d = PixelDescriptor::RGB8_SRGB;
+    let d = PixelFormat::RGB8_SRGB;
     let request = || EncodeRequest::new(ImageFormat::Bmp).with_metadata(meta.clone());
     let expected = request()
-        .encode(PixelSlice::new(&px, 3, H, 9, d).unwrap(), false)
+        .encode(PixelView::new(&px, 3, H, 9, &d).unwrap(), false)
         .unwrap()
         .into_vec();
     let actual = request()
         .with_tone_map_policy(ToneMapPolicy::Bt2408)
-        .encode(PixelSlice::new(&px, 3, H, 9, d).unwrap(), false)
+        .encode(PixelView::new(&px, 3, H, 9, &d).unwrap(), false)
         .unwrap()
         .into_vec();
     assert_eq!(actual, expected);
@@ -457,9 +449,9 @@ fn srgb_icc_takes_precedence_over_hdr_cicp() {
         .with_tone_map_policy(ToneMapPolicy::Bt2408)
         .build_streaming_encoder(3, H)
         .unwrap();
-    se.encoder.begin(3, H, d).unwrap();
+    se.encoder.begin(3, H, d.clone()).unwrap();
     se.encoder
-        .push_rows(PixelSlice::new(&px, 3, H, 9, d).unwrap())
+        .push_rows(PixelView::new(&px, 3, H, 9, &d).unwrap())
         .unwrap();
     let mut streamed = Vec::new();
     se.encoder.take_output(&mut streamed);
@@ -469,20 +461,22 @@ fn srgb_icc_takes_precedence_over_hdr_cicp() {
 
 #[test]
 fn transcode_sink_reaches_tone_mapping_before_native_format_negotiation() {
-    use zencodec::decode::DecodeRowSink;
+    use zencodec::decode::{DecodeRowSink, RowStrip};
     let px = gray_rows(&[pq_code(50.0), pq_code(203.0), pq_code(400.0)]);
-    let d = desc(TransferFunction::Pq);
+    let d = desc(Transfer::Pq);
     for meta in [Metadata::none(), pq_meta()] {
-        let expected = encode(ImageFormat::Bmp, &px, 3, d, meta.clone());
+        let expected = encode(ImageFormat::Bmp, &px, 3, &d, meta.clone());
         let se = EncodeRequest::new(ImageFormat::Bmp)
             .with_metadata(meta)
             .with_tone_map_policy(ToneMapPolicy::Bt2408)
             .build_streaming_encoder(3, H)
             .unwrap();
         let mut sink = zencodecs::transcode::TranscodeSink::new(se.encoder, se.supported);
-        sink.begin(3, H, d).unwrap();
+        sink.begin(3, H, d.clone()).unwrap();
         for y in 0..H {
-            let mut strip = sink.provide_next_buffer(y, 1, 3, d).unwrap();
+            let mut strip = sink
+                .provide_next_buffer(RowStrip::new(y, 3, 1), d.clone())
+                .unwrap();
             strip
                 .row_mut(0)
                 .copy_from_slice(&px[y as usize * 36..(y as usize + 1) * 36]);
@@ -501,20 +495,23 @@ fn srgba8_explicit_opacity_survives_the_tone_map_adapter() {
     let original = [80u8, 120, 160, 32].repeat(2 * H as usize);
     for opaque in [false, true] {
         let mut pixels = original.clone();
+        let fmt = if opaque {
+            PixelFormat::RGBA8_SRGB.with_alpha(zenpixels::AlphaMode::Opaque)
+        } else {
+            PixelFormat::RGBA8_SRGB
+        };
         let se = EncodeRequest::new(ImageFormat::WebP)
             .with_lossless(true)
             .with_tone_map_policy(ToneMapPolicy::Bt2408)
             .build_streaming_encoder(2, H)
             .unwrap();
-        let encoded = se
-            .encoder
-            .encode_srgba8(&mut pixels, opaque, 2, H, 2)
-            .unwrap();
+        let view = zenpixels::PixelViewMut::new(&mut pixels, 2, H, 8, &fmt).unwrap();
+        let encoded = se.encoder.encode_in_place(view).unwrap();
         let decoded = DecodeRequest::new(encoded.data())
             .decode_full_frame()
             .unwrap();
         let px = decoded.pixels();
-        let bpp = decoded.descriptor().bytes_per_pixel();
+        let bpp = decoded.pixel_format().layout.bytes_per_pixel();
         for y in 0..H {
             for p in px.row(y).chunks_exact(bpp) {
                 assert_eq!(
@@ -524,21 +521,23 @@ fn srgba8_explicit_opacity_survives_the_tone_map_adapter() {
             }
         }
     }
-    // The convenience API accepts U8 only. HDR metadata must cause the same
-    // unsupported-sample refusal, regardless of the opaque request.
+    // HDR metadata on U8 samples must cause the same unsupported-sample refusal,
+    // regardless of the opaque request.
     for opaque in [false, true] {
         let mut pixels = original.clone();
+        let fmt = if opaque {
+            PixelFormat::RGBA8_SRGB.with_alpha(zenpixels::AlphaMode::Opaque)
+        } else {
+            PixelFormat::RGBA8_SRGB
+        };
         let se = EncodeRequest::new(ImageFormat::WebP)
             .with_lossless(true)
             .with_metadata(pq_meta())
             .with_tone_map_policy(ToneMapPolicy::Bt2408)
             .build_streaming_encoder(2, H)
             .unwrap();
-        assert!(
-            se.encoder
-                .encode_srgba8(&mut pixels, opaque, 2, H, 2)
-                .is_err()
-        );
+        let view = zenpixels::PixelViewMut::new(&mut pixels, 2, H, 8, &fmt).unwrap();
+        assert!(se.encoder.encode_in_place(view).is_err());
     }
 }
 
@@ -549,17 +548,13 @@ fn hdr_padding_alpha_is_opaque_after_rendering() {
         .into_iter()
         .flat_map(f32::to_ne_bytes)
         .collect();
-    let desc = PixelDescriptor::RGBAF32_LINEAR.with_transfer(TransferFunction::Pq);
-    for alpha in [
-        zenpixels::AlphaMode::Straight,
-        zenpixels::AlphaMode::Undefined,
-        zenpixels::AlphaMode::Opaque,
-    ] {
-        let desc = desc.with_alpha(Some(alpha));
+    let desc = PixelFormat::RGBAF32_LINEAR.with_transfer(Transfer::Pq);
+    for alpha in [zenpixels::AlphaMode::Straight, zenpixels::AlphaMode::Opaque] {
+        let desc = desc.clone().with_alpha(alpha);
         let encoded = EncodeRequest::new(ImageFormat::WebP)
             .with_lossless(true)
             .with_tone_map_policy(ToneMapPolicy::Bt2408)
-            .encode(PixelSlice::new(&data, 1, 1, 16, desc).unwrap(), true)
+            .encode(PixelView::new(&data, 1, 1, 16, &desc).unwrap(), true)
             .unwrap();
         let decoded = DecodeRequest::new(encoded.data())
             .decode_full_frame()
@@ -570,7 +565,7 @@ fn hdr_padding_alpha_is_opaque_after_rendering() {
             255
         };
         assert_eq!(
-            if decoded.descriptor().bytes_per_pixel() == 4 {
+            if decoded.pixel_format().layout.bytes_per_pixel() == 4 {
                 decoded.pixels().row(0)[3]
             } else {
                 255
@@ -590,21 +585,22 @@ fn unknown_transfer_is_not_tone_mapped() {
         .collect::<Vec<u8>>()
         .repeat(2)
         .repeat(H as usize);
-    let d = PixelDescriptor::RGBF32_LINEAR.with_transfer(TransferFunction::Unknown);
-    let target = zenpixels_convert::adapt::adapt_for_encode_cow(
-        &px,
-        d,
-        2,
-        H,
-        24,
+    let d = PixelFormat::RGBF32_LINEAR.with_transfer(Transfer::Unknown);
+    let view = PixelView::new(&px, 2, H, 24, &d).unwrap();
+    let (_, ready) = zenpixels_convert::adapt_for_encode(
+        view,
+        &zenpixels::ColorOrigin::assumed(),
         EncodeRequest::new(ImageFormat::Bmp)
             .build_streaming_encoder(2, H)
             .unwrap()
             .supported,
+        &zenpixels_convert::ConvertPolicy::permissive(),
+        zenpixels::PeakSource::Declared,
+        zenpixels_convert::OutputSignaling::Strip,
     )
-    .unwrap()
-    .as_slice()
-    .descriptor();
-    assert_ne!(target.transfer(), TransferFunction::Pq);
-    assert_ne!(target.transfer(), TransferFunction::Hlg);
+    .unwrap();
+    assert!(!matches!(
+        ready.pixels.as_view().format().color,
+        zenpixels::ColorSpace::Rgb { transfer, .. } if transfer.is_hdr()
+    ));
 }

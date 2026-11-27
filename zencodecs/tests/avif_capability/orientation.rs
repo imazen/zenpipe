@@ -3,8 +3,8 @@
 //! which encode representation the shared metadata contract should select.
 use super::*;
 use zencodec::encode::{EncodeJob as _, Encoder as _, EncoderConfig as _};
-use zencodec::{MetadataPolicy, Orientation, OrientationHint};
-use zencodecs::PixelBufferConvertTypedExt as _;
+use zencodec::{Orientation, OrientationHint};
+use zencodecs::to_rgba8;
 
 fn asymmetric() -> ImgVec<Rgb<u8>> {
     ImgVec::new(
@@ -31,13 +31,13 @@ fn encode(image: &ImgVec<Rgb<u8>>, meta: Metadata, tagged: bool) -> Vec<u8> {
         let native = config.inner().clone().rotation(3);
         *config.inner_mut() = native;
     }
-    let typed: PixelSlice<'_, Rgb<u8>> = PixelSlice::from(image.as_ref());
+    let view = PixelView::from_imgref(image.as_ref(), ColorSpace::SRGB).expect("from_imgref");
     config
         .job()
-        .with_metadata_policy(meta, MetadataPolicy::PreserveExact)
+        .with_unfiltered_metadata(meta)
         .encoder()
         .unwrap()
-        .encode(typed.erase())
+        .encode(view)
         .unwrap()
         .into_vec()
 }
@@ -52,7 +52,12 @@ fn rgba(bytes: &[u8], hint: OrientationHint) -> (u32, u32, Orientation, Vec<u8>)
         decoded.height(),
         decoded.info().orientation,
     );
-    let pixels = decoded.into_buffer().to_rgba8().copy_to_contiguous_bytes();
+    let rgba_buf = to_rgba8(&decoded.pixels()).expect("to_rgba8");
+    let pixels = rgba_buf
+        .as_view()
+        .to_contiguous_bytes()
+        .expect("contiguous")
+        .into_owned();
     (result.0, result.1, result.2, pixels)
 }
 

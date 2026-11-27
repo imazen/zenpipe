@@ -155,13 +155,22 @@ fn apply_srgb(img: &RgbImage, filter: Box<dyn Filter>) -> RgbImage {
 fn apply_with_config(img: &RgbImage, filter: Box<dyn Filter>, config: PipelineConfig) -> RgbImage {
     let (w, h) = img.dimensions();
     let input_bytes: Vec<u8> = img.as_raw().clone();
-    let desc = zenpixels::PixelDescriptor::RGB8_SRGB;
-    let input_buf = zenpixels::buffer::PixelBuffer::from_vec(input_bytes, w, h, desc).unwrap();
+    let desc = zenpixels::PixelFormat::RGB8_SRGB;
+    let input_buf = zenpixels::buffer::PixelBuf::from_bytes(input_bytes, w, h, desc).unwrap();
     let mut pipeline = Pipeline::new(config).unwrap();
     pipeline.push(filter);
     let mut ctx = FilterContext::new();
     let output_buf = apply_to_buffer(&pipeline, &input_buf, true, &mut ctx).unwrap();
-    ImageBuffer::from_raw(w, h, output_buf.copy_to_contiguous_bytes()).unwrap()
+    ImageBuffer::from_raw(
+        w,
+        h,
+        output_buf
+            .as_view()
+            .to_contiguous_bytes()
+            .unwrap()
+            .into_owned(),
+    )
+    .unwrap()
 }
 
 fn zensim_score(a: &RgbImage, b: &RgbImage) -> f64 {
@@ -200,6 +209,7 @@ struct ComparisonResult {
 /// `make_oklab`: creates the Oklab-native filter (or None to skip Oklab)
 /// `make_srgb`: creates the sRGB-compat filter
 /// `im_args`: ImageMagick convert arguments
+#[allow(clippy::too_many_arguments)]
 fn compare_op(
     source: &RgbImage,
     source_path: &str,

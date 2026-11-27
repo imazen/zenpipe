@@ -25,7 +25,7 @@ use zencodecs::ImageFormat;
 #[cfg(feature = "jxl-encode")]
 use zencodecs::{EncodeRequest, Metadata};
 #[cfg(feature = "jxl-encode")]
-use zenpixels::PixelSlice;
+use zenpixels::{ColorSpace, PixelView};
 
 // ─── Inline fixtures ─────────────────────────────────────────────────────
 
@@ -85,11 +85,11 @@ fn encode_jxl_rgb8(img: ImgRef<'_, Rgb<u8>>, quality: f32) -> Vec<u8> {
 
 #[cfg(feature = "jxl-encode")]
 fn encode_jxl_with_meta(img: ImgRef<'_, Rgb<u8>>, meta: Metadata, quality: f32) -> Vec<u8> {
-    let typed: PixelSlice<'_, Rgb<u8>> = PixelSlice::from(img);
+    let view = PixelView::from_imgref(img, ColorSpace::SRGB).expect("from_imgref");
     EncodeRequest::new(ImageFormat::Jxl)
         .with_quality(quality)
         .with_metadata(meta)
-        .encode(typed.erase(), false)
+        .encode(view, false)
         .expect("encode JXL with metadata")
         .into_vec()
 }
@@ -144,10 +144,10 @@ fn jxl_quality_parameter_changes_size() {
 #[test]
 fn jxl_rgb_f32_hdr_encode_decode_round_trip() {
     let img = rgb_f32_gradient(32, 32, 4.0);
-    let typed: PixelSlice<'_, Rgb<f32>> = PixelSlice::from(img.as_ref());
+    let view = PixelView::from_imgref(img.as_ref(), ColorSpace::LINEAR_SRGB).expect("from_imgref");
     let bytes = EncodeRequest::new(ImageFormat::Jxl)
         .with_quality(95.0)
-        .encode(typed.erase(), false)
+        .encode(view, false)
         .expect("encode JXL HDR f32")
         .into_vec();
 
@@ -165,10 +165,11 @@ fn jxl_rgb_f32_hdr_encode_decode_round_trip() {
 #[test]
 fn jxl_rgba_f32_hdr_encode_decode_round_trip() {
     let img = rgba_f32_gradient(16, 16, 2.5);
-    let typed: PixelSlice<'_, Rgba<f32>> = PixelSlice::from(img.as_ref());
+    let view =
+        PixelView::from_imgref(img.as_ref(), ColorSpace::LINEAR_SRGB_ALPHA).expect("from_imgref");
     let bytes = EncodeRequest::new(ImageFormat::Jxl)
         .with_quality(95.0)
-        .encode(typed.erase(), true)
+        .encode(view, true)
         .expect("encode JXL HDR rgba f32")
         .into_vec();
 
@@ -199,11 +200,11 @@ fn jxl_rejects_malformed_icc_at_encode_or_decode() {
     let icc = synthetic_icc(256);
     let meta = Metadata::none().with_icc(icc);
 
-    let typed: PixelSlice<'_, Rgb<u8>> = PixelSlice::from(img.as_ref());
+    let view = PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB).expect("from_imgref");
     let encode_result = EncodeRequest::new(ImageFormat::Jxl)
         .with_quality(80.0)
         .with_metadata(meta)
-        .encode(typed.erase(), false);
+        .encode(view, false);
 
     match encode_result {
         Err(_) => {
@@ -433,18 +434,19 @@ fn jxl_hdr_hlg_fixture_surfaces_hlg_transfer() {
 #[ignore = "needs codec-corpus JXL features corpus; run with cargo test -- --ignored"]
 #[test]
 fn jxl_hdr_fixture_decode_preserves_10bit_pixel_width() {
-    use zenpixels::ChannelType;
+    use zenpixels::SampleType;
     let bytes = std::fs::read(HDR_PQ_JXL_FIXTURE).expect("HDR PQ JXL fixture must be present");
     let decoded = DecodeRequest::new(&bytes)
         .decode_full_frame()
         .expect("decode HDR PQ JXL");
-    let desc = decoded.pixels().descriptor();
+    let pixels = decoded.pixels();
+    let fmt = pixels.format();
     // zenjxl decode preserves bit depth: 10-bit source surfaces as U16.
     // Verified empirically via probe.
     assert_ne!(
-        desc.channel_type(),
-        ChannelType::U8,
+        fmt.layout.sample,
+        SampleType::U8,
         "10-bit HDR JXL must not narrow to U8; got {:?}",
-        desc.channel_type()
+        fmt.layout.sample
     );
 }

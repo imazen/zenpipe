@@ -2,7 +2,7 @@ use crate::access::ChannelAccess;
 use crate::context::FilterContext;
 use crate::filter::Filter;
 use crate::planes::OklabPlanes;
-use zenpixels_convert::oklab;
+use zenpixels_convert::oklab::OklabSpace;
 
 /// 5×5 color matrix applied in linear RGB space.
 ///
@@ -52,9 +52,7 @@ impl Filter for ColorMatrix {
     fn apply(&self, planes: &mut OklabPlanes, _ctx: &mut FilterContext) {
         // We need BT.709 matrices for the Oklab↔RGB round-trip.
         // These are the same matrices used in scatter_gather for BT.709.
-        let m1_inv = oklab::lms_to_rgb_matrix(zenpixels::ColorPrimaries::Bt709)
-            .expect("BT.709 always supported");
-        let m1 = oklab::rgb_to_lms_matrix(zenpixels::ColorPrimaries::Bt709)
+        let space = OklabSpace::for_primaries(zenpixels::Primaries::Bt709)
             .expect("BT.709 always supported");
 
         let m = &self.matrix;
@@ -62,7 +60,7 @@ impl Filter for ColorMatrix {
 
         for i in 0..n {
             // Oklab → linear RGB
-            let [r, g, b] = oklab::oklab_to_rgb(planes.l[i], planes.a[i], planes.b[i], &m1_inv);
+            let [r, g, b] = space.to_rgb([planes.l[i], planes.a[i], planes.b[i]]);
             let a = planes.alpha.as_ref().map_or(1.0, |alpha| alpha[i]);
 
             // Apply 5×5 matrix
@@ -72,7 +70,7 @@ impl Filter for ColorMatrix {
             let na = m[15] * r + m[16] * g + m[17] * b + m[18] * a + m[19];
 
             // Linear RGB → Oklab
-            let [l, oa, ob] = oklab::rgb_to_oklab(nr.max(0.0), ng.max(0.0), nb.max(0.0), &m1);
+            let [l, oa, ob] = space.from_rgb([nr.max(0.0), ng.max(0.0), nb.max(0.0)]);
             planes.l[i] = l;
             planes.a[i] = oa;
             planes.b[i] = ob;

@@ -43,8 +43,8 @@ use alloc::vec::Vec;
 use zencodec::Metadata;
 use zencodec::encode::EncodeCapabilities;
 use zenpixels::{
-    AlphaMode, ChannelLayout, ChannelType, Cicp, ColorPrimaries, PixelBuffer, PixelDescriptor,
-    PixelSlice, SignalRange, TransferFunction,
+    AlphaMode, ChannelOrder, Cicp, ColorSpace, HlgMode, ParametricFormat, PixelBuf, PixelFormat,
+    PixelView, Primaries, SampleType, SignalRange, Transfer,
 };
 use zentone::ToneMap as _;
 
@@ -67,32 +67,32 @@ pub enum ToneMapPolicy {
 // Inputs accepted by the tone-map adapter, before the codec's own format
 // negotiation. Advertising only native SDR formats would make TranscodeSink
 // try HDR-to-SDR conversion before this adapter can apply the request policy.
-pub(crate) const STREAMING_INPUTS: &[PixelDescriptor] = &streaming_inputs();
+const STREAMING_INPUTS_PARAM: [ParametricFormat; 82] = streaming_inputs_parametric();
 
-const fn streaming_inputs() -> [PixelDescriptor; 82] {
-    let mut out = [PixelDescriptor::RGB8_SRGB; 82];
-    out[1] = PixelDescriptor::RGBA8_SRGB;
+const fn streaming_inputs_parametric() -> [ParametricFormat; 82] {
+    let mut out = [ParametricFormat::RGB8_SRGB; 82];
+    out[1] = ParametricFormat::RGBA8_SRGB;
     let formats = [
-        PixelDescriptor::RGBF32_LINEAR,
-        PixelDescriptor::RGBAF32_LINEAR,
-        PixelDescriptor::RGB16_SRGB,
-        PixelDescriptor::RGBA16_SRGB,
+        ParametricFormat::RGBF32_LINEAR,
+        ParametricFormat::RGBAF32_LINEAR,
+        ParametricFormat::RGB16_SRGB,
+        ParametricFormat::RGBA16_SRGB,
     ];
     // Samples of unknown transfer and primaries match their own entry, so nothing relabels them:
     // they adapt to the codec exactly as they would without tone mapping. The rest are SDR first,
     // so that no inexact match becomes HDR.
     let transfers = [
-        TransferFunction::Unknown,
-        TransferFunction::Srgb,
-        TransferFunction::Linear,
-        TransferFunction::Pq,
-        TransferFunction::Hlg,
+        Transfer::Unknown,
+        Transfer::Srgb,
+        Transfer::Linear,
+        Transfer::Pq,
+        Transfer::Hlg(HlgMode::Scene),
     ];
     let primaries = [
-        ColorPrimaries::Unknown,
-        ColorPrimaries::Bt709,
-        ColorPrimaries::DisplayP3,
-        ColorPrimaries::Bt2020,
+        Primaries::Unknown,
+        Primaries::Bt709,
+        Primaries::DisplayP3,
+        Primaries::Bt2020,
     ];
     let mut i = 2;
     let mut f = 0;
@@ -113,6 +113,19 @@ const fn streaming_inputs() -> [PixelDescriptor; 82] {
     }
     out
 }
+
+macro_rules! streaming_inputs_array {
+    ($($idx:literal),* $(,)?) => {
+        &[$(STREAMING_INPUTS_PARAM[$idx].to_pixel_format()),*]
+    };
+}
+
+pub(crate) const STREAMING_INPUTS: &[PixelFormat] = streaming_inputs_array!(
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+    26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+    50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
+    74, 75, 76, 77, 78, 79, 80, 81,
+);
 
 /// SDR white in nits: BT.2408 HDR reference white, mapped to sRGB 255.
 pub(crate) const SDR_WHITE_NITS: f32 = 203.0;
@@ -178,22 +191,35 @@ impl HdrSource {
         })
     }
 
-    fn from_descriptor(d: PixelDescriptor) -> Option<Result<Self, String>> {
-        let transfer = match d.transfer() {
-            TransferFunction::Pq => HdrTransfer::Pq,
-            TransferFunction::Hlg => HdrTransfer::Hlg,
+    fn from_format(d: &PixelFormat) -> Option<Result<Self, String>> {
+        let ColorSpace::Rgb {
+            primaries,
+            transfer,
+            ..
+        } = d.color
+        else {
+            return None;
+        };
+        let transfer = match transfer {
+            Transfer::Pq => HdrTransfer::Pq,
+            Transfer::Hlg(HlgMode::Scene) => HdrTransfer::Hlg,
+            Transfer::Hlg(HlgMode::Display(_)) => {
+                return Some(Err(
+                    "tone mapping expects scene-referred HLG, not display-rendered HLG".into(),
+                ));
+            }
             _ => return None,
         };
-        Some(match d.primaries {
-            ColorPrimaries::Bt709 => Ok(Self {
+        Some(match primaries {
+            Primaries::Bt709 => Ok(Self {
                 transfer,
                 primaries: HdrPrimaries::Bt709,
             }),
-            ColorPrimaries::DisplayP3 => Ok(Self {
+            Primaries::DisplayP3 => Ok(Self {
                 transfer,
                 primaries: HdrPrimaries::DisplayP3,
             }),
-            ColorPrimaries::Bt2020 => Ok(Self {
+            Primaries::Bt2020 => Ok(Self {
                 transfer,
                 primaries: HdrPrimaries::Bt2020,
             }),
@@ -207,7 +233,7 @@ impl HdrSource {
 /// A decision to tone-map an encode to sRGB.
 #[derive(Clone, Debug)]
 pub(crate) struct ToneMapPlan {
-    /// The source colour; `None` takes it from the pixels' descriptor (the
+    /// The source colour; `None` takes it from the pixels' format (the
     /// metadata describes no colour).
     pub(crate) source: Option<Result<HdrSource, String>>,
     /// The content peak the metadata gives (MaxCLL, else mastering peak).
@@ -223,10 +249,10 @@ pub(crate) struct ToneMapPlan {
 impl ToneMapPlan {
     /// Refuses rendered rows that are translucent for a format with no alpha. Encoding
     /// would drop alpha that matters, and a matte would have to follow tone mapping.
-    pub(crate) fn check_alpha(&self, rendered: &PixelSlice<'_>) -> Result<(), String> {
+    pub(crate) fn check_alpha(&self, rendered: &PixelView<'_>) -> Result<(), String> {
         let translucent = !self.native_alpha
-            && rendered.descriptor().has_alpha()
-            && (0..rendered.rows()).any(|y| {
+            && rendered.format().layout.order.has_alpha_slot()
+            && (0..rendered.height()).any(|y| {
                 let row = rendered.row(y).as_chunks::<4>().0;
                 row.iter().any(|px| px[3] != 255)
             });
@@ -237,17 +263,17 @@ impl ToneMapPlan {
     }
 
     /// The source for `desc`'s pixels, or `None` when they aren't HDR.
-    pub(crate) fn source_for(&self, desc: PixelDescriptor) -> Option<Result<HdrSource, String>> {
+    pub(crate) fn source_for(&self, desc: &PixelFormat) -> Option<Result<HdrSource, String>> {
         let source = match &self.source {
             Some(s) => Some(s.clone()),
             None if self.icc_authority => {
-                // An unknown ICC remains authoritative. A PQ/HLG descriptor
+                // An unknown ICC remains authoritative. A PQ/HLG format
                 // cannot authorize replacing its transform with guessed CICP.
-                HdrSource::from_descriptor(desc).map(|_| Err(
-                    "HDR ICC profile cannot be rendered by the supported matrix/TRC tone-map path".into(),
-                ))
+                HdrSource::from_format(desc).map(|_| {
+                    Err("HDR ICC profile cannot be rendered by the supported matrix/TRC tone-map path".into())
+                })
             }
-            None => HdrSource::from_descriptor(desc),
+            None => HdrSource::from_format(desc),
         };
         if source.is_some() && self.strict {
             return Some(Err("strict encode policy refuses HDR tone mapping".into()));
@@ -268,22 +294,22 @@ impl ToneMapPlan {
 /// HDR: the sRGB pixels and the metadata to encode with. `None`: encode as
 /// they are.
 pub(crate) fn one_shot(
-    pixels: &PixelSlice<'_>,
+    pixels: &PixelView<'_>,
     metadata: Option<&Metadata>,
     caps: &EncodeCapabilities,
     policy: ToneMapPolicy,
     strict: bool,
-) -> Result<Option<(PixelBuffer, Option<Metadata>)>, String> {
+) -> Result<Option<(PixelBuf, Option<Metadata>)>, String> {
     let Some(plan) = plan(metadata, caps, policy, strict) else {
         return Ok(None);
     };
-    let Some(source) = plan.source_for(pixels.descriptor()) else {
+    let Some(source) = plan.source_for(pixels.format()) else {
         return Ok(None);
     };
     let source = source?;
     let peak = plan.peak(source);
     let buf = tone_map_to_srgb8(pixels, source, peak)?;
-    plan.check_alpha(&buf.as_slice())?;
+    plan.check_alpha(&buf.as_view())?;
     Ok(Some((buf, plan.metadata)))
 }
 
@@ -295,7 +321,7 @@ pub(crate) fn target_needs_tone_map(caps: &EncodeCapabilities) -> bool {
 
 /// Decide whether to tone-map an encode with `metadata` to a target with
 /// `caps`. `None`: the target carries HDR, or the metadata describes a
-/// colour that isn't HDR (the pixels' descriptor is then not consulted:
+/// colour that isn't HDR (the pixels' format is then not consulted:
 /// the metadata is the authority).
 pub(crate) fn plan(
     metadata: Option<&Metadata>,
@@ -309,19 +335,20 @@ pub(crate) fn plan(
     let source = match metadata {
         Some(meta) => match (&meta.icc_profile, meta.cicp) {
             (Some(icc), _) => {
-                if zenpixels::icc::is_common_srgb(icc) {
+                if zenpixels::icc::IccIdentification::is_common_srgb(icc) {
                     return None;
                 }
                 #[cfg(feature = "cms")]
                 if crate::cms::is_srgb_icc_structural(icc) {
                     return None;
                 }
-                match zenpixels::icc::identify_common(icc)
+                match zenpixels::icc::IccIdentification::from_icc(icc)
                     .and_then(|id| id.to_cicp().map(|c| (id, c)))
                 {
                     Some((id, cicp)) => {
                         let source = HdrSource::from_cicp(cicp)?;
                         if id.valid_use != zenpixels::icc::IdentificationUse::MatrixTrcSubstitution
+                            && meta.cicp != Some(cicp)
                         {
                             Some(Err("HDR ICC profile requires a full color transform; CICP substitution is not valid".into()))
                         } else {
@@ -330,9 +357,17 @@ pub(crate) fn plan(
                     }
                     None => {
                         // A CICP tag alone does not prove the ICC transform
-                        // is substitutable. It can establish an HDR refusal.
-                        zenpixels::icc::extract_cicp(icc).and_then(HdrSource::from_cicp)
-                            .map(|_| Err("HDR ICC profile requires a full color transform; CICP substitution is not valid".into()))
+                        // is substitutable, unless container metadata carries
+                        // the matching authoritative CICP (e.g. PNG cICP
+                        // paired with a compatibility iCCP).
+                        Cicp::from_icc(icc).and_then(|icc_cicp| {
+                            let source = HdrSource::from_cicp(icc_cicp)?;
+                            if meta.cicp == Some(icc_cicp) {
+                                Some(source)
+                            } else {
+                                Some(Err("HDR ICC profile requires a full color transform; CICP substitution is not valid".into()))
+                            }
+                        })
                     }
                 }
             }
@@ -399,28 +434,32 @@ struct SampleLayout {
 }
 
 impl SampleLayout {
-    fn of(desc: PixelDescriptor) -> Result<Self, String> {
-        let float = match desc.channel_type() {
-            ChannelType::F32 => true,
-            ChannelType::U16 => false,
+    fn of(desc: &PixelFormat) -> Result<Self, String> {
+        let float = match desc.layout.sample {
+            SampleType::F32 => true,
+            SampleType::U16 => false,
             t => {
                 return Err(alloc::format!(
                     "tone mapping reads f32 or U16 samples, not {t:?}"
                 ));
             }
         };
-        let alpha = match desc.layout() {
-            ChannelLayout::Rgb => false,
-            ChannelLayout::Rgba => true,
-            l => return Err(alloc::format!("tone mapping reads RGB or RGBA, not {l:?}")),
+        let alpha = match desc.layout.order {
+            ChannelOrder::Rgb => false,
+            ChannelOrder::Rgba | ChannelOrder::Rgbx => true,
+            l => {
+                return Err(alloc::format!(
+                    "tone mapping reads RGB, RGBA, or RGBX, not {l:?}"
+                ));
+            }
         };
-        if desc.alpha() == Some(AlphaMode::Premultiplied) {
+        if desc.color.alpha() == AlphaMode::Premultiplied {
             return Err("tone mapping needs straight alpha, not premultiplied".to_string());
         }
-        if desc.signal_range != SignalRange::Full {
+        if desc.color.range().unwrap_or(SignalRange::Full) != SignalRange::Full {
             return Err("tone mapping needs full-range samples".to_string());
         }
-        let opaque = matches!(desc.alpha(), Some(AlphaMode::Undefined | AlphaMode::Opaque));
+        let opaque = matches!(desc.color.alpha(), AlphaMode::Undefined | AlphaMode::Opaque);
         Ok(Self {
             float,
             alpha,
@@ -461,18 +500,18 @@ impl SampleLayout {
 /// Tone-map HDR `pixels` in `source` colour with content peak `peak_nits`
 /// to sRGB 8-bit (RGB8, or RGBA8 with straight alpha).
 pub(crate) fn tone_map_to_srgb8(
-    pixels: &PixelSlice<'_>,
+    pixels: &PixelView<'_>,
     source: HdrSource,
     peak_nits: f32,
-) -> Result<PixelBuffer, String> {
-    let layout = SampleLayout::of(pixels.descriptor())?;
+) -> Result<PixelBuf, String> {
+    let layout = SampleLayout::of(pixels.format())?;
     let width = pixels.width() as usize;
-    let rows = pixels.rows();
+    let rows = pixels.height();
     let out_ch = layout.channels();
     let out_desc = if layout.alpha {
-        PixelDescriptor::RGBA8_SRGB
+        PixelFormat::RGBA8_SRGB
     } else {
-        PixelDescriptor::RGB8_SRGB
+        PixelFormat::RGB8_SRGB
     };
     let len = width
         .checked_mul(rows as usize)
@@ -545,7 +584,7 @@ pub(crate) fn tone_map_to_srgb8(
             dst.copy_from_slice(srgb.as_flattened());
         }
     }
-    PixelBuffer::from_vec(out, pixels.width(), rows, out_desc).map_err(|e| e.to_string())
+    PixelBuf::from_bytes(out, pixels.width(), rows, out_desc).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -553,7 +592,7 @@ mod tests {
     use super::*;
 
     fn pq_code(nits: f32) -> f32 {
-        linear_srgb::tf::linear_to_pq(nits / 10_000.0)
+        linear_srgb::default::linear_to_pq(nits / 10_000.0)
     }
 
     fn gray_pq_row(nits: &[f32]) -> Vec<u8> {
@@ -568,14 +607,14 @@ mod tests {
 
     fn tone_map_gray(nits: &[f32], peak: f32) -> Vec<u8> {
         let bytes = gray_pq_row(nits);
-        let desc = PixelDescriptor::RGBF32_LINEAR.with_transfer(TransferFunction::Pq);
-        let slice = PixelSlice::new(&bytes, nits.len() as u32, 1, bytes.len(), desc).unwrap();
+        let desc = PixelFormat::RGBF32_LINEAR.with_transfer(Transfer::Pq);
+        let slice = PixelView::new(&bytes, nits.len() as u32, 1, bytes.len(), &desc).unwrap();
         let src = HdrSource {
             transfer: HdrTransfer::Pq,
             primaries: HdrPrimaries::Bt709,
         };
         let out = tone_map_to_srgb8(&slice, src, peak).unwrap();
-        out.as_slice().row(0).to_vec()
+        out.as_view().row(0).to_vec()
     }
 
     #[test]
@@ -607,8 +646,8 @@ mod tests {
     #[test]
     fn unsupported_samples_are_refused() {
         let bytes = [0u8; 12];
-        let desc = PixelDescriptor::RGB8_SRGB.with_transfer(TransferFunction::Pq);
-        let slice = PixelSlice::new(&bytes, 4, 1, 12, desc).unwrap();
+        let desc = PixelFormat::RGB8_SRGB.with_transfer(Transfer::Pq);
+        let slice = PixelView::new(&bytes, 4, 1, 12, &desc).unwrap();
         let src = HdrSource {
             transfer: HdrTransfer::Pq,
             primaries: HdrPrimaries::Bt2020,
@@ -618,8 +657,8 @@ mod tests {
     #[test]
     fn descriptor_only_conversion_clears_hdr_metadata() {
         let bytes = gray_pq_row(&[203.0, 400.0]);
-        let desc = PixelDescriptor::RGBF32_LINEAR.with_transfer(TransferFunction::Pq);
-        let slice = PixelSlice::new(&bytes, 2, 1, bytes.len(), desc).unwrap();
+        let desc = PixelFormat::RGBF32_LINEAR.with_transfer(Transfer::Pq);
+        let slice = PixelView::new(&bytes, 2, 1, bytes.len(), &desc).unwrap();
         for described in [false, true] {
             let mut meta = Metadata::none();
             meta.content_light_level = Some(zenpixels::hdr::ContentLightLevel::new(400, 100));
@@ -671,11 +710,11 @@ mod tests {
         };
         for rgba_u16 in [false, true] {
             let desc = if rgba_u16 {
-                PixelDescriptor::RGBA16_SRGB.with_transfer(TransferFunction::Pq)
+                PixelFormat::RGBA16_SRGB.with_transfer(Transfer::Pq)
             } else {
-                PixelDescriptor::RGBF32_LINEAR.with_transfer(TransferFunction::Pq)
+                PixelFormat::RGBF32_LINEAR.with_transfer(Transfer::Pq)
             }
-            .with_primaries(ColorPrimaries::Bt2020);
+            .with_primaries(Primaries::Bt2020);
             let row: Vec<u8> = [50.0, 203.0, 400.0, 2000.0]
                 .into_iter()
                 .flat_map(|n| {
@@ -698,31 +737,34 @@ mod tests {
                     }
                 })
                 .collect();
-            let padding = 2 * desc.bytes_per_pixel();
+            let padding = 2 * desc.layout.bytes_per_pixel();
             let stride = row.len() + padding;
             let mut padded = row.clone();
             padded.extend_from_slice(&vec![0xab; padding]);
             padded.extend_from_slice(&row); // final row has no padding
-            let pixels = PixelSlice::new(&padded, 4, 2, stride, desc).unwrap();
+            let pixels = PixelView::new(&padded, 4, 2, stride, &desc).unwrap();
             let whole = tone_map_to_srgb8(&pixels, source, 1000.0).unwrap();
-            let single = PixelSlice::new(&row, 4, 1, row.len(), desc).unwrap();
+            let single = PixelView::new(&row, 4, 1, row.len(), &desc).unwrap();
             let strip = tone_map_to_srgb8(&single, source, 1000.0).unwrap();
             for y in 0..2 {
-                assert_eq!(whole.as_slice().row(y), strip.as_slice().row(0));
+                assert_eq!(whole.as_view().row(y), strip.as_view().row(0));
             }
             if rgba_u16 {
-                for p in whole.as_slice().row(0).as_chunks::<4>().0 {
+                for p in whole.as_view().row(0).as_chunks::<4>().0 {
                     assert_eq!(p[3], 128);
                 }
             }
             if rgba_u16 {
-                for alpha in [AlphaMode::Undefined, AlphaMode::Opaque] {
-                    let ignored =
-                        PixelSlice::new(&padded, 4, 2, stride, desc.with_alpha(Some(alpha)))
-                            .unwrap();
+                let rgbx_desc = PixelFormat::new(
+                    zenpixels::SampleLayout::new(SampleType::U16, ChannelOrder::Rgbx),
+                    desc.color.clone().with_alpha(AlphaMode::Undefined),
+                );
+                let opaque_desc = desc.clone().with_alpha(AlphaMode::Opaque);
+                for ignored_desc in [rgbx_desc, opaque_desc] {
+                    let ignored = PixelView::new(&padded, 4, 2, stride, &ignored_desc).unwrap();
                     let opaque = tone_map_to_srgb8(&ignored, source, 1000.0).unwrap();
                     for y in 0..2 {
-                        for p in opaque.as_slice().row(y).as_chunks::<4>().0 {
+                        for p in opaque.as_view().row(y).as_chunks::<4>().0 {
                             assert_eq!(p[3], 255);
                         }
                     }
@@ -742,11 +784,11 @@ mod tests {
         )
         .unwrap();
         assert!(
-            plan.source_for(PixelDescriptor::RGBF32_LINEAR.with_transfer(TransferFunction::Pq))
+            plan.source_for(&PixelFormat::RGBF32_LINEAR.with_transfer(Transfer::Pq))
                 .unwrap()
                 .is_err()
         );
         // Secondary HDR CICP does not override the unknown ICC for SDR pixels.
-        assert!(plan.source_for(PixelDescriptor::RGB8_SRGB).is_none());
+        assert!(plan.source_for(&PixelFormat::RGB8_SRGB).is_none());
     }
 }

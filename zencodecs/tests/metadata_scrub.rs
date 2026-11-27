@@ -531,8 +531,7 @@ mod gain_map_scrub {
             ch.max = 2.0;
         }
         let view =
-            zenpixels::PixelSlice::new(&pixels, 16, 16, 48, zenpixels::PixelDescriptor::RGB8_SRGB)
-                .unwrap();
+            zenpixels::PixelView::new(&pixels, 16, 16, 48, &zenpixels::formats::RGB8_SRGB).unwrap();
         zencodecs::EncodeRequest::new(format)
             .with_metadata_policy(zencodec::MetadataPolicy::ColorAndRotation)
             .with_gain_map(zencodecs::gainmap::GainMapSource::Precomputed {
@@ -622,8 +621,8 @@ mod gain_map_scrub {
         )
         .unwrap();
         assert_eq!(
-            a.as_slice().contiguous_bytes(),
-            b.as_slice().contiguous_bytes()
+            a.as_view().to_contiguous_bytes().unwrap(),
+            b.as_view().to_contiguous_bytes().unwrap()
         );
         let (_, a) = zencodecs::DecodeRequest::new(&input)
             .decode_gain_map()
@@ -707,7 +706,10 @@ mod gain_map_scrub {
         let (b, gb) = zencodecs::DecodeRequest::new(&output)
             .decode_gain_map()
             .unwrap();
-        assert_eq!(a.pixels().contiguous_bytes(), b.pixels().contiguous_bytes());
+        assert_eq!(
+            a.pixels().to_contiguous_bytes().unwrap(),
+            b.pixels().to_contiguous_bytes().unwrap()
+        );
         let (ga, gb) = (ga.unwrap(), gb.unwrap());
         assert_eq!(ga.metadata, gb.metadata);
         assert_eq!(ga.gain_map.data, gb.gain_map.data);
@@ -732,16 +734,16 @@ mod gain_map_scrub {
 #[cfg(all(feature = "jxl-encode", feature = "jxl-decode"))]
 #[test]
 fn native_jxl_pixels_survive_container_scrubbing() {
-    let pixels = zenpixels::PixelBuffer::from_vec(
+    let pixels = zenpixels::PixelBuf::from_bytes(
         vec![73u8; 16 * 16 * 3],
         16,
         16,
-        zenpixels::PixelDescriptor::RGB8_SRGB,
+        zenpixels::PixelFormat::RGB8_SRGB,
     )
     .unwrap();
     let encoded = zencodecs::EncodeRequest::new(zencodecs::ImageFormat::Jxl)
         .with_metadata(zencodec::Metadata::none().with_xmp(b"SECRET".to_vec()))
-        .encode(pixels.as_slice(), false)
+        .encode(pixels.as_view(), false)
         .unwrap()
         .into_vec();
     let output = ScrubRequest::new(&encoded)
@@ -756,7 +758,10 @@ fn native_jxl_pixels_survive_container_scrubbing() {
     let b = zencodecs::DecodeRequest::new(&output)
         .decode_full_frame()
         .unwrap();
-    assert_eq!(a.pixels().contiguous_bytes(), b.pixels().contiguous_bytes());
+    assert_eq!(
+        a.pixels().to_contiguous_bytes().unwrap(),
+        b.pixels().to_contiguous_bytes().unwrap()
+    );
     assert_eq!(a.info().source_color, b.info().source_color);
 }
 

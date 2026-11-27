@@ -65,7 +65,7 @@ impl TeeSource {
         let width = upstream.width();
         let height = upstream.height();
         let format = upstream.format();
-        let bpp = format.bytes_per_pixel();
+        let bpp = format.layout.bytes_per_pixel();
         let stride = (width as usize).checked_mul(bpp).ok_or_else(|| {
             at!(crate::error::PipeError::LimitExceeded(alloc::format!(
                 "Tee stride overflow: width={width} bpp={bpp}"
@@ -77,7 +77,7 @@ impl TeeSource {
         let mut y = 0usize;
 
         while let Some(strip) = upstream.next()? {
-            for r in 0..strip.rows() {
+            for r in 0..strip.height() {
                 let row_idx = y.checked_add(r as usize).ok_or_else(|| {
                     at!(crate::error::PipeError::LimitExceeded(alloc::format!(
                         "Tee row index overflow: y={y} r={r}"
@@ -104,7 +104,7 @@ impl TeeSource {
                 let src_row = strip.row(r);
                 data[dst_start..dst_end].copy_from_slice(&src_row[..stride]);
             }
-            y = y.saturating_add(strip.rows() as usize);
+            y = y.saturating_add(strip.height() as usize);
         }
 
         Ok(Self {
@@ -130,7 +130,7 @@ impl TeeSource {
 
     /// Pixel format of the materialized image.
     pub fn format(&self) -> PixelFormat {
-        self.buf.format
+        self.buf.format.clone()
     }
 
     /// Create a new cursor that replays the materialized data as strips.
@@ -147,7 +147,7 @@ impl TeeSource {
             data: Arc::clone(&self.buf.data),
             width: self.buf.width,
             height: self.buf.height,
-            format: self.buf.format,
+            format: self.buf.format.clone(),
             stride: self.buf.stride,
             strip_height: strip_height.min(self.buf.height),
             y: 0,
@@ -189,7 +189,7 @@ impl Source for TeeCursor {
                 self.width,
                 rows,
                 self.stride,
-                self.format,
+                &self.format,
             )
             .pipe_err()?,
         ))
@@ -204,7 +204,7 @@ impl Source for TeeCursor {
     }
 
     fn format(&self) -> PixelFormat {
-        self.format
+        self.format.clone()
     }
 }
 

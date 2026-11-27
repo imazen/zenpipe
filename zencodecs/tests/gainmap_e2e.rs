@@ -48,12 +48,19 @@ fn decode_with_gainmap(data: &[u8]) -> (zencodecs::DecodeOutput, Option<DecodedG
 
 /// Get SDR base as contiguous RGB8 bytes from DecodeOutput.
 fn sdr_bytes(output: zencodecs::DecodeOutput) -> (Vec<u8>, u32, u32) {
-    use zencodecs::PixelBufferConvertTypedExt as _;
     let w = output.width();
     let h = output.height();
-    let rgb8 = output.into_buffer().to_rgb8();
-    let img = rgb8.as_imgref();
-    let bytes: Vec<u8> = bytemuck::cast_slice(img.buf()).to_vec();
+    let rgb8 = zenpixels_convert::convert_to_buf(
+        &output.pixels(),
+        zenpixels::PixelFormat::RGB8_SRGB,
+        &zenpixels_convert::ConvertPolicy::permissive(),
+    )
+    .expect("to rgb8");
+    let bytes = rgb8
+        .as_view()
+        .to_contiguous_bytes()
+        .expect("contiguous")
+        .into_owned();
     (bytes, w, h)
 }
 
@@ -72,8 +79,8 @@ fn reconstruct_hdr(
     };
 
     let pixel_format = match channels {
-        3 => UhdrPixelFormat::Rgb8,
-        4 => UhdrPixelFormat::Rgba8,
+        3 => UhdrPixelFormat::RGB8,
+        4 => UhdrPixelFormat::RGBA8,
         _ => panic!("unsupported channels: {channels}"),
     };
 
@@ -97,7 +104,7 @@ fn reconstruct_hdr(
     )
     .expect("apply_gainmap failed");
 
-    hdr_result.as_slice().as_strided_bytes().to_vec()
+    hdr_result.as_view().as_strided_bytes().to_vec()
 }
 
 /// Assert gain map fields are well-formed.
@@ -213,9 +220,15 @@ fn e2e_gain_map_passthrough_jpeg_to_jpeg() {
         metadata: &gm.metadata,
     };
 
-    use zencodecs::PixelBufferConvertTypedExt as _;
-    let rgb8 = output.into_buffer().to_rgb8();
-    let img_ref = rgb8.as_imgref();
+    let rgb_buf = zenpixels_convert::convert_to_buf(
+        &output.pixels(),
+        zenpixels::PixelFormat::RGB8_SRGB,
+        &zenpixels_convert::ConvertPolicy::permissive(),
+    )
+    .expect("to rgb8");
+    let (w, h) = (rgb_buf.width() as usize, rgb_buf.height() as usize);
+    let rgb8 = ImgVec::new(rgb_buf.into_vec::<Rgb<u8>>().unwrap(), w, h);
+    let img_ref = rgb8.as_ref();
 
     let _request = EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(75.0) // different quality

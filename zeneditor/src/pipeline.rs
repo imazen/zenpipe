@@ -268,7 +268,7 @@ pub(crate) fn make_source_info(width: u32, height: u32) -> SourceImageInfo {
 /// Handles any pipeline output format (RGBA8, RGB8, RgbaF32 linear, etc.)
 /// via automatic conversion planning. Fast path when already RGBA8 sRGB.
 pub(crate) fn pack_rgba(mat: &MaterializedSource) -> Vec<u8> {
-    use zenpipe::RowConverter;
+    use zenpipe::{ConvertPolicy, RowPlan};
 
     let w = mat.width() as usize;
     let h = mat.height() as usize;
@@ -291,25 +291,25 @@ pub(crate) fn pack_rgba(mat: &MaterializedSource) -> Vec<u8> {
         return packed;
     }
 
-    // Use RowConverter for any other format (RGB8, RgbaF32 linear, RGBX8, etc.)
-    let mut converter = match RowConverter::new(src_desc, dst_desc) {
+    // Use RowPlan for any other format (RGB8, RgbaF32 linear, RGBX8, etc.)
+    let plan = match RowPlan::build(&src_desc, &dst_desc, &ConvertPolicy::permissive(), None) {
         Ok(c) => c,
         Err(_e) => {
             #[cfg(test)]
-            eprintln!("pack_rgba: no conversion {src_desc} → {dst_desc}: {_e}");
+            eprintln!("pack_rgba: no conversion {src_desc:?} → {dst_desc:?}: {_e}");
             return vec![0u8; dst_row_bytes * h];
         }
     };
 
     let mut packed = vec![0u8; dst_row_bytes * h];
-    let src_bpp = src_desc.bytes_per_pixel();
+    let src_bpp = src_desc.layout.bytes_per_pixel();
     let src_row_bytes = w * src_bpp;
     let data = mat.data();
 
     for y in 0..h {
         let src_start = y * src_stride;
         let dst_start = y * dst_row_bytes;
-        converter.convert_row(
+        let _ = plan.convert_row(
             &data[src_start..src_start + src_row_bytes],
             &mut packed[dst_start..dst_start + dst_row_bytes],
             w as u32,

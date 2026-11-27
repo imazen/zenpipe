@@ -76,7 +76,8 @@ impl TempFileSource {
                 "TempFileSource: empty geometry {width}x{height} / strip {strip_rows}"
             ))));
         }
-        let row_bytes = crate::limits::checked_buffer_size(width, 1, format.bytes_per_pixel())?;
+        let row_bytes =
+            crate::limits::checked_buffer_size(width, 1, format.layout.bytes_per_pixel())?;
         let n = SPOOL_COUNTER.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -98,7 +99,7 @@ impl TempFileSource {
         {
             let mut out = BufWriter::with_capacity((row_bytes * 16).min(1 << 20), &file);
             while let Some(strip) = upstream.next()? {
-                for r in 0..strip.rows() {
+                for r in 0..strip.height() {
                     if rows_written >= height {
                         return Err(at!(PipeError::DimensionMismatch(alloc::format!(
                             "TempFileSource: upstream produced more than {height} rows"
@@ -118,6 +119,7 @@ impl TempFileSource {
             ))));
         }
         let strip_rows = strip_rows.min(height);
+        let buf = StripBuf::new(width, strip_rows, format.clone());
         Ok(Self {
             file,
             path,
@@ -128,7 +130,7 @@ impl TempFileSource {
             strip_rows,
             y: 0,
             row_scratch: vec![0u8; row_bytes],
-            buf: StripBuf::new(width, strip_rows, format),
+            buf,
             passes: 0,
         })
     }
@@ -173,7 +175,7 @@ impl Source for TempFileSource {
             .seek(SeekFrom::Start(offset))
             .map_err(|e| Self::io(e, &self.path, "seek"))?;
         self.buf.reset();
-        self.buf.reconfigure(self.width, rows, self.format);
+        self.buf.reconfigure(self.width, rows, self.format.clone());
         for _ in 0..rows {
             self.file
                 .read_exact(&mut self.row_scratch)
@@ -193,7 +195,7 @@ impl Source for TempFileSource {
     }
 
     fn format(&self) -> PixelFormat {
-        self.format
+        self.format.clone()
     }
 }
 
@@ -220,7 +222,7 @@ mod tests {
         let mut out = Vec::new();
         let mut strips = 0;
         while let Some(s) = src.next().unwrap() {
-            for r in 0..s.rows() {
+            for r in 0..s.height() {
                 out.extend_from_slice(&s.row(r)[..w]);
             }
             strips += 1;

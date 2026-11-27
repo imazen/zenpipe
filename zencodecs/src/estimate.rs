@@ -342,7 +342,7 @@ mod tests {
     use super::*;
 
     fn chars(w: u32, h: u32) -> ImageCharacteristics {
-        ImageCharacteristics::new(w, h, zenpixels::PixelDescriptor::RGBA8_SRGB)
+        ImageCharacteristics::new(w, h, zenpixels::PixelFormat::RGBA8_SRGB)
     }
 
     #[test]
@@ -463,7 +463,7 @@ mod pdf_tests {
         // Compare the delegated result to the backend directly, so a fallback
         // to unknown() fails when the backend provides an estimate.
         use zencodec::decode::DecoderConfig;
-        let c = ImageCharacteristics::new(64, 64, zenpixels::PixelDescriptor::RGBA8_SRGB);
+        let c = ImageCharacteristics::new(64, 64, zenpixels::PixelFormat::RGBA8_SRGB);
         let env = ComputeEnvironment::conservative();
         let est = estimate_decode(ImageFormat::Custom(&zenpdf::PDF_FORMAT), &c, &env);
         let direct = zenpdf::PdfDecoderConfig::new().estimate_decode_resources(&c, &env);

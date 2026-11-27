@@ -2,7 +2,7 @@
 //! writer through the blocking pool. `cargo run -p zenpipe-io-check --example tokio_bridge -- in.png out.png`
 use zencodec::CodecSet;
 use zencodec::encode::EncoderConfig;
-use zencodec::operation::{DecodeRequest, OutputSchedule, PolicySet};
+use zencodec::operation::{DecodeOptions as CodecDecodeOptions, OutputSchedule, PolicySet};
 use zencodec::storage::StorageBudget;
 use zencodec_io::row_encode::{self, Options};
 use zencodec_io::tokio_io::BytesSource;
@@ -26,7 +26,7 @@ async fn main() -> Result<(), Error> {
             let codecs = CodecSet::new().with_decoder(zenpng::PngDecoderConfig::new());
             let source = DecodeSource::new(
                 &codecs,
-                &DecodeRequest::new(),
+                &CodecDecodeOptions::new(),
                 BlockingReadAt::new(source, handle),
                 PolicySet::new(),
                 DecodeOptions::new(StorageBudget::new(256 << 20, 64)),

@@ -3,7 +3,7 @@
 //! strips of any height). Codec-free: exact rows against the authored samples.
 
 use zenpipe::sources::{CropSource, MaterializedSource};
-use zenpipe::{PixelDescriptor, Source};
+use zenpipe::{PixelFormat, Source};
 
 const W: u32 = 23;
 const H: u32 = 150;
@@ -23,10 +23,10 @@ fn collect(source: &mut dyn Source) -> (Vec<u8>, u32) {
     let mut out = Vec::new();
     let mut rows = 0;
     while let Some(strip) = source.next().unwrap() {
-        for r in 0..strip.rows() {
+        for r in 0..strip.height() {
             out.extend_from_slice(strip.row(r));
         }
-        rows += strip.rows();
+        rows += strip.height();
     }
     (out, rows)
 }
@@ -45,7 +45,7 @@ fn crop_keeps_every_row_across_unaligned_upstream_strips() {
             (4, 61, 9, 89),
         ] {
             let upstream =
-                MaterializedSource::from_data(data.clone(), W, H, PixelDescriptor::RGB8_SRGB)
+                MaterializedSource::from_data(data.clone(), W, H, PixelFormat::RGB8_SRGB)
                     .with_strip_height(upstream_rows);
             let mut crop = CropSource::new(Box::new(upstream), x, y, w, h).unwrap();
             let (got, rows) = collect(&mut crop);

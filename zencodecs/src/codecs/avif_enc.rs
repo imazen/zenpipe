@@ -78,7 +78,7 @@ pub(crate) fn encode_with_precomputed_gainmap(
     pixel_data: &[u8],
     width: u32,
     height: u32,
-    descriptor: zenpixels::PixelDescriptor,
+    pixel_format: zenpixels::PixelFormat,
     quality: Option<f32>,
     effort: Option<u32>,
     codec_config: Option<&crate::config::CodecConfig>,
@@ -136,7 +136,8 @@ pub(crate) fn encode_with_precomputed_gainmap(
     let iso_metadata = zenjpeg::ultrahdr::serialize_iso21496_fmt(
         metadata,
         zenjpeg::ultrahdr::Iso21496Format::AvifTmap,
-    );
+    )
+    .map_err(|e| whereat::at!(CodecError::InvalidInput(alloc::format!("iso21496: {e}"))))?;
 
     // Step 3: Build the main encoder with gain map attached
     let mut enc = build_encoding(quality, effort, false, codec_config);
@@ -150,9 +151,8 @@ pub(crate) fn encode_with_precomputed_gainmap(
 
     // Step 4: Encode the base image through the normal trait path
     use zencodec::encode::{EncodeJob as _, Encoder as _};
-    let mut job = enc.job().with_metadata_policy(
-        source_metadata.clone(),
-        zencodec::MetadataPolicy::PreserveExact,
+    let mut job = enc.job().with_unfiltered_metadata(
+        source_metadata.filtered(&zencodec::MetadataPolicy::PreserveExact),
     );
     if let Some(lim) = limits {
         job = job.with_limits(crate::limits::to_resource_limits(lim));
@@ -163,17 +163,29 @@ pub(crate) fn encode_with_precomputed_gainmap(
     let encoder =
         at_crate!(job.encoder()).map_err_at(|e| CodecError::from_codec(ImageFormat::Avif, e))?;
 
-    let adapted = at_crate!(zenpixels_convert::adapt::adapt_for_encode_cow(
+    let stride = (width as usize)
+        .checked_mul(pixel_format.layout.bytes_per_pixel())
+        .ok_or_else(|| whereat::at!(CodecError::InvalidInput("pixel stride overflow".into())))?;
+    let view = at_crate!(zenpixels::PixelView::new(
         pixel_data,
-        descriptor,
         width,
         height,
-        descriptor.aligned_stride(width),
-        zenavif::AvifEncoderConfig::supported_descriptors(),
+        stride,
+        &pixel_format,
+    ))
+    .map_err_at(|e| CodecError::InvalidInput(alloc::format!("pixel view: {e}")))?;
+
+    let (_, adapted) = at_crate!(zenpixels_convert::adapt_for_encode(
+        view,
+        &zenpixels::ColorOrigin::assumed(),
+        zenavif::AvifEncoderConfig::supported_pixel_formats(),
+        &zenpixels_convert::ConvertPolicy::permissive(),
+        zenpixels::PeakSource::Declared,
+        zenpixels_convert::OutputSignaling::Strip,
     ))
     .map_err_at(|e| CodecError::InvalidInput(alloc::format!("pixel format: {e}")))?;
 
-    at_crate!(encoder.encode(adapted.as_slice()))
+    at_crate!(encoder.encode(adapted.pixels.as_view()))
         .map_err_at(|e| CodecError::from_codec(ImageFormat::Avif, e))
 }
 
@@ -231,7 +243,7 @@ mod pulse_tests {
                 &[],
                 8,
                 8,
-                zenpixels::PixelDescriptor::RGB8_SRGB,
+                zenpixels::PixelFormat::RGB8_SRGB,
                 None,
                 None,
                 None,

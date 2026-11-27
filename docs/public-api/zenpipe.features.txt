@@ -90,7 +90,7 @@ pub struct io::DecodeSource<R, P>
 pub fn io::DecodeSource<io::SharedBytes, zencodec::operation::policy::PolicySet>::from_bytes(&zencodec::set::CodecSet, impl core::convert::Into<io::SharedBytes>, io::DecodeOptions) -> PipeResult<Self>
 pub fn io::DecodeSource<zencodec::source::SliceReadAt<'a>, zencodec::operation::policy::PolicySet>::from_slice(&zencodec::set::CodecSet, &'a [u8], io::DecodeOptions) -> PipeResult<Self>
 pub fn io::DecodeSource<R, P>::info(&self) -> &zencodec::info::ImageInfo
-pub fn io::DecodeSource<R, P>::new(&zencodec::set::CodecSet, &zencodec::operation::DecodeRequest, R, P, io::DecodeOptions) -> PipeResult<Self>
+pub fn io::DecodeSource<R, P>::new(&zencodec::set::CodecSet, &zencodec::operation::DecodeOptions, R, P, io::DecodeOptions) -> PipeResult<Self>
 pub fn io::DecodeSource<R, P>::report(&self) -> &zencodec::operation::policy::OperationReport
 pub fn io::DecodeSource<R, P>::retained_input_capacity(&self) -> usize
 pub fn io::DecodeSource<R, P>::stats(&self) -> io::DecodeStats
@@ -109,11 +109,11 @@ pub io::OrientationCost::orientation: zenpixels::orientation::Orientation
 pub io::OrientationCost::reverses_rows: bool
 pub io::OrientationCost::swaps_axes: bool
 pub io::OrientationCost::width: u32
-pub fn io::OrientationCost::new(zenpixels::orientation::Orientation, u32, u32, zenpixels::descriptor::PixelDescriptor) -> Self
+pub fn io::OrientationCost::new(zenpixels::orientation::Orientation, u32, u32, zenpixels::color::PixelFormat) -> Self
 pub fn io::OrientationCost::streams(&self) -> bool
 pub struct io::PipelineRows<S>
 pub fn io::PipelineRows<S>::from_source(S) -> PipeResult<Self>
-pub fn io::PipelineRows<S>::new(S, core::option::Option<alloc::rcs::arc::Arc<zenpixels::color::ColorContext>>) -> PipeResult<Self>
+pub fn io::PipelineRows<S>::new(S, core::option::Option<zenpixels::color::ColorOrigin>) -> PipeResult<Self>
 pub fn io::PipelineRows<S>::stats(&self) -> io::RowStats
 #[non_exhaustive] pub struct io::RowStats
 pub io::RowStats::carried_rows: u64

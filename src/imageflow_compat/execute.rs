@@ -376,21 +376,21 @@ fn execute_steps_with_overrides(
                         width: w,
                         height: h,
                         pixels: data.clone(),
-                        format: fmt,
+                        format: fmt.clone(),
                         alpha_meaningful,
                     },
                 );
             }
             if has_encode {
                 let encode_io_id = pipeline.encode_io_id.unwrap();
-                let stride = w as usize * fmt.bytes_per_pixel();
-                let ps = zenpixels::PixelSlice::new(&data, w, h, stride, fmt)
+                let stride = w as usize * fmt.layout.bytes_per_pixel();
+                let ps = zenpixels::PixelView::new(&data, w, h, stride, &fmt)
                     .map_err(|e| ZenError::Codec(format!("pixel slice: {e}")))?;
                 let registry = AllowedFormats::all();
                 let decision = zencodecs::FormatDecision::for_format(zencodecs::ImageFormat::Png);
                 let output = zencodecs::EncodeRequest::new(decision.format)
                     .with_registry(&registry)
-                    .encode(ps, fmt.has_alpha())
+                    .encode(ps, crate::format::format_has_alpha(&fmt))
                     .map_err(|e| ZenError::Codec(format!("encode: {e}")))?;
                 return Ok((
                     vec![ZenEncodeResult {
@@ -553,15 +553,15 @@ fn execute_steps_with_overrides(
                     width: w,
                     height: h,
                     pixels: data.clone(),
-                    format: fmt,
+                    format: fmt.clone(),
                     alpha_meaningful,
                 },
             );
         }
 
         // One-shot encode from materialized data.
-        let stride = w as usize * fmt.bytes_per_pixel();
-        let pixel_slice = zenpixels::PixelSlice::new(&data, w, h, stride, fmt)
+        let stride = w as usize * fmt.layout.bytes_per_pixel();
+        let pixel_slice = zenpixels::PixelView::new(&data, w, h, stride, &fmt)
             .map_err(|e| ZenError::Codec(format!("pixel slice: {e}")))?;
 
         let encode_io_id = pipeline.encode_io_id.unwrap();
@@ -571,7 +571,7 @@ fn execute_steps_with_overrides(
             .with_quality(eff_quality)
             .with_lossless(eff_lossless)
             .with_registry(&registry)
-            .encode(pixel_slice, fmt.has_alpha())
+            .encode(pixel_slice, crate::format::format_has_alpha(&fmt))
             .map_err(|e| ZenError::Codec(format!("encode: {e}")))?;
 
         vec![ZenEncodeResult {
@@ -597,7 +597,7 @@ fn execute_steps_with_overrides(
                     width: w,
                     height: h,
                     pixels: data.clone(),
-                    format: fmt,
+                    format: fmt.clone(),
                     alpha_meaningful,
                 },
             );
@@ -1059,8 +1059,10 @@ fn decode_to_source_frame(
             let buf = frame.into_buffer();
             let w = buf.width();
             let h = buf.height();
-            let format = buf.descriptor();
-            let bytes = buf.copy_to_contiguous_bytes();
+            let format = buf.format().clone();
+            let bytes = buf
+                .into_vec::<u8>()
+                .map_err(|e| ZenError::Codec(format!("frame buffer: {e}")))?;
             return Ok(Box::new(crate::sources::MaterializedSource::from_data(
                 bytes, w, h, format,
             )));
@@ -1118,8 +1120,11 @@ fn decode_to_source(
 
             let w = decoded.width();
             let h = decoded.height();
-            let format = decoded.descriptor();
-            let bytes = decoded.into_buffer().copy_to_contiguous_bytes();
+            let format = decoded.pixel_format().clone();
+            let bytes = decoded
+                .into_buffer()
+                .into_vec::<u8>()
+                .map_err(|e| ZenError::Codec(format!("decode buffer: {e}")))?;
             Ok(Box::new(crate::sources::MaterializedSource::from_data(
                 bytes, w, h, format,
             )))
@@ -1223,18 +1228,21 @@ fn stream_encode(
     // If encoding to a format that doesn't support alpha (JPEG) and the
     // source has alpha, apply matte compositing first. V2's mozjpeg encoder
     // does this internally; zen needs it explicitly.
-    if !decision.format.supports_alpha() && source.format().has_alpha() {
+    if !decision.format.supports_alpha() && crate::format::format_has_alpha(&source.format()) {
         let matte = decision.matte.unwrap_or([255, 255, 255]);
-        let options = zenpixels::ConvertOptions::permissive().with_alpha_policy(
-            zenpixels::AlphaPolicy::CompositeOnto {
-                r: matte[0],
-                g: matte[1],
-                b: matte[2],
-            },
+        let policy = zenpixels_convert::ConvertPolicy::permissive().with_alpha(
+            zenpixels_convert::AlphaPolicy::CompositeOnto(zenpixels::Color::linear(
+                [
+                    linear_srgb::default::srgb_u8_to_linear(matte[0]),
+                    linear_srgb::default::srgb_u8_to_linear(matte[1]),
+                    linear_srgb::default::srgb_u8_to_linear(matte[2]),
+                ],
+                zenpixels::Primaries::Bt709,
+            )),
         );
         let from = source.format();
         let to = crate::format::RGB8_SRGB;
-        if let Some(op) = crate::ops::RowConverterOp::new_explicit(from, to, &options) {
+        if let Some(op) = crate::ops::RowConverterOp::new_explicit(from, to, &policy) {
             source = Box::new(crate::sources::TransformSource::new(source).push(op));
         }
     }
@@ -1283,8 +1291,8 @@ fn stream_encode(
         let h = mat.height();
         let fmt = mat.format();
         let data = mat.data();
-        let stride = w as usize * fmt.bytes_per_pixel();
-        let pixel_slice = zenpixels::PixelSlice::new(data, w, h, stride, fmt)
+        let stride = w as usize * fmt.layout.bytes_per_pixel();
+        let pixel_slice = zenpixels::PixelView::new(data, w, h, stride, &fmt)
             .map_err(|e| ZenError::Codec(format!("pixel slice: {e}")))?;
 
         let mut req = zencodecs::EncodeRequest::new(decision.format)
@@ -1294,7 +1302,7 @@ fn stream_encode(
         if let Some(ref cfg) = codec_config {
             req = req.with_codec_config(cfg);
         }
-        req.encode(pixel_slice, fmt.has_alpha())
+        req.encode(pixel_slice, crate::format::format_has_alpha(&fmt))
             .map_err(|e| ZenError::Codec(format!("one-shot encode: {e}")))?
     };
 

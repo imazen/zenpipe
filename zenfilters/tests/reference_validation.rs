@@ -81,15 +81,19 @@ fn apply_zenfilter(img: &RgbImage, filter: Box<dyn Filter>) -> RgbImage {
     let (w, h) = img.dimensions();
     let input_bytes: Vec<u8> = img.as_raw().clone();
 
-    let desc = zenpixels::PixelDescriptor::RGB8_SRGB;
-    let input_buf = zenpixels::buffer::PixelBuffer::from_vec(input_bytes, w, h, desc).unwrap();
+    let desc = zenpixels::PixelFormat::RGB8_SRGB;
+    let input_buf = zenpixels::buffer::PixelBuf::from_bytes(input_bytes, w, h, desc).unwrap();
 
     let mut pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
     pipeline.push(filter);
 
     let mut ctx = FilterContext::new();
     let output_buf = apply_to_buffer(&pipeline, &input_buf, true, &mut ctx).unwrap();
-    let output_bytes = output_buf.copy_to_contiguous_bytes();
+    let output_bytes = output_buf
+        .as_view()
+        .to_contiguous_bytes()
+        .unwrap()
+        .into_owned();
 
     ImageBuffer::from_raw(w, h, output_bytes).unwrap()
 }
@@ -719,12 +723,16 @@ fn fused_adjust_matches_individual_filters() {
     pipeline_individual.push(Box::new(sat));
 
     let input_bytes = img.as_raw().clone();
-    let desc = zenpixels::PixelDescriptor::RGB8_SRGB;
+    let desc = zenpixels::PixelFormat::RGB8_SRGB;
     let input_buf =
-        zenpixels::buffer::PixelBuffer::from_vec(input_bytes.clone(), SIZE, SIZE, desc).unwrap();
+        zenpixels::buffer::PixelBuf::from_bytes(input_bytes.clone(), SIZE, SIZE, desc).unwrap();
     let mut ctx = FilterContext::new();
     let individual_out = apply_to_buffer(&pipeline_individual, &input_buf, true, &mut ctx).unwrap();
-    let individual_bytes = individual_out.copy_to_contiguous_bytes();
+    let individual_bytes = individual_out
+        .as_view()
+        .to_contiguous_bytes()
+        .unwrap()
+        .into_owned();
     let individual: RgbImage = ImageBuffer::from_raw(SIZE, SIZE, individual_bytes).unwrap();
 
     // Apply equivalent FusedAdjust
@@ -808,14 +816,17 @@ fn alpha_has_no_effect_on_rgb() {
 fn empty_pipeline_is_near_identity() {
     let img = make_gradient_rgb(SIZE, SIZE);
     let input_bytes = img.as_raw().clone();
-    let desc = zenpixels::PixelDescriptor::RGB8_SRGB;
-    let input_buf =
-        zenpixels::buffer::PixelBuffer::from_vec(input_bytes, SIZE, SIZE, desc).unwrap();
+    let desc = zenpixels::PixelFormat::RGB8_SRGB;
+    let input_buf = zenpixels::buffer::PixelBuf::from_bytes(input_bytes, SIZE, SIZE, desc).unwrap();
 
     let pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
     let mut ctx = FilterContext::new();
     let output_buf = apply_to_buffer(&pipeline, &input_buf, true, &mut ctx).unwrap();
-    let output_bytes = output_buf.copy_to_contiguous_bytes();
+    let output_bytes = output_buf
+        .as_view()
+        .to_contiguous_bytes()
+        .unwrap()
+        .into_owned();
     let result: RgbImage = ImageBuffer::from_raw(SIZE, SIZE, output_bytes).unwrap();
 
     let score = zensim_score(&img, &result);
@@ -836,9 +847,11 @@ fn empty_pipeline_is_near_identity() {
 /// Convert a single sRGB u8 pixel through our pipeline (sRGB→Oklab→sRGB).
 fn our_srgb_to_oklab(r: u8, g: u8, b: u8) -> (f32, f32, f32) {
     let input = vec![r, g, b];
-    let m1 = zenpixels_convert::oklab::rgb_to_lms_matrix(zenpixels::ColorPrimaries::Bt709).unwrap();
+    let space =
+        zenpixels_convert::oklab::OklabSpace::for_primaries(zenpixels::Primaries::Bt709).unwrap();
+    let m1 = space.rgb_to_lms();
     let mut planes = OklabPlanes::new(1, 1);
-    zenfilters::scatter_srgb_u8_to_oklab(&input, &mut planes, 3, &m1);
+    zenfilters::scatter_srgb_u8_to_oklab(&input, &mut planes, 3, m1);
     (planes.l[0], planes.a[0], planes.b[0])
 }
 

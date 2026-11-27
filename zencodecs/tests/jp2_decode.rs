@@ -12,8 +12,8 @@ fn jp2_and_bare_codestream_decode_every_reference_sample() {
         assert_eq!(decoded.info().format, ImageFormat::Jp2);
         assert_eq!((decoded.width(), decoded.height()), (16, 16));
         let buffer = decoded.into_buffer();
-        let pixels = buffer.as_slice();
-        assert_eq!(pixels.descriptor(), zenpixels::PixelDescriptor::RGB8_SRGB);
+        let pixels = buffer.as_view();
+        assert_eq!(pixels.format(), &zenpixels::formats::RGB8_SRGB);
         for y in 0..16 {
             for x in 0..16 {
                 assert_eq!(

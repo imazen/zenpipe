@@ -3,7 +3,7 @@
 //! `cargo run -p zenpipe-io-check --example file_to_file -- in.jpg out.png`
 use zencodec::CodecSet;
 use zencodec::encode::EncoderConfig;
-use zencodec::operation::{DecodeRequest, PolicySet};
+use zencodec::operation::{DecodeOptions as CodecDecodeOptions, PolicySet};
 use zencodec::storage::StorageBudget;
 use zencodec_io::destination::SeekBack;
 use zencodec_io::row_encode::{self, Options};
@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .with_decoder(zenpng::PngDecoderConfig::new());
     let source = DecodeSource::new(
         &codecs,
-        &DecodeRequest::new(),
+        &CodecDecodeOptions::new(),
         FileReadAt::open(input)?,
         PolicySet::new(),
         DecodeOptions::new(StorageBudget::new(256 << 20, 64))

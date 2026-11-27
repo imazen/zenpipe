@@ -5,9 +5,9 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use zencodec::decode::{DecodeRowSink, SinkError};
+use zencodec::decode::{DecodeRowSink, RowStrip, SinkError};
 use zencodecs::{AllowedFormats, DecodeRequest, Limits};
-use zenpixels::{PixelDescriptor, PixelSliceMut};
+use zenpixels::{PixelFormat, PixelViewMut};
 
 struct CountingSink {
     buf: Vec<u8>,
@@ -15,6 +15,7 @@ struct CountingSink {
     max_rows: u32,
     width: u32,
     bpp: usize,
+    format: PixelFormat,
 }
 
 impl DecodeRowSink for CountingSink {
@@ -22,13 +23,14 @@ impl DecodeRowSink for CountingSink {
         &mut self,
         width: u32,
         height: u32,
-        descriptor: PixelDescriptor,
+        descriptor: PixelFormat,
     ) -> Result<(), SinkError> {
         if height > self.max_rows || width > 1024 {
             return Err("dimensions exceed fuzz limit".into());
         }
         self.width = width;
-        self.bpp = descriptor.bytes_per_pixel() as usize;
+        self.bpp = descriptor.layout.bytes_per_pixel();
+        self.format = descriptor;
         // Pre-allocate one strip buffer (reused for each strip)
         let strip_bytes = width as usize * self.bpp * 16; // 16 rows max strip
         self.buf.resize(strip_bytes.min(1024 * 1024), 0);
@@ -37,21 +39,25 @@ impl DecodeRowSink for CountingSink {
 
     fn provide_next_buffer(
         &mut self,
-        _y: u32,
-        height: u32,
-        width: u32,
-        descriptor: PixelDescriptor,
-    ) -> Result<PixelSliceMut<'_>, SinkError> {
+        strip: RowStrip,
+        descriptor: PixelFormat,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
+        let RowStrip {
+            y: _y,
+            width,
+            height,
+        } = strip;
         self.rows = self.rows.saturating_add(height);
         if self.rows > self.max_rows {
             return Err("row count exceeds fuzz limit".into());
         }
-        let stride = width as usize * self.bpp;
+        self.format = descriptor;
+        let stride = width as usize * self.format.layout.bytes_per_pixel();
         let needed = stride * height as usize;
         if needed > self.buf.len() {
             self.buf.resize(needed, 0);
         }
-        PixelSliceMut::new(&mut self.buf[..needed], width, height, stride, descriptor)
+        PixelViewMut::new(&mut self.buf[..needed], width, height, stride, &self.format)
             .map_err(|e| -> SinkError { alloc::format!("{e}").into() })
     }
 
@@ -75,6 +81,7 @@ fuzz_target!(|data: &[u8]| {
         max_rows: 1024,
         width: 0,
         bpp: 4,
+        format: PixelFormat::RGBA8_SRGB,
     };
     let _ = DecodeRequest::new(data)
         .with_limits(&limits)

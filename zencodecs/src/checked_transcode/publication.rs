@@ -158,7 +158,7 @@ impl VerifiedOutput {
     }
 }
 
-impl TranscodeRequest<'_> {
+impl TranscodeRequest {
     /// Checked transcode and its verification, then an owner for
     /// publication under the universal pulse. The same requirements reach
     /// discovery and the joint Transcode question; none is cleared or
@@ -570,14 +570,14 @@ mod tests {
     #[test]
     fn the_private_fixed_no_pulse_witness_runs_the_actual_prepared_job() {
         use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
-        use zenpixels::{Cicp, PixelSlice};
-        use zenpixels_convert::cms_moxcms::MoxCms;
+        use zenpixels::PixelView;
+        use zenpixels_convert::cms::MoxCms;
         let input = zenjpeg::JpegEncoderConfig::new()
             .with_calibrated_quality(87.0)
             .job()
             .encoder()
             .unwrap()
-            .encode(PixelSlice::new(&[23, 42, 61], 1, 1, 3, PixelDescriptor::RGB8_SRGB).unwrap())
+            .encode(PixelView::new(&[23, 42, 61], 1, 1, 3, &zenpixels::formats::RGB8_SRGB).unwrap())
             .unwrap()
             .into_vec();
         let codecs = CodecSet::new()
@@ -586,12 +586,8 @@ mod tests {
             .with_encoder(zenpng::PngEncoderConfig::new());
         const CAP: usize = 65536; // Private fixture capacity, not a measured native bound.
         let request = TranscodeRequest::new(ImageFormat::Png)
-            .with_cms(&MoxCms)
-            .with_output(
-                OutputProfile::Named(Cicp::SRGB),
-                PixelFormat::Rgb8,
-                ConvertOptions::retain_channels(),
-            )
+            .with_cms(Arc::new(MoxCms))
+            .with_output(PixelFormat::RGB8_SRGB, ConvertPolicy::lossless())
             .with_metadata(MetadataTransfer::DiscardDescriptive)
             .with_output_limit(CAP);
         let mut policy = PolicySet::new()
@@ -613,7 +609,7 @@ mod tests {
             )
             .unwrap();
         let proof = FixedProof::<CAP>::from_verified(completed).unwrap();
-        drop(cursor);
+        let _ = cursor;
         drop(input);
         drop(codecs);
         drop(request);

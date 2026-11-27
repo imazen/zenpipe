@@ -281,12 +281,12 @@ fn flip_h_multi_strip() {
     while let Ok(Some(strip)) = flip.next() {
         assert_eq!(strip.width(), 4);
         // Each strip should be flipped
-        for r in 0..strip.rows() {
+        for r in 0..strip.height() {
             let row = strip.row(r);
             assert_eq!(row[0], 3, "first pixel x should be 3 (flipped)");
             assert_eq!(row[3 * 4], 0, "last pixel x should be 0 (flipped)");
         }
-        total_rows += strip.rows();
+        total_rows += strip.height();
     }
     assert_eq!(total_rows, 50);
 }
@@ -467,8 +467,8 @@ fn mask_transform_rejects_wrong_format() {
 #[test]
 fn pipe_error_display_format_mismatch() {
     let err = PipeError::FormatMismatch {
-        expected: format::RGBA8_SRGB,
-        got: format::RGB8_SRGB,
+        expected: Box::new(format::RGBA8_SRGB),
+        got: Box::new(format::RGB8_SRGB),
     };
     let msg = format!("{err}");
     assert!(msg.contains("format mismatch"), "got: {msg}");

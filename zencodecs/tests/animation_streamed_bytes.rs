@@ -3,7 +3,7 @@
 
 use zencodec::encode::{AnimationOutputTiming, DynAnimationFrameEncoder};
 use zencodecs::{EncodeRequest, ImageFormat};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelFormat, PixelView};
 
 const W: u32 = 19;
 const H: u32 = 23;
@@ -50,7 +50,7 @@ fn encode(
         .unwrap();
     let timing = begin.then(|| {
         encoder
-            .begin(W, H, PixelDescriptor::RGBA8_SRGB, Some(3))
+            .begin(W, H, PixelFormat::RGBA8_SRGB, Some(3))
             .unwrap()
     });
     let mut output = Vec::new();
@@ -70,7 +70,7 @@ fn encode(
                 ]);
             }
         }
-        let pixels = PixelSlice::new(&data, W, H, stride, PixelDescriptor::RGBA8_SRGB).unwrap();
+        let pixels = PixelView::new(&data, W, H, stride, &zenpixels::formats::RGBA8_SRGB).unwrap();
         encoder
             .push_frame(pixels, 40 + frame as u32 * 10, None)
             .unwrap();

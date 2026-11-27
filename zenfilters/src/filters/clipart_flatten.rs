@@ -482,7 +482,8 @@ fn quantize_zenquant(
     tmp.l.copy_from_slice(gl);
     tmp.a.copy_from_slice(ga);
     tmp.b.copy_from_slice(gb);
-    let m1_inv = zenpixels_convert::oklab::lms_to_rgb_matrix(zenpixels::ColorPrimaries::Bt709)?;
+    let space = zenpixels_convert::oklab::OklabSpace::for_primaries(zenpixels::Primaries::Bt709)?;
+    let m1_inv = *space.lms_to_rgb();
     let mut lin = vec![0.0f32; n * 3];
     crate::gather_from_oklab(&tmp, &mut lin, 3, &m1_inv, 1.0);
 

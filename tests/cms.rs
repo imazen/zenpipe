@@ -69,7 +69,7 @@ fn icc_srgb_to_p3_basic() {
     let p3 = p3_icc();
 
     let mut transform =
-        IccTransformSource::new(src, &srgb, &p3, &zenpixels_convert::cms_moxcms::MoxCms).unwrap();
+        IccTransformSource::new(src, &srgb, &p3, &zenpixels_convert::MoxCms).unwrap();
 
     assert_eq!(transform.width(), 4);
     assert_eq!(transform.height(), 4);
@@ -109,7 +109,7 @@ fn icc_p3_to_srgb_basic() {
 
     // Interpret as P3, convert to sRGB.
     let mut transform =
-        IccTransformSource::new(src, &p3, &srgb, &zenpixels_convert::cms_moxcms::MoxCms).unwrap();
+        IccTransformSource::new(src, &p3, &srgb, &zenpixels_convert::MoxCms).unwrap();
 
     let data = drain(&mut transform);
     assert_eq!(data.len(), 4 * 4 * 4);
@@ -131,15 +131,9 @@ fn icc_srgb_roundtrip() {
 
     let src = solid_rgba8(4, 2, [200, 100, 50, 200]);
 
-    let step1 =
-        IccTransformSource::new(src, &srgb, &p3, &zenpixels_convert::cms_moxcms::MoxCms).unwrap();
-    let mut step2 = IccTransformSource::new(
-        Box::new(step1),
-        &p3,
-        &srgb,
-        &zenpixels_convert::cms_moxcms::MoxCms,
-    )
-    .unwrap();
+    let step1 = IccTransformSource::new(src, &srgb, &p3, &zenpixels_convert::MoxCms).unwrap();
+    let mut step2 =
+        IccTransformSource::new(Box::new(step1), &p3, &srgb, &zenpixels_convert::MoxCms).unwrap();
 
     let data = drain(&mut step2);
     for px in data.as_chunks::<4>().0.iter() {
@@ -174,12 +168,12 @@ fn icc_streaming_strips() {
 
     let src = solid_rgba8(4, 50, [180, 90, 45, 255]);
     let mut transform =
-        IccTransformSource::new(src, &srgb, &p3, &zenpixels_convert::cms_moxcms::MoxCms).unwrap();
+        IccTransformSource::new(src, &srgb, &p3, &zenpixels_convert::MoxCms).unwrap();
 
     let mut total_rows = 0u32;
     let mut strip_count = 0u32;
     while let Ok(Some(strip)) = transform.next() {
-        total_rows += strip.rows();
+        total_rows += strip.height();
         strip_count += 1;
     }
     assert_eq!(total_rows, 50);

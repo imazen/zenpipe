@@ -22,8 +22,8 @@ use zenfilters::{
     Filter, FilterContext, OklabPlanes, Pipeline, PipelineConfig, gather_oklab_to_srgb_u8,
     scatter_srgb_u8_to_oklab,
 };
-use zenpixels::ColorPrimaries;
-use zenpixels_convert::oklab;
+use zenpixels::Primaries;
+use zenpixels_convert::oklab::OklabSpace;
 
 const MAX_DIM: u32 = 1024;
 const JPEG_QUALITY: u8 = 88;
@@ -173,8 +173,9 @@ fn main() {
         save_jpeg(&originals_dir.join(format!("{stem}.jpg")), &rgb);
 
         // Prepare both formats for the two entry types
-        let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
-        let m1_inv = oklab::lms_to_rgb_matrix(ColorPrimaries::Bt709).unwrap();
+        let space = OklabSpace::for_primaries(Primaries::Bt709).unwrap();
+        let m1 = space.rgb_to_lms();
+        let m1_inv = space.lms_to_rgb();
 
         // Oklab planes for film looks
         let mut base_planes = OklabPlanes::new(rw, rh);

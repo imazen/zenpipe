@@ -690,7 +690,7 @@ pub(crate) fn compile_geometry_run(
             source_w,
             source_h,
             &plan,
-            zenresize::PixelDescriptor::RGBA8_SRGB,
+            zenresize::PixelFormat::RGBA8_SRGB,
             filter,
         );
         if let Some(pct) = extras.sharpen_percent {

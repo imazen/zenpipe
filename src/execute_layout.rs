@@ -11,7 +11,7 @@ use alloc::vec::Vec;
 use whereat::{At, ResultAtExt, at};
 use zenlayout::{CanvasColor, DecoderOffer, DecoderRequest, IdealLayout, LayoutPlan, Orientation};
 use zenresize::composite::{Background, CompositeError};
-use zenresize::{AlphaMode, ChannelLayout, ChannelType, PixelDescriptor};
+use zenresize::{AlphaMode, ChannelOrder, PixelFormat, SampleType};
 use zenresize::{Filter, Resizer};
 
 /// Bridge: convert zenlayout Orientation to zenresize OrientOutput.
@@ -34,7 +34,7 @@ fn orient_from(o: Orientation) -> zenresize::OrientOutput {
 #[allow(dead_code)] // not yet wired into the layout path; kept for canvas work
 fn solid_background_from_canvas_color(
     color: &zenlayout::CanvasColor,
-    desc: PixelDescriptor,
+    desc: PixelFormat,
 ) -> zenresize::SolidBackground {
     match color {
         zenlayout::CanvasColor::Transparent => zenresize::SolidBackground::transparent(desc),
@@ -145,20 +145,20 @@ impl<B: Background> Background for OffsetBackground<B> {
 ///
 /// Pipeline: trim → orient → resize → canvas placement → edge replication.
 ///
-/// Only supports u8 pixel formats. Panics if `desc` is not `ChannelType::U8`.
+/// Only supports u8 pixel formats. Panics if `desc` is not `SampleType::U8`.
 pub fn execute_layout(
     decoder_output: &[u8],
     decoder_width: u32,
     decoder_height: u32,
     plan: &LayoutPlan,
-    desc: PixelDescriptor,
+    desc: PixelFormat,
     filter: Filter,
 ) -> Vec<u8> {
     assert!(
-        desc.channel_type() == ChannelType::U8,
+        desc.layout.sample == SampleType::U8,
         "execute_layout only supports u8 formats"
     );
-    let ch = desc.channels();
+    let ch = desc.layout.channels();
 
     let expected_len = decoder_width as usize * decoder_height as usize * ch;
     assert!(
@@ -230,7 +230,7 @@ pub fn execute_layout(
             trim_w,
             trim_h,
             plan.remaining_orientation,
-            desc.channels() as u8,
+            desc.layout.channels() as u8,
         );
         (Some(result), new_w, new_h)
     };
@@ -258,7 +258,7 @@ pub fn execute_layout(
 
         let builder = zenresize::ResizeConfig::builder(orient_w, orient_h, rw, rh)
             .filter(filter)
-            .format(desc);
+            .format(desc.clone());
 
         if let Some(ref data) = oriented {
             let config = builder.build();
@@ -322,7 +322,7 @@ pub fn execute_layout(
 pub fn execute(
     source_pixels: &[u8],
     ideal: &IdealLayout,
-    desc: PixelDescriptor,
+    desc: PixelFormat,
     filter: Filter,
 ) -> Vec<u8> {
     let pre_orient = ideal
@@ -371,7 +371,7 @@ pub fn execute_with_offer(
     ideal: &IdealLayout,
     request: &DecoderRequest,
     offer: &DecoderOffer,
-    desc: PixelDescriptor,
+    desc: PixelFormat,
     filter: Filter,
 ) -> Vec<u8> {
     let plan = ideal.finalize(request, offer);
@@ -406,7 +406,7 @@ pub fn execute_secondary(
     primary_source: zenlayout::Size,
     secondary_source: zenlayout::Size,
     secondary_target: Option<zenlayout::Size>,
-    desc: PixelDescriptor,
+    desc: PixelFormat,
     filter: Filter,
 ) -> Vec<u8> {
     let (sec_ideal, _sec_request) =
@@ -439,7 +439,7 @@ pub fn execute_layout_with_background<B: Background + Clone>(
     decoder_width: u32,
     decoder_height: u32,
     plan: &LayoutPlan,
-    desc: PixelDescriptor,
+    desc: PixelFormat,
     filter: Filter,
     background: B,
 ) -> Result<Vec<u8>, At<CompositeError>> {
@@ -456,13 +456,13 @@ pub fn execute_layout_with_background<B: Background + Clone>(
     }
 
     assert!(
-        desc.channel_type() == ChannelType::U8,
+        desc.layout.sample == SampleType::U8,
         "execute_layout_with_background only supports u8 formats"
     );
-    if desc.alpha == Some(AlphaMode::Premultiplied) {
+    if desc.color.alpha() == AlphaMode::Premultiplied {
         return Err(at!(CompositeError::PremultipliedInput));
     }
-    let ch = desc.channels();
+    let ch = desc.layout.channels();
 
     let expected_len = decoder_width as usize * decoder_height as usize * ch;
     assert!(
@@ -526,7 +526,7 @@ pub fn execute_layout_with_background<B: Background + Clone>(
             trim_w,
             trim_h,
             plan.remaining_orientation,
-            desc.channels() as u8,
+            desc.layout.channels() as u8,
         );
         (Some(result), new_w, new_h)
     };
@@ -541,7 +541,7 @@ pub fn execute_layout_with_background<B: Background + Clone>(
     // Capture solid pixel for canvas fill before moving background into Resizer.
     let solid_fill: Option<Vec<u8>> = background
         .solid_pixel()
-        .map(|pixel| premul_linear_f32_to_srgb_u8_pixel(pixel, desc));
+        .map(|pixel| premul_linear_f32_to_srgb_u8_pixel(pixel, &desc));
 
     // For non-solid backgrounds with canvas expansion, the background covers the full
     // canvas. Wrap it with OffsetBackground so the Resizer sees rows at the placement
@@ -573,7 +573,7 @@ pub fn execute_layout_with_background<B: Background + Clone>(
         let offset_bg = OffsetBackground::new(background, px, py, canvas_w, canvas_h, ch);
         let builder = zenresize::ResizeConfig::builder(orient_w, orient_h, actual_rw, actual_rh)
             .filter(filter)
-            .format(desc);
+            .format(desc.clone());
         if let Some(ref data) = oriented {
             let config = builder.build();
             let mut resizer = Resizer::with_background(&config, offset_bg).at()?;
@@ -588,7 +588,7 @@ pub fn execute_layout_with_background<B: Background + Clone>(
     } else {
         let builder = zenresize::ResizeConfig::builder(orient_w, orient_h, actual_rw, actual_rh)
             .filter(filter)
-            .format(desc);
+            .format(desc.clone());
         let resized = if let Some(ref data) = oriented {
             let config = builder.build();
             Resizer::with_background(&config, background)
@@ -623,7 +623,7 @@ pub fn execute_layout_with_background<B: Background + Clone>(
         canvas
     } else if let Some(ref mut bg) = background {
         // Non-solid background: fill canvas from background rows, place resized on top
-        let mut canvas = fill_canvas_from_background(bg, canvas_w, canvas_h, desc);
+        let mut canvas = fill_canvas_from_background(bg, canvas_w, canvas_h, &desc);
         place_on_canvas(
             &mut canvas,
             canvas_w,
@@ -682,7 +682,7 @@ pub fn execute_layout_with_background<B: Background + Clone>(
 pub fn execute_with_background<B: Background + Clone>(
     source_pixels: &[u8],
     ideal: &IdealLayout,
-    desc: PixelDescriptor,
+    desc: PixelFormat,
     filter: Filter,
     background: B,
 ) -> Result<Vec<u8>, At<CompositeError>> {
@@ -725,7 +725,7 @@ pub fn execute_secondary_with_background<B: Background + Clone>(
     primary_source: zenlayout::Size,
     secondary_source: zenlayout::Size,
     secondary_target: Option<zenlayout::Size>,
-    desc: PixelDescriptor,
+    desc: PixelFormat,
     filter: Filter,
     background: B,
 ) -> Result<Vec<u8>, At<CompositeError>> {
@@ -819,15 +819,15 @@ fn compact_strided(src: &[u8], w: u32, h: u32, stride: usize, ch: usize) -> Vec<
     out
 }
 
-/// Convert a [`CanvasColor`] to pixel bytes for the given descriptor.
+/// Convert a [`CanvasColor`] to pixel bytes for the given format.
 #[allow(unreachable_patterns)] // non_exhaustive enums require wildcard arms
-pub fn canvas_color_to_pixel(color: &CanvasColor, desc: PixelDescriptor) -> Vec<u8> {
-    let ch = desc.channels();
+pub fn canvas_color_to_pixel(color: &CanvasColor, desc: PixelFormat) -> Vec<u8> {
+    let ch = desc.layout.channels();
     match color {
         CanvasColor::Transparent => vec![0u8; ch],
-        CanvasColor::Srgb { r, g, b, a } => match desc.layout() {
-            ChannelLayout::Gray => vec![*r], // approximate: use red channel
-            ChannelLayout::Rgb => vec![*r, *g, *b],
+        CanvasColor::Srgb { r, g, b, a } => match desc.layout.order {
+            ChannelOrder::Gray => vec![*r], // approximate: use red channel
+            ChannelOrder::Rgb => vec![*r, *g, *b],
             _ => {
                 // Rgba, Bgra, etc.
                 vec![*r, *g, *b, *a]
@@ -838,9 +838,9 @@ pub fn canvas_color_to_pixel(color: &CanvasColor, desc: PixelDescriptor) -> Vec<
             let sg = linear_srgb::default::linear_to_srgb_u8(*g);
             let sb = linear_srgb::default::linear_to_srgb_u8(*b);
             let sa = (*a * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
-            match desc.layout() {
-                ChannelLayout::Gray => vec![sr],
-                ChannelLayout::Rgb => vec![sr, sg, sb],
+            match desc.layout.order {
+                ChannelOrder::Gray => vec![sr],
+                ChannelOrder::Rgb => vec![sr, sg, sb],
                 _ => {
                     // Rgba, Bgra, etc.
                     vec![sr, sg, sb, sa]
@@ -852,7 +852,7 @@ pub fn canvas_color_to_pixel(color: &CanvasColor, desc: PixelDescriptor) -> Vec<
 }
 
 /// Convert a premultiplied linear f32 pixel to sRGB u8 for canvas fill.
-fn premul_linear_f32_to_srgb_u8_pixel(pixel: &[f32; 4], desc: PixelDescriptor) -> Vec<u8> {
+fn premul_linear_f32_to_srgb_u8_pixel(pixel: &[f32; 4], desc: &PixelFormat) -> Vec<u8> {
     // Unpremultiply
     let a = pixel[3];
     let (r, g, b) = if a > 1.0 / 1024.0 {
@@ -866,9 +866,9 @@ fn premul_linear_f32_to_srgb_u8_pixel(pixel: &[f32; 4], desc: PixelDescriptor) -
     let sg = linear_srgb::default::linear_to_srgb_u8(g);
     let sb = linear_srgb::default::linear_to_srgb_u8(b);
     let sa = (a * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
-    match desc.layout() {
-        ChannelLayout::Gray => vec![sr],
-        ChannelLayout::Rgb => vec![sr, sg, sb],
+    match desc.layout.order {
+        ChannelOrder::Gray => vec![sr],
+        ChannelOrder::Rgb => vec![sr, sg, sb],
         _ => vec![sr, sg, sb, sa],
     }
 }
@@ -904,14 +904,14 @@ fn fill_canvas_from_background<B: Background>(
     background: &mut B,
     w: u32,
     h: u32,
-    desc: PixelDescriptor,
+    desc: &PixelFormat,
 ) -> Vec<u8> {
-    let ch = desc.channels();
+    let ch = desc.layout.channels();
     let row_len_u8 = w as usize * ch;
     let row_len_f32 = w as usize * ch;
     let mut buf = vec![0u8; h as usize * row_len_u8];
     let mut row_f32 = vec![0.0f32; row_len_f32];
-    let has_alpha = desc.has_alpha();
+    let has_alpha = crate::format::format_has_alpha(desc);
 
     for y in 0..h {
         background.fill_row(&mut row_f32, y, ch as u8);
@@ -1073,7 +1073,7 @@ pub fn config_from_plan(
     decoder_width: u32,
     decoder_height: u32,
     plan: &LayoutPlan,
-    desc: PixelDescriptor,
+    desc: PixelFormat,
     filter: Filter,
 ) -> zenresize::ResizeConfig {
     let orient = plan.remaining_orientation;
@@ -1095,7 +1095,7 @@ pub fn config_from_plan(
 
     let mut builder = zenresize::ResizeConfig::builder(decoder_width, decoder_height, rw, rh)
         .filter(filter)
-        .format(desc);
+        .format(desc.clone());
 
     // Source region from trim (always in decoder/source coords — no swap needed)
     if plan.trim.is_some() {
@@ -1171,7 +1171,7 @@ pub fn streaming_from_plan(
     decoder_width: u32,
     decoder_height: u32,
     plan: &LayoutPlan,
-    desc: PixelDescriptor,
+    desc: PixelFormat,
     filter: Filter,
 ) -> zenresize::StreamingResize {
     streaming_from_plan_batched(decoder_width, decoder_height, plan, desc, filter, 1)
@@ -1186,7 +1186,7 @@ pub fn streaming_from_plan_batched(
     decoder_width: u32,
     decoder_height: u32,
     plan: &LayoutPlan,
-    desc: PixelDescriptor,
+    desc: PixelFormat,
     filter: Filter,
     batch_hint: u32,
 ) -> zenresize::StreamingResize {
@@ -1196,7 +1196,7 @@ pub fn streaming_from_plan_batched(
 }
 
 /// Convert a [`CanvasColor`] to `[f32; 4]` in the output's color space (0.0–1.0).
-pub(crate) fn canvas_color_to_f32(color: &CanvasColor, desc: PixelDescriptor) -> [f32; 4] {
+pub(crate) fn canvas_color_to_f32(color: &CanvasColor, desc: PixelFormat) -> [f32; 4] {
     match color {
         CanvasColor::Transparent => [0.0, 0.0, 0.0, 0.0],
         CanvasColor::Srgb { r, g, b, a } => [
@@ -1207,7 +1207,7 @@ pub(crate) fn canvas_color_to_f32(color: &CanvasColor, desc: PixelDescriptor) ->
         ],
         CanvasColor::Linear { r, g, b, a } => {
             // Convert linear to output space
-            if desc.transfer == zenpixels::TransferFunction::Linear {
+            if crate::format::format_transfer(&desc) == crate::Transfer::Linear {
                 [*r, *g, *b, *a]
             } else {
                 // Linear → sRGB (0.0–1.0 range)
@@ -1367,7 +1367,7 @@ mod tests {
     #[test]
     fn canvas_fill_and_place() {
         let ch = 4usize;
-        let format = PixelDescriptor::RGBA8_SRGB;
+        let format = PixelFormat::RGBA8_SRGB;
         let white = canvas_color_to_pixel(&CanvasColor::white(), format);
         assert_eq!(white, vec![255, 255, 255, 255]);
 
@@ -1458,7 +1458,7 @@ mod tests {
         let w = 8u32;
         let h = 6u32;
         let ch = 4usize;
-        let format = PixelDescriptor::RGBA8_SRGB;
+        let format = PixelFormat::RGBA8_SRGB;
         let img = make_test_image(w, h, ch);
 
         let plan = LayoutPlan::identity(Size::new(w, h));
@@ -1475,7 +1475,7 @@ mod tests {
         let src_w = 100u32;
         let src_h = 50u32;
         let ch = 4usize;
-        let format = PixelDescriptor::RGBA8_SRGB;
+        let format = PixelFormat::RGBA8_SRGB;
         let img = make_test_image(src_w, src_h, ch);
 
         let (ideal, request) = Pipeline::new(src_w, src_h).fit_pad(80, 80).plan().unwrap();
@@ -1512,7 +1512,7 @@ mod tests {
         let stored_w = 60u32;
         let stored_h = 40u32;
         let ch = 4usize;
-        let format = PixelDescriptor::RGBA8_SRGB;
+        let format = PixelFormat::RGBA8_SRGB;
         let img = make_test_image(stored_w, stored_h, ch);
 
         let (ideal, request) = Pipeline::new(stored_w, stored_h)
@@ -1540,7 +1540,7 @@ mod tests {
         let src_w = 20u32;
         let src_h = 20u32;
         let ch = 4usize;
-        let format = PixelDescriptor::RGBA8_SRGB;
+        let format = PixelFormat::RGBA8_SRGB;
         let img = make_test_image(src_w, src_h, ch);
 
         let trim = Rect::new(5, 5, 10, 10);
@@ -1549,7 +1549,7 @@ mod tests {
         let extracted = extract_rect(&img, src_w, trim.x, trim.y, trim.width, trim.height, ch);
         let config_a = zenresize::ResizeConfig::builder(10, 10, 6, 6)
             .filter(Filter::Lanczos)
-            .format(format)
+            .format(format.clone())
             .build();
         let result_a = Resizer::new(&config_a).resize(&extracted);
 
@@ -1578,7 +1578,7 @@ mod tests {
         let stored_w = 60u32;
         let stored_h = 40u32;
         let ch = 4usize;
-        let format = PixelDescriptor::RGBA8_SRGB;
+        let format = PixelFormat::RGBA8_SRGB;
         let stored_img = make_test_image(stored_w, stored_h, ch);
 
         let (ideal, request) = Pipeline::new(stored_w, stored_h)
@@ -1605,7 +1605,7 @@ mod tests {
             &ideal,
             &request,
             &offer,
-            format,
+            format.clone(),
             Filter::Lanczos,
         );
         assert_eq!(result.len(), 20 * 30 * ch);
@@ -1636,7 +1636,7 @@ mod tests {
         let gm_w = 100u32; // 1/4 scale gain map
         let gm_h = 75u32;
         let ch = 4usize;
-        let format = PixelDescriptor::RGBA8_SRGB;
+        let format = PixelFormat::RGBA8_SRGB;
         let gm_img = make_test_image(gm_w, gm_h, ch);
 
         // Primary: auto_orient(6) + fit(200, 200)
@@ -1689,7 +1689,7 @@ mod tests {
         let gm_w = 100u32;
         let gm_h = 75u32;
         let ch = 4usize;
-        let format = PixelDescriptor::RGBA8_SRGB;
+        let format = PixelFormat::RGBA8_SRGB;
         let gm_stored = make_test_image(gm_w, gm_h, ch);
 
         let (sdr_ideal, _sdr_req) = Pipeline::new(sdr_w, sdr_h)
@@ -1715,7 +1715,7 @@ mod tests {
             &gm_ideal,
             &gm_request,
             &gm_offer,
-            format,
+            format.clone(),
             Filter::Lanczos,
         );
 
@@ -1745,12 +1745,12 @@ mod tests {
         let w = 80u32;
         let h = 60u32;
         let ch = 4usize;
-        let format = PixelDescriptor::RGBA8_SRGB;
+        let format = PixelFormat::RGBA8_SRGB;
         let img = make_test_image(w, h, ch);
 
         let (ideal, request) = Pipeline::new(w, h).fit(40, 40).plan().unwrap();
 
-        let result_exec = execute(&img, &ideal, format, Filter::Lanczos);
+        let result_exec = execute(&img, &ideal, format.clone(), Filter::Lanczos);
         let offer = DecoderOffer::full_decode(w, h);
         let result_offer =
             execute_with_offer(&img, &ideal, &request, &offer, format, Filter::Lanczos);
@@ -1768,7 +1768,7 @@ mod tests {
         let gm_w = 100u32;
         let gm_h = 75u32;
         let ch = 4usize;
-        let format = PixelDescriptor::RGBA8_SRGB;
+        let format = PixelFormat::RGBA8_SRGB;
         let gm_img = make_test_image(gm_w, gm_h, ch);
 
         let (sdr_ideal, _sdr_req) = Pipeline::new(sdr_w, sdr_h)
@@ -1781,7 +1781,7 @@ mod tests {
         let (gm_ideal, _gm_req) =
             sdr_ideal.derive_secondary(Size::new(sdr_w, sdr_h), Size::new(gm_w, gm_h), None);
 
-        let result_direct = execute(&gm_img, &gm_ideal, format, Filter::Lanczos);
+        let result_direct = execute(&gm_img, &gm_ideal, format.clone(), Filter::Lanczos);
         let result_convenience = execute_secondary(
             &gm_img,
             &sdr_ideal,
@@ -1803,14 +1803,14 @@ mod tests {
         let w = 80u32;
         let h = 60u32;
         let ch = 4usize;
-        let format = PixelDescriptor::RGBA8_SRGB;
+        let format = PixelFormat::RGBA8_SRGB;
         let img = make_test_image(w, h, ch);
 
         let (ideal, request) = Pipeline::new(w, h).fit(40, 40).plan().unwrap();
         let offer = DecoderOffer::full_decode(w, h);
         let plan = ideal.finalize(&request, &offer);
 
-        let result_plain = execute_layout(&img, w, h, &plan, format, Filter::Lanczos);
+        let result_plain = execute_layout(&img, w, h, &plan, format.clone(), Filter::Lanczos);
         let result_bg = execute_layout_with_background(
             &img,
             w,
@@ -1833,7 +1833,7 @@ mod tests {
         let src_w = 100u32;
         let src_h = 50u32;
         let ch = 4usize;
-        let format = PixelDescriptor::RGBA8_SRGB;
+        let format = PixelFormat::RGBA8_SRGB;
         // Semi-transparent RGBA image
         let mut img = vec![0u8; src_w as usize * src_h as usize * ch];
         for pixel in img.chunks_exact_mut(ch) {
@@ -1858,7 +1858,7 @@ mod tests {
         assert_eq!(plan.resize_to, Size::new(80, 40));
         let py = plan.placement.1; // vertical offset (should be 20)
 
-        let bg = zenresize::SolidBackground::white(format);
+        let bg = zenresize::SolidBackground::white(format.clone());
         let result =
             execute_layout_with_background(&img, src_w, src_h, &plan, format, Filter::Lanczos, bg)
                 .unwrap();
@@ -1895,7 +1895,7 @@ mod tests {
         let w = 60u32;
         let h = 40u32;
         let ch = 4usize;
-        let format = PixelDescriptor::RGBA8_SRGB;
+        let format = PixelFormat::RGBA8_SRGB;
         let img = make_test_image(w, h, ch);
 
         let (ideal, request) = Pipeline::new(w, h).fit(30, 30).plan().unwrap();
@@ -1907,13 +1907,13 @@ mod tests {
             w,
             h,
             &plan,
-            format,
+            format.clone(),
             Filter::Lanczos,
             zenresize::NoBackground,
         )
         .unwrap();
 
-        let transparent_bg = zenresize::SolidBackground::transparent(format);
+        let transparent_bg = zenresize::SolidBackground::transparent(format.clone());
         let result_transparent = execute_layout_with_background(
             &img,
             w,
@@ -1936,14 +1936,19 @@ mod tests {
         let w = 10u32;
         let h = 10u32;
         let ch = 4usize;
-        let format = PixelDescriptor::RGBA8_SRGB.with_alpha(Some(AlphaMode::Premultiplied));
+        let format = PixelFormat::new(
+            PixelFormat::RGBA8_SRGB.layout,
+            PixelFormat::RGBA8_SRGB
+                .color
+                .with_alpha(AlphaMode::Premultiplied),
+        );
         let img = vec![128u8; w as usize * h as usize * ch];
 
         let (ideal, request) = Pipeline::new(w, h).fit(5, 5).plan().unwrap();
         let offer = DecoderOffer::full_decode(w, h);
         let plan = ideal.finalize(&request, &offer);
 
-        let bg = zenresize::SolidBackground::white(format);
+        let bg = zenresize::SolidBackground::white(format.clone());
         let result = execute_layout_with_background(&img, w, h, &plan, format, Filter::Lanczos, bg);
 
         assert!(matches!(
@@ -1959,7 +1964,7 @@ mod tests {
     fn config_from_plan_trim_to_source_region() {
         let src_w = 100u32;
         let src_h = 80u32;
-        let format = PixelDescriptor::RGBA8_SRGB;
+        let format = PixelFormat::RGBA8_SRGB;
 
         // Trim 20,10,60,50 → resize to 30×25
         let plan = LayoutPlan::identity(Size::new(30, 25))
@@ -1994,7 +1999,7 @@ mod tests {
     fn config_from_plan_fit_pad_to_padding() {
         let src_w = 100u32;
         let src_h = 50u32;
-        let format = PixelDescriptor::RGBA8_SRGB;
+        let format = PixelFormat::RGBA8_SRGB;
 
         let (ideal, request) = Pipeline::new(src_w, src_h)
             .constrain(
@@ -2036,7 +2041,7 @@ mod tests {
     // -----------------------------------------------------------------------
     #[test]
     fn config_from_plan_swaps_dims_for_rotation() {
-        let format = PixelDescriptor::RGBA8_SRGB;
+        let format = PixelFormat::RGBA8_SRGB;
         // Plan says resize_to = 20x10 (post-orient), orientation = Rotate90 (swaps axes)
         // So the resize config should target 10x20 (pre-orient)
         let plan = LayoutPlan::identity(Size::new(20, 10))
@@ -2055,7 +2060,7 @@ mod tests {
         let src_w = 100u32;
         let src_h = 50u32;
         let ch = 4usize;
-        let format = PixelDescriptor::RGBA8_SRGB;
+        let format = PixelFormat::RGBA8_SRGB;
         let img = make_test_image(src_w, src_h, ch);
 
         let (ideal, request) = Pipeline::new(src_w, src_h)
@@ -2069,7 +2074,8 @@ mod tests {
         let plan = ideal.finalize(&request, &offer);
 
         // Fullframe path
-        let result_fullframe = execute_layout(&img, src_w, src_h, &plan, format, Filter::Lanczos);
+        let result_fullframe =
+            execute_layout(&img, src_w, src_h, &plan, format.clone(), Filter::Lanczos);
 
         // Streaming path
         let mut stream = streaming_from_plan(src_w, src_h, &plan, format, Filter::Lanczos);
@@ -2120,7 +2126,7 @@ mod tests {
         let src_w = 80u32;
         let src_h = 60u32;
         let ch = 4usize;
-        let format = PixelDescriptor::RGBA8_SRGB;
+        let format = PixelFormat::RGBA8_SRGB;
         let img = make_test_image(src_w, src_h, ch);
 
         // Trim center 40×30, resize to 20×15, place on 30×30 canvas with white bg
@@ -2190,18 +2196,18 @@ mod tests {
     // -----------------------------------------------------------------------
     #[test]
     fn canvas_color_to_f32_conversions() {
-        let srgb_format = PixelDescriptor::RGBA8_SRGB;
-        let linear_format = PixelDescriptor::RGBAF32_LINEAR;
+        let srgb_format = PixelFormat::RGBA8_SRGB;
+        let linear_format = PixelFormat::RGBAF32_LINEAR;
 
         // Transparent → [0, 0, 0, 0]
         assert_eq!(
-            canvas_color_to_f32(&CanvasColor::Transparent, srgb_format),
+            canvas_color_to_f32(&CanvasColor::Transparent, srgb_format.clone()),
             [0.0, 0.0, 0.0, 0.0]
         );
 
         // White sRGB → [1.0, 1.0, 1.0, 1.0]
         assert_eq!(
-            canvas_color_to_f32(&CanvasColor::white(), srgb_format),
+            canvas_color_to_f32(&CanvasColor::white(), srgb_format.clone()),
             [1.0, 1.0, 1.0, 1.0]
         );
 
@@ -2213,7 +2219,7 @@ mod tests {
             a: 255,
         };
         assert_eq!(
-            canvas_color_to_f32(&black, srgb_format),
+            canvas_color_to_f32(&black, srgb_format.clone()),
             [0.0, 0.0, 0.0, 1.0]
         );
 

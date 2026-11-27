@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use zencodec::enough::{Stop, StopReason};
 use zencodec::how_far::{Child, Execution, PhaseSpec, PlanError, Pulse, Report};
 use zencodecs::{CodecError, DecodeRequest, EncodeRequest, ImageFormat, SharedPulse};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelFormat, PixelView};
 
 /// A deadline that has passed once `polls` reaches `fail_at`, and stays passed.
 struct Deadline {
@@ -74,11 +74,14 @@ fn transcode_sink_preserves_native_deadline_causes() {
             let mut sink = TranscodeSink::new(encoder.encoder, encoder.supported);
             let error = if at_begin {
                 polls.store(1_000_000, Ordering::Relaxed);
-                sink.begin(8, 64, PixelDescriptor::RGB8_SRGB).unwrap_err()
+                sink.begin(8, 64, PixelFormat::RGB8_SRGB).unwrap_err()
             } else {
-                sink.begin(8, 64, PixelDescriptor::RGB8_SRGB).unwrap();
+                sink.begin(8, 64, PixelFormat::RGB8_SRGB).unwrap();
                 let mut rows = sink
-                    .provide_next_buffer(0, 64, 8, PixelDescriptor::RGB8_SRGB)
+                    .provide_next_buffer(
+                        zencodec::decode::RowStrip::new(0, 8, 64),
+                        PixelFormat::RGB8_SRGB,
+                    )
                     .unwrap();
                 for y in 0..64 {
                     rows.row_mut(y).fill(127);
@@ -156,7 +159,7 @@ fn jpeg_and_png_requests_hand_their_pulse_to_the_codec_job() {
     let (w, h) = (96u32, 64u32);
     let bytes: Vec<u8> = (0..w * h * 3).map(|i| (i * 7 % 251) as u8).collect();
     let pixels =
-        || PixelSlice::new(&bytes, w, h, w as usize * 3, PixelDescriptor::RGB8_SRGB).unwrap();
+        || PixelView::new(&bytes, w, h, w as usize * 3, &zenpixels::formats::RGB8_SRGB).unwrap();
     let mut failures = Vec::new();
     for format in [ImageFormat::Jpeg, ImageFormat::Png] {
         let encoded = EncodeRequest::new(format)
@@ -200,7 +203,7 @@ fn gif_animation_request_hands_its_pulse_to_the_codec_job() {
         let bytes: Vec<u8> = (0..w * h)
             .flat_map(|n| [(n * 7 + frame * 40) as u8, (frame * 60) as u8, 200, 255])
             .collect();
-        let pixels = PixelSlice::new(&bytes, w, h, stride, PixelDescriptor::RGBA8_SRGB).unwrap();
+        let pixels = PixelView::new(&bytes, w, h, stride, &zenpixels::formats::RGBA8_SRGB).unwrap();
         encoder.push_frame(pixels, 100, None).unwrap();
     }
     let encoded = encoder.finish(None).unwrap().into_vec();

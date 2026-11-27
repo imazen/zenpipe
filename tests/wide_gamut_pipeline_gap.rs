@@ -85,16 +85,11 @@ fn gainmap_preserve_mode_round_trips_through_pipeline_unchanged() {
 /// the pixels-vs-metadata divergence xfail.
 #[test]
 fn jpeg_icc_preserve_round_trips_icc_bytes_verbatim() {
-    use rgb::Rgb;
-    let pixels: Vec<Rgb<u8>> = (0..32 * 32)
-        .map(|i| Rgb {
-            r: (i % 32) as u8,
-            g: (i / 32) as u8,
-            b: 100,
-        })
+    let pixels: Vec<u8> = (0..32 * 32)
+        .flat_map(|i| [(i % 32) as u8, (i / 32) as u8, 100u8])
         .collect();
-    let img = imgref::ImgVec::new(pixels, 32, 32);
-    let typed: zenpixels::PixelSlice<'_, Rgb<u8>> = zenpixels::PixelSlice::from(img.as_ref());
+    let view = zenpixels::PixelView::new(&pixels, 32, 32, 32 * 3, &zenpixels::formats::RGB8_SRGB)
+        .expect("pixel view");
 
     // Synthetic non-sRGB ICC — what matters is that it is NOT detected as
     // sRGB so the Preserve path actually has to carry it. Using a pattern
@@ -103,12 +98,17 @@ fn jpeg_icc_preserve_round_trips_icc_bytes_verbatim() {
     for (i, b) in icc.iter_mut().enumerate() {
         *b = (i as u8).wrapping_mul(37).wrapping_add(13);
     }
+    icc[0..4].copy_from_slice(&256u32.to_be_bytes());
+    icc[12..16].copy_from_slice(b"mntr");
+    icc[16..20].copy_from_slice(b"RGB ");
+    icc[36..40].copy_from_slice(b"acsp");
+    icc[128..132].copy_from_slice(&0u32.to_be_bytes());
     let meta = zencodec::Metadata::none().with_icc(icc.clone());
 
     let input = zencodecs::EncodeRequest::new(zencodec::ImageFormat::Jpeg)
         .with_quality(95.0)
         .with_metadata(meta)
-        .encode(typed.erase(), false)
+        .encode(view, false)
         .expect("encode JPEG with ICC")
         .into_vec();
 

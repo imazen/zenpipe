@@ -221,8 +221,8 @@ fn async_transfer_registration_is_checked_before_input() {
 #[test]
 fn png_network_sources_match_sync_with_alpha_and_sixteen_bit_samples() {
     let codecs = codecs();
-    for descriptor in [PixelDescriptor::RGBA8_SRGB, PixelDescriptor::RGB16_SRGB] {
-        let (input, _) = super::png_source::png_fixture(descriptor, false);
+    for descriptor in [PixelFormat::RGBA8_SRGB, PixelFormat::RGB16_SRGB] {
+        let (input, _) = super::png_source::png_fixture(&descriptor, false);
         let budget = StorageBudget::new(512 * 1024, 16);
         let request = TranscodeRequest::new(ImageFormat::Png)
             .with_fidelity(zencodec::encode::Fidelity::Lossless)

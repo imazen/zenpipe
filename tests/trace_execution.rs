@@ -269,7 +269,8 @@ fn memory_timeline_is_off_unless_requested() {
 fn image_job_surfaces_its_finished_trace() {
     use zenpipe::job::ImageJob;
     let pixels: Vec<u8> = (0..48u32 * 40 * 4).map(|i| (i * 7) as u8).collect();
-    let slice = zenpixels::PixelSlice::new(&pixels, 48, 40, 48 * 4, format::RGBA8_SRGB).unwrap();
+    let slice = zenpixels::PixelView::new(&pixels, 48, 40, 48 * 4, &zenpixels::formats::RGBA8_SRGB)
+        .unwrap();
     let png = zencodecs::EncodeRequest::new(zencodec::ImageFormat::Png)
         .encode(slice, true)
         .expect("fixture png")

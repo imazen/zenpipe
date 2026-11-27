@@ -184,7 +184,7 @@ impl ExpandCanvasSource {
         // Branch on bpp: as_chunks_mut::<4>() is only correct for 4-byte
         // pixels. For other bpp, replicate the appropriate prefix of the
         // 4-byte bg_pixel (or zero-fill for non-RGBA layouts).
-        let bpp = fmt.bytes_per_pixel();
+        let bpp = fmt.layout.bytes_per_pixel();
         let row_len = checked_buffer_size(canvas_w, 1, bpp).map_err(|e| {
             at!(PipeError::LimitExceeded(alloc::format!(
                 "ExpandCanvas bg_row size overflow: canvas_w={canvas_w} bpp={bpp}: {e}",
@@ -216,7 +216,7 @@ impl ExpandCanvasSource {
         }
 
         let sh = 16u32.min(canvas_h);
-        let buf = StripBuf::try_new(canvas_w, sh, fmt)?;
+        let buf = StripBuf::try_new(canvas_w, sh, fmt.clone())?;
         Ok(Self {
             upstream,
             canvas_w,
@@ -261,7 +261,7 @@ impl ExpandCanvasSource {
     pub fn with_fill(mut self, fill: CanvasFill) -> Self {
         if let CanvasFill::Solid(px) = fill {
             // Rebuild the background row for the new color.
-            let bpp = self.format.bytes_per_pixel();
+            let bpp = self.format.layout.bytes_per_pixel();
             match bpp {
                 4 => self
                     .bg_row
@@ -318,7 +318,7 @@ impl ExpandCanvasSource {
     /// Buffer the leading visible content rows the fill mode needs before
     /// the first canvas row can be emitted.
     fn fill_prefix(&mut self) -> crate::PipeResult<()> {
-        let bpp = self.format.bytes_per_pixel();
+        let bpp = self.format.layout.bytes_per_pixel();
         let src_start = self.skip_x as usize * bpp;
         let src_end = src_start + self.content_w as usize * bpp;
         while (self.prefix.len() as u32) < self.prefix_needed {
@@ -342,7 +342,7 @@ impl ExpandCanvasSource {
         if self.content_w == 0 {
             return;
         }
-        let bpp = self.format.bytes_per_pixel();
+        let bpp = self.format.layout.bytes_per_pixel();
         let content_w = self.content_w;
         let place_x = self.place_x as usize;
         let mut px = [0u8; 16];
@@ -368,7 +368,7 @@ impl ExpandCanvasSource {
 
     /// Emit one canvas row for the non-solid fill path.
     fn emit_filled_row(&mut self, canvas_y: u32) -> crate::PipeResult<()> {
-        let bpp = self.format.bytes_per_pixel();
+        let bpp = self.format.layout.bytes_per_pixel();
         let cw = self.content_w as usize * bpp;
         let dst_start = self.place_x as usize * bpp;
         let content_y_start = self.place_y;
@@ -448,8 +448,8 @@ impl ExpandCanvasSource {
             Some(strip) => {
                 self.pending = Some(PendingStrip {
                     data: strip.as_strided_bytes().to_vec(),
-                    stride: strip.stride(),
-                    height: strip.rows(),
+                    stride: strip.stride_bytes(),
+                    height: strip.height(),
                     next_row: 0,
                 });
                 Ok(Some(()))
@@ -496,7 +496,7 @@ impl Source for ExpandCanvasSource {
 
         let rows_wanted = self.strip_height.min(self.canvas_h - self.out_y);
         self.buf
-            .reconfigure(self.canvas_w, rows_wanted, self.format);
+            .reconfigure(self.canvas_w, rows_wanted, self.format.clone());
         self.buf.reset();
 
         if !matches!(self.fill, CanvasFill::Solid(_)) {
@@ -519,7 +519,7 @@ impl Source for ExpandCanvasSource {
         // (content_h = saturating_sub of canvas_h - place_y), so saturating_add
         // here is safe and never produces an out-of-canvas value.
         let content_y_end = self.place_y.saturating_add(self.content_h);
-        let bpp = self.format.bytes_per_pixel();
+        let bpp = self.format.layout.bytes_per_pixel();
 
         for r in 0..rows_wanted {
             let canvas_y = self.out_y.saturating_add(r);
@@ -566,9 +566,9 @@ impl Source for ExpandCanvasSource {
         self.canvas_h
     }
     fn format(&self) -> PixelFormat {
-        self.format
+        self.format.clone()
     }
-    fn color_context(&self) -> Option<alloc::sync::Arc<zenpixels::ColorContext>> {
-        self.upstream.color_context()
+    fn color_origin(&self) -> Option<zenpixels::ColorOrigin> {
+        self.upstream.color_origin()
     }
 }

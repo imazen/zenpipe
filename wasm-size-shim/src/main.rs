@@ -27,10 +27,9 @@ fn generate_gradient(w: u32, h: u32) -> Vec<u8> {
 fn encode_via_zencodec(name: &str, cfg: &dyn DynEncoderConfig, pixels: &[u8], w: u32, h: u32) {
     let t = Instant::now();
     let job = cfg.dyn_job();
-    let desc = zenpixels::PixelDescriptor::RGBA8_SRGB;
     match job.into_encoder() {
         Ok(mut enc) => {
-            if let Ok(slice) = zenpixels::PixelSlice::new(pixels, w, h, w as usize * 4, desc) {
+            if let Ok(slice) = zenpixels::PixelView::new(pixels, w, h, w as usize * 4, &zenpixels::formats::RGBA8_SRGB) {
                 let _ = enc.push_rows(slice);
                 match enc.finish() {
                     Ok(out) => {
@@ -48,7 +47,7 @@ fn encode_via_zencodec(name: &str, cfg: &dyn DynEncoderConfig, pixels: &[u8], w:
 fn decode_via_zencodec(name: &str, cfg: &dyn DynDecoderConfig, data: &[u8]) {
     let t = Instant::now();
     let job = cfg.dyn_job();
-    let pref = [zenpixels::PixelDescriptor::RGBA8_SRGB];
+    let pref = [zenpixels::PixelFormat::RGBA8_SRGB];
     match job.into_streaming_decoder(std::borrow::Cow::Borrowed(data), &pref) {
         Ok(mut dec) => {
             let info = dec.info();
@@ -113,7 +112,7 @@ fn main() {
         let mut g = zenpipe::graph::PipelineGraph::new();
         let sn = g.add_node(zenpipe::graph::NodeOp::Source);
         let cn = g.add_node(zenpipe::graph::NodeOp::PixelTransform(
-            Box::new(zenpipe::ops::RowConverterOp::must(from, to)),
+            Box::new(zenpipe::ops::RowConverterOp::must(from.clone(), to)),
         ));
         let on = g.add_node(zenpipe::graph::NodeOp::Output);
         g.add_edge(sn, cn, zenpipe::graph::EdgeKind::Input);

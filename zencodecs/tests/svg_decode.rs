@@ -33,7 +33,7 @@ fn svg_is_detected_probed_and_rasterized() {
     let out = zencodecs::decode_full_frame(SVG, &all).expect("decode");
     assert_eq!((out.width(), out.height()), (64, 32));
     let pixels = out.pixels();
-    let bpp = pixels.descriptor().bytes_per_pixel();
+    let bpp = pixels.format().layout.bytes_per_pixel();
     let row0 = pixels.row(0);
     let px = &row0[..bpp];
     assert_eq!(

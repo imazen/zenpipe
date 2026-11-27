@@ -3,7 +3,61 @@ use archmage::prelude::*;
 use crate::blur::{self, GaussianKernel};
 use crate::context::FilterContext;
 use zenpixels_convert::gamut::GamutMatrix;
-use zenpixels_convert::oklab;
+use zenpixels_convert::oklab::{LMS_CBRT_FROM_OKLAB, OKLAB_FROM_LMS_CBRT};
+
+#[inline]
+fn fast_cbrt(x: f32) -> f32 {
+    if x == 0.0 || !x.is_finite() {
+        return x;
+    }
+    let sign = x.signum();
+    let ax = x.abs();
+    let (scaled, undo) = if ax < f32::MIN_POSITIVE {
+        (ax * 16_777_216.0, 1.0 / 256.0)
+    } else {
+        (ax, 1.0)
+    };
+    let mut y = f32::from_bits(scaled.to_bits() / 3 + 709_958_130);
+    let y3 = y * y * y;
+    y *= (y3 + 2.0 * scaled) / (2.0 * y3 + scaled);
+    let y3 = y * y * y;
+    y *= (y3 + 2.0 * scaled) / (2.0 * y3 + scaled);
+    sign * y * undo
+}
+
+#[inline]
+pub(super) fn rgb_to_oklab(r: f32, g: f32, b: f32, m1: &GamutMatrix) -> [f32; 3] {
+    let m1 = m1.rows();
+    let m2 = OKLAB_FROM_LMS_CBRT.rows();
+    let l = m1[0][0] * r + m1[0][1] * g + m1[0][2] * b;
+    let m = m1[1][0] * r + m1[1][1] * g + m1[1][2] * b;
+    let s = m1[2][0] * r + m1[2][1] * g + m1[2][2] * b;
+    let l_ = fast_cbrt(l);
+    let m_ = fast_cbrt(m);
+    let s_ = fast_cbrt(s);
+    [
+        m2[0][0] * l_ + m2[0][1] * m_ + m2[0][2] * s_,
+        m2[1][0] * l_ + m2[1][1] * m_ + m2[1][2] * s_,
+        m2[2][0] * l_ + m2[2][1] * m_ + m2[2][2] * s_,
+    ]
+}
+
+#[inline]
+pub(super) fn oklab_to_rgb(l: f32, a: f32, b: f32, m1_inv: &GamutMatrix) -> [f32; 3] {
+    let im2 = LMS_CBRT_FROM_OKLAB.rows();
+    let im1 = m1_inv.rows();
+    let l_ = im2[0][0] * l + im2[0][1] * a + im2[0][2] * b;
+    let m_ = im2[1][0] * l + im2[1][1] * a + im2[1][2] * b;
+    let s_ = im2[2][0] * l + im2[2][1] * a + im2[2][2] * b;
+    let lms_l = l_ * l_ * l_;
+    let lms_m = m_ * m_ * m_;
+    let lms_s = s_ * s_ * s_;
+    [
+        im1[0][0] * lms_l + im1[0][1] * lms_m + im1[0][2] * lms_s,
+        im1[1][0] * lms_l + im1[1][1] * lms_m + im1[1][2] * lms_s,
+        im1[2][0] * lms_l + im1[2][1] * lms_m + im1[2][2] * lms_s,
+    ]
+}
 
 pub(super) fn scale_plane_impl_scalar(_token: ScalarToken, plane: &mut [f32], factor: f32) {
     for v in plane.iter_mut() {
@@ -146,7 +200,7 @@ pub(super) fn scatter_oklab_impl_scalar(
         let r = src[base] * inv_white;
         let g = src[base + 1] * inv_white;
         let bv = src[base + 2] * inv_white;
-        let [ol, oa, ob] = oklab::rgb_to_oklab(r, g, bv, m1);
+        let [ol, oa, ob] = rgb_to_oklab(r, g, bv, m1);
         l[i] = ol;
         a[i] = oa;
         b[i] = ob;
@@ -167,7 +221,7 @@ pub(super) fn gather_oklab_impl_scalar(
     let n = l.len();
     let ch = channels as usize;
     for i in 0..n {
-        let [r, g, bv] = oklab::oklab_to_rgb(l[i], a[i], b[i], m1_inv);
+        let [r, g, bv] = oklab_to_rgb(l[i], a[i], b[i], m1_inv);
         let base = i * ch;
         dst[base] = (r * reference_white).max(0.0);
         dst[base + 1] = (g * reference_white).max(0.0);
@@ -191,7 +245,7 @@ pub(super) fn scatter_srgb_u8_to_oklab_impl_scalar(
         let r = linear_srgb::default::srgb_u8_to_linear(src[base]);
         let g = linear_srgb::default::srgb_u8_to_linear(src[base + 1]);
         let bv = linear_srgb::default::srgb_u8_to_linear(src[base + 2]);
-        let [ol, oa, ob] = oklab::rgb_to_oklab(r, g, bv, m1);
+        let [ol, oa, ob] = rgb_to_oklab(r, g, bv, m1);
         l[i] = ol;
         a[i] = oa;
         b[i] = ob;
@@ -210,7 +264,7 @@ pub(super) fn gather_oklab_to_srgb_u8_impl_scalar(
     let n = l.len();
     let ch = channels as usize;
     for i in 0..n {
-        let [r, g, bv] = oklab::oklab_to_rgb(l[i], a[i], b[i], m1_inv);
+        let [r, g, bv] = oklab_to_rgb(l[i], a[i], b[i], m1_inv);
         let base = i * ch;
         dst[base] = linear_srgb::default::linear_to_srgb_u8(r);
         dst[base + 1] = linear_srgb::default::linear_to_srgb_u8(g);
@@ -438,7 +492,7 @@ pub(super) fn fused_interleaved_adjust_impl_scalar(
         let r = src[base] * inv_white;
         let g = src[base + 1] * inv_white;
         let bv = src[base + 2] * inv_white;
-        let [mut ok_l, mut ok_a, mut ok_b] = oklab::rgb_to_oklab(r, g, bv, m1);
+        let [mut ok_l, mut ok_a, mut ok_b] = rgb_to_oklab(r, g, bv, m1);
 
         ok_l = ((ok_l - bp) * inv_range).max(0.0);
         ok_l *= wp_exp;
@@ -463,7 +517,7 @@ pub(super) fn fused_interleaved_adjust_impl_scalar(
         ok_a *= vib_scale;
         ok_b *= vib_scale;
 
-        let [ro, go, bo] = oklab::oklab_to_rgb(ok_l, ok_a, ok_b, m1_inv);
+        let [ro, go, bo] = oklab_to_rgb(ok_l, ok_a, ok_b, m1_inv);
         dst[base] = (ro * reference_white).max(0.0);
         dst[base + 1] = (go * reference_white).max(0.0);
         dst[base + 2] = (bo * reference_white).max(0.0);

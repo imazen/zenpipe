@@ -11,7 +11,7 @@ use crate::{CodecError, ImageFormat, Limits, Metadata, SharedPulse};
 use alloc::boxed::Box;
 use whereat::at;
 use zencodec::encode::EncodeOutput;
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelBuf, PixelFormat, PixelView, PixelViewMut};
 
 /// Encoding parameters extracted from [`EncodeRequest`](crate::EncodeRequest).
 // Every field is read by some encoder; with only decoders compiled the request
@@ -62,8 +62,7 @@ pub(crate) struct EncodeParams<'a> {
     pub lossless: bool,
     pub prefer_streaming: bool,
     pub metadata: Option<Metadata>,
-    /// Retention policy applied to `metadata` at the codec boundary via
-    /// [`zencodec::encode::EncodeJob::with_metadata_policy`].
+    /// Retention policy applied to `metadata` before handing it to the codec.
     pub metadata_policy: zencodec::MetadataPolicy,
     // The bitmap formats and TIFF have no per-codec configuration.
     #[cfg_attr(
@@ -144,14 +143,142 @@ pub(crate) fn fold_orientation_into_exif(meta: Metadata, format: ImageFormat) ->
 }
 
 /// Type-erased one-shot encode closure.
-pub(crate) type EncodeFn<'a> = Box<dyn FnOnce(PixelSlice<'_>) -> Result<EncodeOutput> + 'a>;
+pub(crate) type EncodeFn<'a> = Box<dyn FnOnce(PixelView<'_>) -> Result<EncodeOutput> + 'a>;
 
-/// A built encoder: a closure that encodes pixels + its supported descriptors.
+/// A built encoder: a closure that encodes pixels + its supported pixel formats.
 pub(crate) struct BuiltEncoder<'a> {
     pub encoder: EncodeFn<'a>,
     /// Read only by the gain-map encodes; the closure negotiates its own.
     #[cfg_attr(not(feature = "jpeg-ultrahdr"), allow(dead_code))]
-    pub supported: &'static [PixelDescriptor],
+    pub supported: &'static [PixelFormat],
+}
+
+/// Normalize `Transfer::Unknown` / `Primaries::Unknown` to standard defaults
+/// (`Bt709`, `Srgb` for integer / `Linear` for float) when converting or
+/// negotiating formats under `zenpixels 0.5`'s strict unknown-transfer rules.
+pub(crate) fn normalize_unknown_format(fmt: &PixelFormat) -> Option<PixelFormat> {
+    let default_tf = if fmt.layout.sample.is_float() {
+        zenpixels::Transfer::Linear
+    } else {
+        zenpixels::Transfer::Srgb
+    };
+    let color = match &fmt.color {
+        zenpixels::ColorSpace::Rgb {
+            primaries,
+            transfer,
+            range,
+            alpha,
+            white,
+        } if *primaries == zenpixels::Primaries::Unknown
+            || *transfer == zenpixels::Transfer::Unknown =>
+        {
+            zenpixels::ColorSpace::Rgb {
+                primaries: if *primaries == zenpixels::Primaries::Unknown {
+                    zenpixels::Primaries::Bt709
+                } else {
+                    *primaries
+                },
+                transfer: if *transfer == zenpixels::Transfer::Unknown {
+                    default_tf
+                } else {
+                    *transfer
+                },
+                range: *range,
+                alpha: *alpha,
+                white: *white,
+            }
+        }
+        zenpixels::ColorSpace::Gray {
+            transfer: zenpixels::Transfer::Unknown,
+            range,
+            alpha,
+            white,
+        } => zenpixels::ColorSpace::Gray {
+            transfer: default_tf,
+            range: *range,
+            alpha: *alpha,
+            white: *white,
+        },
+        _ => return None,
+    };
+    Some(PixelFormat::new(fmt.layout, color))
+}
+
+fn relabel_view_zero_copy<'a>(pixels: PixelView<'a>, format: PixelFormat) -> PixelView<'a> {
+    let mut out = PixelView::new_with_format_cow(
+        pixels.as_strided_bytes(),
+        pixels.width(),
+        pixels.height(),
+        pixels.stride_bytes(),
+        zenpixels::FormatCow::from_owned(format),
+    )
+    .expect("relabeling view preserves layout and geometry")
+    .with_assumed_facts(pixels.facts())
+    .with_hdr(pixels.hdr())
+    .with_orientation(pixels.orientation());
+    if let Some(origin) = pixels.origin() {
+        out = out.with_origin(origin);
+    }
+    out
+}
+
+/// Normalize `Transfer::Unknown` / `Primaries::Unknown` before calling
+/// `adapt_for_encode` when the encoder's `supported` list does not directly
+/// match the view's format.
+pub(crate) fn normalize_unknown_for_encode<'a>(
+    pixels: PixelView<'a>,
+    supported: &[PixelFormat],
+) -> PixelView<'a> {
+    if supported.contains(pixels.format()) {
+        return pixels;
+    }
+    match normalize_unknown_format(pixels.format()) {
+        Some(norm) => relabel_view_zero_copy(pixels, norm),
+        None => pixels,
+    }
+}
+
+/// For PNG encodes carrying explicit job-level ICC/CICP metadata, `zenpng`'s
+/// `bind_color` treats `ColorSpace::Rgb { Bt709, Srgb }` as an explicit sRGB
+/// CICP claim that contradicts non-sRGB metadata, whereas `ColorSpace::Untagged`
+/// lets the job's metadata govern the written color chunks.
+fn untag_format_for_png_metadata(fmt: &PixelFormat) -> Option<PixelFormat> {
+    match fmt.color {
+        zenpixels::ColorSpace::Rgb {
+            primaries: zenpixels::Primaries::Bt709 | zenpixels::Primaries::Unknown,
+            transfer: zenpixels::Transfer::Srgb | zenpixels::Transfer::Unknown,
+            range: zenpixels::SignalRange::Full,
+            alpha,
+            ..
+        }
+        | zenpixels::ColorSpace::Gray {
+            transfer: zenpixels::Transfer::Srgb | zenpixels::Transfer::Unknown,
+            range: zenpixels::SignalRange::Full,
+            alpha,
+            ..
+        } => Some(PixelFormat::new(
+            fmt.layout,
+            zenpixels::ColorSpace::Untagged {
+                total_channels: fmt.layout.channels() as u8,
+                alpha,
+            },
+        )),
+        _ => None,
+    }
+}
+
+fn untag_view_for_png_metadata<'a>(
+    pixels: PixelView<'a>,
+    format: ImageFormat,
+    has_color_meta: bool,
+) -> PixelView<'a> {
+    if format != ImageFormat::Png || !has_color_meta {
+        return pixels;
+    }
+    match untag_format_for_png_metadata(pixels.format()) {
+        Some(untagged) => relabel_view_zero_copy(pixels, untagged),
+        None => pixels,
+    }
 }
 
 /// Build a type-erased encoder from a config-building closure.
@@ -201,12 +328,16 @@ where
                 .check_strict(true)
                 .map_err(|detail| at!(CodecError::UnsupportedOperation { format, detail }))?;
             }
-            let oriented = crate::orient_fit::orient(&pixels, orientation);
+            let oriented = crate::orient_fit::orient(&pixels, orientation).map_err(|e| {
+                at!(CodecError::InvalidInput(alloc::format!(
+                    "orienting pixels for {format:?}: {e}"
+                )))
+            })?;
             let pixels = match &oriented {
-                Some(b) => b.as_slice(),
+                Some(b) => b.as_view(),
                 None => pixels,
             };
-            crate::row_contract::check_dimensions(format, pixels.width(), pixels.rows())
+            crate::row_contract::check_dimensions(format, pixels.width(), pixels.height())
                 .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
             // HDR pixels into a target that carries neither HDR nor CICP are
             // tone-mapped to sRGB first (see `crate::tonemap`); the fitting
@@ -226,7 +357,7 @@ where
             })?;
             #[cfg(feature = "tonemap")]
             let (pixels, upright) = match &toned {
-                Some((b, m)) => (b.as_slice(), m.clone()),
+                Some((b, m)) => (b.as_view(), m.clone()),
                 None => (pixels, upright),
             };
             // A pixel-format change that changes the colour space converts
@@ -234,7 +365,7 @@ where
             let fitted = crate::color_fit::fit_to_supported(
                 &pixels,
                 upright.as_ref(),
-                C::supported_descriptors(),
+                C::supported_pixel_formats(),
             )
             .map_err(|e| {
                 at!(CodecError::InvalidInput(alloc::format!(
@@ -242,7 +373,7 @@ where
                 )))
             })?;
             let (pixels, upright) = match &fitted {
-                Some((b, m)) => (b.as_slice(), Some(m.clone())),
+                Some((b, m)) => (b.as_view(), Some(m.clone())),
                 None => (pixels, upright),
             };
             // Fit the colour description to what this format carries,
@@ -267,26 +398,26 @@ where
                 }
             };
             let pixels = match &converted {
-                Some(b) => b.as_slice(),
+                Some(b) => b.as_view(),
                 None => pixels,
             };
             // Negotiate the cheapest pixel format the encoder accepts;
             // zero-copy when it already accepts these pixels.
-            let bytes = pixels.contiguous_bytes();
-            let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
-                &bytes,
-                pixels.descriptor(),
-                pixels.width(),
-                pixels.rows(),
-                pixels.descriptor().aligned_stride(pixels.width()),
-                C::supported_descriptors(),
+            let pixels = normalize_unknown_for_encode(pixels, C::supported_pixel_formats());
+            let (_, adapted) = zenpixels_convert::adapt_for_encode(
+                pixels,
+                &zenpixels::ColorOrigin::assumed(),
+                C::supported_pixel_formats(),
+                &zenpixels_convert::ConvertPolicy::permissive(),
+                zenpixels::PeakSource::Declared,
+                zenpixels_convert::OutputSignaling::Strip,
             )
             .map_err(|e| {
                 at!(CodecError::InvalidInput(alloc::format!(
                     "pixel format negotiation: {e}"
                 )))
             })?;
-            let pixels = adapted.as_slice();
+            let pixels = adapted.pixels.as_view();
             let mut config = build_config(&params);
             if params.prefer_streaming
                 && !params
@@ -300,11 +431,15 @@ where
             if let Some(lim) = params.limits {
                 job = job.with_limits(crate::limits::to_resource_limits(lim));
             }
-            if let Some(meta) = metadata {
-                job = job.with_metadata_policy(
-                    crate::color_fit::exif_color_space(meta),
-                    params.metadata_policy,
-                );
+            let filtered_meta = metadata.map(|meta| {
+                crate::color_fit::exif_color_space(meta).filtered(&params.metadata_policy)
+            });
+            let has_color_meta = params.cicp.is_some()
+                || filtered_meta
+                    .as_ref()
+                    .is_some_and(|m| m.icc_profile.is_some() || m.cicp.is_some());
+            if let Some(meta) = filtered_meta {
+                job = job.with_unfiltered_metadata(meta);
             }
             let format = C::format();
             if let Some(mode) = params.orientation_mode {
@@ -322,10 +457,11 @@ where
             let enc = job
                 .encoder()
                 .map_err(|e| at!(CodecError::from_codec(format, e)))?;
+            let pixels = untag_view_for_png_metadata(pixels, format, has_color_meta);
             enc.encode(pixels)
                 .map_err(|e| at!(CodecError::from_codec(format, e)))
         }),
-        supported: C::supported_descriptors(),
+        supported: C::supported_pixel_formats(),
     }
 }
 
@@ -355,12 +491,12 @@ pub trait AnyEncoder: Send + Sync {
     fn format(&self) -> ImageFormat;
 
     /// Pixel formats this encoder accepts natively.
-    fn supported_descriptors(&self) -> &'static [PixelDescriptor];
+    fn supported_pixel_formats(&self) -> &'static [PixelFormat];
 
     /// Encode type-erased pixels.
     fn encode_pixels(
         &self,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
         metadata: Option<Metadata>,
         limits: Option<&Limits>,
         pulse: SharedPulse,
@@ -375,16 +511,13 @@ pub trait AnyEncoder: Send + Sync {
         img: imgref::ImgRef<'_, rgb::Rgba<u8>>,
         ignore_alpha: bool,
     ) -> Result<EncodeOutput> {
-        let typed: PixelSlice<'_, rgb::Rgba<u8>> = PixelSlice::from(img);
-        let pixels: PixelSlice<'_> = if ignore_alpha {
-            typed
-                .with_descriptor(
-                    PixelDescriptor::RGBA8_SRGB.with_alpha(Some(zenpixels::AlphaMode::Undefined)),
-                )
-                .erase()
+        let color = if ignore_alpha {
+            zenpixels::ColorSpace::SRGB_ALPHA.with_alpha(zenpixels::AlphaMode::Opaque)
         } else {
-            typed.erase()
+            zenpixels::ColorSpace::SRGB_ALPHA
         };
+        let pixels = PixelView::from_imgref(img, color)
+            .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
         self.encode_pixels(pixels, None, None, SharedPulse::default())
     }
 }
@@ -398,13 +531,13 @@ where
         C::format()
     }
 
-    fn supported_descriptors(&self) -> &'static [PixelDescriptor] {
-        C::supported_descriptors()
+    fn supported_pixel_formats(&self) -> &'static [PixelFormat] {
+        C::supported_pixel_formats()
     }
 
     fn encode_pixels(
         &self,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
         metadata: Option<Metadata>,
         limits: Option<&Limits>,
         pulse: SharedPulse,
@@ -413,9 +546,14 @@ where
 
         // Re-encodes write upright pixels and orientation 1.
         let (orientation, metadata) = crate::orient_fit::upright(metadata.as_ref());
-        let oriented = crate::orient_fit::orient(&pixels, orientation);
+        let oriented = crate::orient_fit::orient(&pixels, orientation).map_err(|e| {
+            at!(CodecError::InvalidInput(alloc::format!(
+                "orienting pixels for {:?}: {e}",
+                C::format()
+            )))
+        })?;
         let pixels = match &oriented {
-            Some(b) => b.as_slice(),
+            Some(b) => b.as_view(),
             None => pixels,
         };
         // A pixel-format change that changes the colour space converts from
@@ -423,7 +561,7 @@ where
         let fitted = crate::color_fit::fit_to_supported(
             &pixels,
             metadata.as_ref(),
-            C::supported_descriptors(),
+            C::supported_pixel_formats(),
         )
         .map_err(|e| {
             at!(CodecError::InvalidInput(alloc::format!(
@@ -432,35 +570,38 @@ where
             )))
         })?;
         let (pixels, metadata) = match &fitted {
-            Some((b, m)) => (b.as_slice(), Some(m.clone())),
+            Some((b, m)) => (b.as_view(), Some(m.clone())),
             None => (pixels, metadata),
         };
 
         // Negotiate pixel format -- convert input to something the encoder supports
-        let pixel_data = pixels.contiguous_bytes();
-        let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
-            &pixel_data,
-            pixels.descriptor(),
-            pixels.width(),
-            pixels.rows(),
-            pixels.descriptor().aligned_stride(pixels.width()),
-            C::supported_descriptors(),
+        let pixels = normalize_unknown_for_encode(pixels, C::supported_pixel_formats());
+        let (_, adapted) = zenpixels_convert::adapt_for_encode(
+            pixels,
+            &zenpixels::ColorOrigin::assumed(),
+            C::supported_pixel_formats(),
+            &zenpixels_convert::ConvertPolicy::permissive(),
+            zenpixels::PeakSource::Declared,
+            zenpixels_convert::OutputSignaling::Strip,
         )
         .map_err(|e| {
             at!(CodecError::InvalidInput(alloc::format!(
                 "pixel format negotiation: {e}"
             )))
         })?;
-        let adapted_pixels = adapted.as_slice();
+        let adapted_pixels = adapted.pixels.as_view();
 
         let mut job = self.clone().job();
         job = job.with_pulse(pulse);
-        if let Some(m) = metadata {
+        let filtered_meta = metadata.map(|m| {
+            crate::color_fit::exif_color_space(m).filtered(&zencodec::MetadataPolicy::PreserveExact)
+        });
+        let has_color_meta = filtered_meta
+            .as_ref()
+            .is_some_and(|m| m.icc_profile.is_some() || m.cicp.is_some());
+        if let Some(m) = filtered_meta {
             // Type-erased convenience path carries no policy; embed verbatim.
-            job = job.with_metadata_policy(
-                crate::color_fit::exif_color_space(m),
-                zencodec::MetadataPolicy::PreserveExact,
-            );
+            job = job.with_unfiltered_metadata(m);
         }
         if let Some(l) = limits {
             job = job.with_limits(crate::limits::to_resource_limits(l));
@@ -469,21 +610,22 @@ where
         let enc = job
             .encoder()
             .map_err(|e| at!(CodecError::from_codec(format, e)))?;
+        let adapted_pixels = untag_view_for_png_metadata(adapted_pixels, format, has_color_meta);
         enc.encode(adapted_pixels)
             .map_err(|e| at!(CodecError::from_codec(format, e)))
     }
 }
 
-/// A streaming encoder: a `DynEncoder` + its supported pixel descriptors.
+/// A streaming encoder: a `DynEncoder` + its supported pixel formats.
 ///
 /// The caller pushes strips via [`DynEncoder::push_rows()`] and finalizes
-/// with [`DynEncoder::finish()`]. Use [`adapt_for_encode_cow`] per-strip
+/// with [`DynEncoder::finish()`]. Use [`adapt_for_encode`] per-strip
 /// to convert pixel formats without materializing the full image.
 ///
 /// All codec encoders are `'static` (they clone/Arc their config), so this
 /// type has no lifetime parameter.
 ///
-/// [`adapt_for_encode_cow`]: zenpixels_convert::adapt::adapt_for_encode_cow
+/// [`adapt_for_encode`]: zenpixels_convert::adapt_for_encode
 pub struct StreamingEncoder {
     /// The type-erased encoder. Call `push_rows()` per strip, `finish()` when done.
     ///
@@ -491,9 +633,9 @@ pub struct StreamingEncoder {
     /// or used in `zenpipe::codec::EncoderSink`.
     pub encoder: Box<dyn zencodec::encode::DynEncoder + Send>,
     /// Pixel formats accepted by this encoder and its conversion adapters.
-    /// Pass to `adapt_for_encode_cow` to pick the cheapest conversion. A tone-map
+    /// Pass to `adapt_for_encode` to pick the cheapest conversion. A tone-map
     /// adapter advertises HDR inputs so rendering happens before SDR negotiation.
-    pub supported: &'static [PixelDescriptor],
+    pub supported: &'static [PixelFormat],
     /// The resolved output format.
     pub format: ImageFormat,
 }
@@ -601,11 +743,14 @@ where
             (Some(metadata), Some(from))
         }
     };
-    if let Some(meta) = metadata {
-        job = job.with_metadata_policy(
-            crate::color_fit::exif_color_space(meta),
-            params.metadata_policy,
-        );
+    let filtered_meta = metadata
+        .map(|meta| crate::color_fit::exif_color_space(meta).filtered(&params.metadata_policy));
+    let has_color_meta = params.cicp.is_some()
+        || filtered_meta
+            .as_ref()
+            .is_some_and(|m| m.icc_profile.is_some() || m.cicp.is_some());
+    if let Some(meta) = filtered_meta {
+        job = job.with_unfiltered_metadata(meta);
     }
     let format = C::format();
     if let Some(mode) = params.orientation_mode {
@@ -623,6 +768,12 @@ where
     let encoder = job
         .dyn_encoder()
         .map_err(|e| at!(CodecError::Codec { format, source: e }))?;
+    let encoder: Box<dyn zencodec::encode::DynEncoder + Send> =
+        if format == ImageFormat::Png && has_color_meta {
+            Box::new(PngMetadataUntagEncoder { inner: encoder })
+        } else {
+            encoder
+        };
     let encoder: Box<dyn zencodec::encode::DynEncoder + Send> = match convert_from {
         Some(from) => Box::new(ColorConvertingEncoder {
             inner: encoder,
@@ -652,16 +803,16 @@ where
     let supported = if tone_map.is_some() {
         crate::tonemap::STREAMING_INPUTS
     } else {
-        C::supported_descriptors()
+        C::supported_pixel_formats()
     };
     #[cfg(not(feature = "tonemap"))]
-    let supported = C::supported_descriptors();
+    let supported = C::supported_pixel_formats();
     #[cfg(feature = "tonemap")]
     let encoder: Box<dyn zencodec::encode::DynEncoder + Send> = match tone_map {
         Some(plan) => Box::new(ToneMappingEncoder {
             inner: encoder,
             plan,
-            supported: C::supported_descriptors(),
+            supported: C::supported_pixel_formats(),
         }),
         None => encoder,
     };
@@ -687,7 +838,7 @@ pub struct ConfiguredJob {
     /// The erased job; `plan_encode` and `into_encoder` are available on it.
     pub job: Box<dyn zencodec::encode::DynEncodeJob>,
     /// Pixel formats the encoder accepts natively.
-    pub supported: &'static [PixelDescriptor],
+    pub supported: &'static [PixelFormat],
     /// The resolved output format.
     pub format: ImageFormat,
 }
@@ -718,7 +869,7 @@ where
         job.set_limits(crate::limits::to_resource_limits(lim));
     }
     if let Some(meta) = params.metadata {
-        job.set_metadata_policy(meta, params.metadata_policy);
+        job.set_unfiltered_metadata(meta.filtered(&params.metadata_policy));
     }
     if let Some(mode) = params.orientation_mode {
         job.try_set_orientation_mode(mode)
@@ -730,7 +881,7 @@ where
     }
     Ok(ConfiguredJob {
         job,
-        supported: C::supported_descriptors(),
+        supported: C::supported_pixel_formats(),
         format,
     })
 }
@@ -748,6 +899,103 @@ pub(crate) fn build_job(format: ImageFormat, params: EncodeParams<'_>) -> Result
             format,
             detail: "planned row encoding is qualified for JPEG and PNG only",
         })),
+    }
+}
+
+/// Relabels default-sRGB strips to `ColorSpace::Untagged` before forwarding to
+/// `zenpng` when the streaming encode job carries explicit ICC/CICP metadata.
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "bitmaps-bmp",
+    feature = "bitmaps-qoi",
+    feature = "bitmaps-tga",
+    feature = "bitmaps-hdr",
+    feature = "tiff"
+))]
+struct PngMetadataUntagEncoder {
+    inner: Box<dyn zencodec::encode::DynEncoder + Send>,
+}
+
+#[cfg(any(
+    feature = "jpeg",
+    feature = "webp",
+    feature = "gif",
+    feature = "png",
+    feature = "avif-encode",
+    feature = "jxl-encode",
+    feature = "bitmaps",
+    feature = "bitmaps-bmp",
+    feature = "bitmaps-qoi",
+    feature = "bitmaps-tga",
+    feature = "bitmaps-hdr",
+    feature = "tiff"
+))]
+impl zencodec::encode::DynEncoder for PngMetadataUntagEncoder {
+    fn preferred_strip_height(&self) -> u32 {
+        self.inner.preferred_strip_height()
+    }
+
+    fn encode(
+        self: Box<Self>,
+        pixels: PixelView<'_>,
+    ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        let pixels = untag_view_for_png_metadata(pixels, ImageFormat::Png, true);
+        self.inner.encode(pixels)
+    }
+
+    fn encode_in_place(
+        self: Box<Self>,
+        pixels: PixelViewMut<'_>,
+    ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        let pixels = untag_view_for_png_metadata(pixels.into_view(), ImageFormat::Png, true);
+        self.inner.encode(pixels)
+    }
+
+    fn begin(
+        &mut self,
+        width: u32,
+        height: u32,
+        pixel_format: PixelFormat,
+    ) -> core::result::Result<zencodec::encode::OutputTiming, zencodec::encode::BoxedError> {
+        let pixel_format = untag_format_for_png_metadata(&pixel_format).unwrap_or(pixel_format);
+        self.inner.begin(width, height, pixel_format)
+    }
+
+    fn pending_output(&self) -> &[u8] {
+        self.inner.pending_output()
+    }
+
+    fn consume_output(&mut self, n: usize) {
+        self.inner.consume_output(n)
+    }
+
+    fn take_output(&mut self, into: &mut alloc::vec::Vec<u8>) {
+        self.inner.take_output(into)
+    }
+
+    fn push_rows(
+        &mut self,
+        rows: PixelView<'_>,
+    ) -> core::result::Result<(), zencodec::encode::BoxedError> {
+        let rows = untag_view_for_png_metadata(rows, ImageFormat::Png, true);
+        self.inner.push_rows(rows)
+    }
+
+    fn finish(self: Box<Self>) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        self.inner.finish()
+    }
+
+    fn encode_from(
+        self: Box<Self>,
+        source: &mut dyn FnMut(u32, PixelViewMut<'_>) -> usize,
+    ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
+        self.inner.encode_from(source)
     }
 }
 
@@ -782,8 +1030,8 @@ struct ColorConvertingEncoder {
 impl ColorConvertingEncoder {
     fn convert(
         &self,
-        pixels: PixelSlice<'_>,
-    ) -> core::result::Result<zenpixels::PixelBuffer, zencodec::encode::BoxedError> {
+        pixels: PixelView<'_>,
+    ) -> core::result::Result<PixelBuf, zencodec::encode::BoxedError> {
         crate::color_fit::convert_to_srgb(&pixels, &self.from).map_err(|e| e.into())
     }
 }
@@ -805,44 +1053,32 @@ impl zencodec::encode::DynEncoder for ColorConvertingEncoder {
 
     fn encode(
         self: Box<Self>,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
     ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
         let buf = self.convert(pixels)?;
-        self.inner.encode(buf.as_slice())
+        self.inner.encode(buf.as_view())
     }
 
-    fn encode_srgba8(
+    fn encode_in_place(
         self: Box<Self>,
-        data: &mut [u8],
-        _make_opaque: bool,
-        width: u32,
-        height: u32,
-        stride_pixels: u32,
+        pixels: PixelViewMut<'_>,
     ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
-        let pixels = PixelSlice::new(
-            data,
-            width,
-            height,
-            stride_pixels as usize * 4,
-            PixelDescriptor::RGBA8_SRGB,
-        )
-        .map_err(|e| -> zencodec::encode::BoxedError { alloc::format!("{e:?}").into() })?;
-        let buf = self.convert(pixels)?;
-        self.inner.encode(buf.as_slice())
+        let buf = self.convert(pixels.into_view())?;
+        self.inner.encode(buf.as_view())
     }
 
     fn begin(
         &mut self,
         width: u32,
         height: u32,
-        descriptor: PixelDescriptor,
+        pixel_format: PixelFormat,
     ) -> core::result::Result<zencodec::encode::OutputTiming, zencodec::encode::BoxedError> {
-        // Declare the descriptor the converted strips will carry: convert
+        // Declare the format the converted strips will carry: convert
         // one pixel through the same function.
-        let one = alloc::vec![0u8; descriptor.bytes_per_pixel()];
-        let px = PixelSlice::new(&one, 1, 1, one.len(), descriptor)
+        let one = alloc::vec![0u8; pixel_format.layout.bytes_per_pixel()];
+        let px = PixelView::new(&one, 1, 1, one.len(), &pixel_format)
             .map_err(|e| -> zencodec::encode::BoxedError { alloc::format!("{e:?}").into() })?;
-        let target = self.convert(px)?.descriptor();
+        let target = self.convert(px)?.format().clone();
         self.inner.begin(width, height, target)
     }
 
@@ -860,10 +1096,10 @@ impl zencodec::encode::DynEncoder for ColorConvertingEncoder {
 
     fn push_rows(
         &mut self,
-        rows: PixelSlice<'_>,
+        rows: PixelView<'_>,
     ) -> core::result::Result<(), zencodec::encode::BoxedError> {
         let buf = self.convert(rows)?;
-        self.inner.push_rows(buf.as_slice())
+        self.inner.push_rows(buf.as_view())
     }
 
     fn finish(self: Box<Self>) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
@@ -872,7 +1108,7 @@ impl zencodec::encode::DynEncoder for ColorConvertingEncoder {
 
     fn encode_from(
         self: Box<Self>,
-        _source: &mut dyn FnMut(u32, zenpixels::PixelSliceMut<'_>) -> usize,
+        _source: &mut dyn FnMut(u32, PixelViewMut<'_>) -> usize,
     ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
         Err(
             "encode_from is not available when the pixels need colour conversion; use push_rows"
@@ -889,7 +1125,7 @@ impl zencodec::encode::DynEncoder for ColorConvertingEncoder {
 struct ToneMappingEncoder {
     inner: Box<dyn zencodec::encode::DynEncoder + Send>,
     plan: crate::tonemap::ToneMapPlan,
-    supported: &'static [PixelDescriptor],
+    supported: &'static [PixelFormat],
 }
 
 /// Render before adapting to the native codec's formats. Both operations
@@ -897,9 +1133,9 @@ struct ToneMappingEncoder {
 #[cfg(feature = "tonemap")]
 fn with_tone_mapped<R>(
     plan: &crate::tonemap::ToneMapPlan,
-    pixels: PixelSlice<'_>,
-    supported: &[PixelDescriptor],
-    consume: impl FnOnce(PixelSlice<'_>) -> core::result::Result<R, zencodec::encode::BoxedError>,
+    pixels: PixelView<'_>,
+    supported: &[PixelFormat],
+    consume: impl FnOnce(PixelView<'_>) -> core::result::Result<R, zencodec::encode::BoxedError>,
 ) -> core::result::Result<R, zencodec::encode::BoxedError> {
     with_rendered(plan, pixels, supported, true, consume)
 }
@@ -907,34 +1143,34 @@ fn with_tone_mapped<R>(
 #[cfg(feature = "tonemap")]
 fn with_rendered<R>(
     plan: &crate::tonemap::ToneMapPlan,
-    pixels: PixelSlice<'_>,
-    supported: &[PixelDescriptor],
+    pixels: PixelView<'_>,
+    supported: &[PixelFormat],
     real_pixels: bool,
-    consume: impl FnOnce(PixelSlice<'_>) -> core::result::Result<R, zencodec::encode::BoxedError>,
+    consume: impl FnOnce(PixelView<'_>) -> core::result::Result<R, zencodec::encode::BoxedError>,
 ) -> core::result::Result<R, zencodec::encode::BoxedError> {
-    let toned = match plan.source_for(pixels.descriptor()) {
+    let toned = match plan.source_for(pixels.format()) {
         Some(source) => {
             let source = source?;
             let toned = crate::tonemap::tone_map_to_srgb8(&pixels, source, plan.peak(source))?;
             if real_pixels {
-                plan.check_alpha(&toned.as_slice())?;
+                plan.check_alpha(&toned.as_view())?;
             }
             Some(toned)
         }
         None => None,
     };
-    let pixels = toned.as_ref().map_or(pixels, |b| b.as_slice());
-    let bytes = pixels.contiguous_bytes();
-    let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
-        &bytes,
-        pixels.descriptor(),
-        pixels.width(),
-        pixels.rows(),
-        pixels.descriptor().aligned_stride(pixels.width()),
+    let pixels = toned.as_ref().map_or(pixels, |b| b.as_view());
+    let pixels = normalize_unknown_for_encode(pixels, supported);
+    let (_, adapted) = zenpixels_convert::adapt_for_encode(
+        pixels,
+        &zenpixels::ColorOrigin::assumed(),
         supported,
+        &zenpixels_convert::ConvertPolicy::permissive(),
+        zenpixels::PeakSource::Declared,
+        zenpixels_convert::OutputSignaling::Strip,
     )
     .map_err(|e| -> zencodec::encode::BoxedError { alloc::format!("{e}").into() })?;
-    consume(adapted.as_slice())
+    consume(adapted.pixels.as_view())
 }
 
 #[cfg(feature = "tonemap")]
@@ -945,7 +1181,7 @@ impl zencodec::encode::DynEncoder for ToneMappingEncoder {
 
     fn encode(
         self: Box<Self>,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
     ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
         let Self {
             inner,
@@ -955,60 +1191,30 @@ impl zencodec::encode::DynEncoder for ToneMappingEncoder {
         with_tone_mapped(&plan, pixels, supported, |p| inner.encode(p))
     }
 
-    fn encode_srgba8(
+    fn encode_in_place(
         self: Box<Self>,
-        data: &mut [u8],
-        make_opaque: bool,
-        width: u32,
-        height: u32,
-        stride_pixels: u32,
+        pixels: PixelViewMut<'_>,
     ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
-        // Metadata remains authoritative; U8 HDR samples must be refused.
-        if let Some(source) = self.plan.source_for(PixelDescriptor::RGBA8_SRGB) {
-            source?;
-            return Err("tone mapping reads f32 or U16 samples, not U8".into());
-        }
-        let stride = (stride_pixels as usize)
-            .checked_mul(4)
-            .ok_or("sRGBA8 stride overflows")?;
-        // Validate before touching caller memory, including the valid case
-        // where the last row omits trailing padding.
-        PixelSlice::new(data, width, height, stride, PixelDescriptor::RGBA8_SRGB)
-            .map_err(|e| -> zencodec::encode::BoxedError { alloc::format!("{e:?}").into() })?;
-        if make_opaque {
-            for y in 0..height as usize {
-                for p in data[y * stride..y * stride + width as usize * 4]
-                    .as_chunks_mut::<4>()
-                    .0
-                {
-                    p[3] = 255;
-                }
-            }
-        }
-        // Native codecs need not accept AlphaMode::Undefined. Materializing
-        // opaque alpha honors the request while keeping a supported descriptor.
-        let pixels = PixelSlice::new(data, width, height, stride, PixelDescriptor::RGBA8_SRGB)
-            .map_err(|e| -> zencodec::encode::BoxedError { alloc::format!("{e:?}").into() })?;
         let Self {
             inner,
             plan,
             supported,
         } = *self;
-        with_tone_mapped(&plan, pixels, supported, |p| inner.encode(p))
+        with_tone_mapped(&plan, pixels.into_view(), supported, |p| inner.encode(p))
     }
 
     fn begin(
         &mut self,
         width: u32,
         height: u32,
-        descriptor: PixelDescriptor,
+        pixel_format: PixelFormat,
     ) -> core::result::Result<zencodec::encode::OutputTiming, zencodec::encode::BoxedError> {
-        let one = alloc::vec![0u8; descriptor.bytes_per_pixel()];
-        let px = PixelSlice::new(&one, 1, 1, one.len(), descriptor)
+        let one = alloc::vec![0u8; pixel_format.layout.bytes_per_pixel()];
+        let px = PixelView::new(&one, 1, 1, one.len(), &pixel_format)
             .map_err(|e| -> zencodec::encode::BoxedError { alloc::format!("{e:?}").into() })?;
         // This pixel only finds the format, and its alpha means nothing.
         with_rendered(&self.plan, px, self.supported, false, |p| {
-            self.inner.begin(width, height, p.descriptor())
+            self.inner.begin(width, height, p.format().clone())
         })
     }
 
@@ -1024,7 +1230,7 @@ impl zencodec::encode::DynEncoder for ToneMappingEncoder {
 
     fn push_rows(
         &mut self,
-        rows: PixelSlice<'_>,
+        rows: PixelView<'_>,
     ) -> core::result::Result<(), zencodec::encode::BoxedError> {
         with_tone_mapped(&self.plan, rows, self.supported, |p| {
             self.inner.push_rows(p)
@@ -1037,10 +1243,10 @@ impl zencodec::encode::DynEncoder for ToneMappingEncoder {
 
     fn encode_from(
         self: Box<Self>,
-        source: &mut dyn FnMut(u32, zenpixels::PixelSliceMut<'_>) -> usize,
+        source: &mut dyn FnMut(u32, PixelViewMut<'_>) -> usize,
     ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
         // The encoder fills its own buffer, so this is only HDR if the metadata says so.
-        if self.plan.source_for(PixelDescriptor::RGBA8_SRGB).is_some() {
+        if self.plan.source_for(&PixelFormat::RGBA8_SRGB).is_some() {
             return Err(
                 "encode_from is not available when HDR pixels need tone mapping; use push_rows"
                     .into(),
@@ -1074,8 +1280,8 @@ struct BufferedRowEncoder {
     /// Applied to the collected image at `finish` (re-encodes are written
     /// upright; see `crate::orient_fit`).
     orientation: zencodec::Orientation,
-    /// Width, declared height (if `begin` ran) and descriptor.
-    image: Option<(u32, Option<u32>, PixelDescriptor)>,
+    /// Width, declared height (if `begin` ran) and pixel format.
+    image: Option<(u32, Option<u32>, PixelFormat)>,
     rows: alloc::vec::Vec<u8>,
     filled: u32,
 }
@@ -1110,10 +1316,10 @@ impl BufferedRowEncoder {
 
     fn row_bytes(
         width: u32,
-        descriptor: PixelDescriptor,
+        pixel_format: &PixelFormat,
     ) -> core::result::Result<usize, zencodec::encode::BoxedError> {
         (width as usize)
-            .checked_mul(descriptor.bytes_per_pixel())
+            .checked_mul(pixel_format.layout.bytes_per_pixel())
             .ok_or_else(|| "row size overflows usize".into())
     }
 }
@@ -1135,7 +1341,7 @@ impl zencodec::encode::DynEncoder for BufferedRowEncoder {
 
     fn encode(
         self: Box<Self>,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
     ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
         if self.image.is_some() || self.failed {
             return Err("one-shot encode after row encoding started".into());
@@ -1143,33 +1349,28 @@ impl zencodec::encode::DynEncoder for BufferedRowEncoder {
         self.inner.encode(pixels)
     }
 
-    fn encode_srgba8(
+    fn encode_in_place(
         self: Box<Self>,
-        data: &mut [u8],
-        make_opaque: bool,
-        width: u32,
-        height: u32,
-        stride_pixels: u32,
+        pixels: PixelViewMut<'_>,
     ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
         if self.image.is_some() || self.failed {
             return Err("one-shot encode after row encoding started".into());
         }
-        self.inner
-            .encode_srgba8(data, make_opaque, width, height, stride_pixels)
+        self.inner.encode_in_place(pixels)
     }
 
     fn begin(
         &mut self,
         width: u32,
         height: u32,
-        descriptor: PixelDescriptor,
+        pixel_format: PixelFormat,
     ) -> core::result::Result<zencodec::encode::OutputTiming, zencodec::encode::BoxedError> {
         if self.image.is_some() || self.failed {
             return Err("begin after an earlier declaration or rows".into());
         }
         let (out_width, out_height) = self.orientation.output_dimensions(width, height);
         self.limits.check_dimensions(out_width, out_height)?;
-        let total = Self::row_bytes(width, descriptor)?
+        let total = Self::row_bytes(width, &pixel_format)?
             .checked_mul(height as usize)
             .ok_or("image size overflows usize")?;
         self.limits.check_memory(total as u64)?;
@@ -1178,37 +1379,36 @@ impl zencodec::encode::DynEncoder for BufferedRowEncoder {
             .map_err(|_| -> zencodec::encode::BoxedError {
                 "row buffer allocation failed".into()
             })?;
-        self.image = Some((width, Some(height), descriptor));
+        self.image = Some((width, Some(height), pixel_format));
         Ok(zencodec::encode::OutputTiming::AT_FINISH)
     }
 
     fn push_rows(
         &mut self,
-        rows: PixelSlice<'_>,
+        rows: PixelView<'_>,
     ) -> core::result::Result<(), zencodec::encode::BoxedError> {
         if self.failed {
             return Err("row encoding already failed".into());
         }
         let result = (|| {
-            let (width, height, descriptor) =
-                *self
-                    .image
-                    .get_or_insert((rows.width(), None, rows.descriptor()));
-            if rows.width() != width || rows.descriptor() != descriptor {
+            let (width, height, ref pixel_format) = *self
+                .image
+                .get_or_insert_with(|| (rows.width(), None, rows.format().clone()));
+            if rows.width() != width || rows.format() != pixel_format {
                 return Err("rows differ in width or pixel format from the image".into());
             }
             let filled = self
                 .filled
-                .checked_add(rows.rows())
+                .checked_add(rows.height())
                 .ok_or("row count overflows u32")?;
             if height.is_some_and(|h| filled > h) {
                 return Err("more rows than the declared height".into());
             }
             let (out_width, out_height) = self.orientation.output_dimensions(width, filled);
             self.limits.check_dimensions(out_width, out_height)?;
-            let row_bytes = Self::row_bytes(width, descriptor)?;
+            let row_bytes = Self::row_bytes(width, pixel_format)?;
             let add = row_bytes
-                .checked_mul(rows.rows() as usize)
+                .checked_mul(rows.height() as usize)
                 .ok_or("strip size overflows usize")?;
             let total = self
                 .rows
@@ -1221,7 +1421,7 @@ impl zencodec::encode::DynEncoder for BufferedRowEncoder {
                 .map_err(|_| -> zencodec::encode::BoxedError {
                     "row buffer allocation failed".into()
                 })?;
-            for y in 0..rows.rows() {
+            for y in 0..rows.height() {
                 self.rows.extend_from_slice(&rows.row(y)[..row_bytes]);
             }
             self.filled = filled;
@@ -1238,15 +1438,15 @@ impl zencodec::encode::DynEncoder for BufferedRowEncoder {
         if this.failed {
             return Err("row encoding already failed".into());
         }
-        let (width, height, descriptor) = this.image.ok_or("finish before any rows")?;
+        let (width, height, pixel_format) = this.image.ok_or("finish before any rows")?;
         if height.is_some_and(|h| h != this.filled) {
             return Err("fewer rows than the declared height".into());
         }
-        let row_bytes = Self::row_bytes(width, descriptor)?;
-        let pixels = PixelSlice::new(&this.rows, width, this.filled, row_bytes, descriptor)
+        let row_bytes = Self::row_bytes(width, &pixel_format)?;
+        let pixels = PixelView::new(&this.rows, width, this.filled, row_bytes, &pixel_format)
             .map_err(|e| -> zencodec::encode::BoxedError { alloc::format!("{e:?}").into() })?;
-        let output = match crate::orient_fit::orient(&pixels, this.orientation) {
-            Some(oriented) => this.inner.encode(oriented.as_slice()),
+        let output = match crate::orient_fit::orient(&pixels, this.orientation)? {
+            Some(oriented) => this.inner.encode(oriented.as_view()),
             None => this.inner.encode(pixels),
         }?;
         this.limits.check_output_size(output.len() as u64)?;
@@ -1255,7 +1455,7 @@ impl zencodec::encode::DynEncoder for BufferedRowEncoder {
 
     fn encode_from(
         self: Box<Self>,
-        source: &mut dyn FnMut(u32, zenpixels::PixelSliceMut<'_>) -> usize,
+        source: &mut dyn FnMut(u32, PixelViewMut<'_>) -> usize,
     ) -> core::result::Result<EncodeOutput, zencodec::encode::BoxedError> {
         if self.image.is_some() || self.failed {
             return Err("pull encode after row encoding started".into());

@@ -23,9 +23,9 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use zencodec::MetadataPolicy;
-use zencodec::decode::{DecodeRowSink, SinkError};
+use zencodec::decode::{DecodeRowSink, RowStrip, SinkError};
 use zencodec::encode::{DynEncoder, EncodeOutput};
-use zenpixels::{PixelDescriptor, PixelSliceMut};
+use zenpixels::{PixelFormat, PixelView, PixelViewMut};
 
 use crate::decision::FormatDecision;
 use crate::error::Result;
@@ -309,10 +309,24 @@ pub fn transcode(
             }));
             #[cfg(feature = "cms")]
             {
-                if matches!(
-                    buffer.descriptor().transfer(),
-                    zenpixels::TransferFunction::Pq | zenpixels::TransferFunction::Hlg
-                ) || src_cicp.is_some_and(|c| matches!(c.transfer_characteristics, 16 | 18))
+                let src_fmt = zencodec::helpers::pixel_format_for_decoded_pixels(
+                    buffer.format().layout,
+                    &source_color,
+                    None,
+                )
+                .map_err(|e| at!(CodecError::ColorManagement(alloc::format!("{e}"))))?;
+                let is_hdr = matches!(
+                    src_fmt.color,
+                    zenpixels::ColorSpace::Rgb { transfer, .. }
+                        | zenpixels::ColorSpace::Gray { transfer, .. }
+                        if transfer.is_hdr()
+                ) || matches!(
+                    buffer.format().color,
+                    zenpixels::ColorSpace::Rgb { transfer, .. }
+                        | zenpixels::ColorSpace::Gray { transfer, .. }
+                        if transfer.is_hdr()
+                );
+                if is_hdr || src_cicp.is_some_and(|c| matches!(c.transfer_characteristics, 16 | 18))
                 {
                     return Err(at!(CodecError::ColorManagement(
                         "HDR-to-SDR requires an explicit display and tone-map policy".into()
@@ -324,45 +338,44 @@ pub fn transcode(
                         "sRGB conversion cannot preserve an unchanged gain map; select SupplementPolicy::Strip".into()
                     )));
                 }
-                // The decoded descriptor is only a best-effort label (PNG8
-                // decoders label RGBA8 as sRGB by convention). Attach the
-                // authoritative source color — ICC or CICP per
-                // `color_authority` — so the CMS converts e.g. embedded Adobe
-                // RGB instead of assuming the pixels are already sRGB, and so
-                // malformed ICC bytes fail here instead of being silently
-                // dropped by the metadata clearing below.
-                let buffer = if buffer.color_context().is_none()
-                    && (source_color.cicp.is_some() || source_color.icc_profile.is_some())
-                {
-                    buffer
-                        .with_color_context(alloc::sync::Arc::new(source_color.to_color_context()))
+                // Relabel the decoded buffer with the authoritative source color
+                // (ICC or CICP per `color_authority`) so the CMS converts e.g.
+                // embedded Adobe RGB instead of assuming sRGB, and so malformed
+                // ICC bytes fail here instead of being silently dropped.
+                // Only normalize Unknown transfer/primaries for genuinely untagged
+                // sources (no ICC and no CICP), never when an attached ICC failed
+                // header identification.
+                let src_fmt = if source_color.icc_profile.is_none() && source_color.cicp.is_none() {
+                    crate::dispatch::normalize_unknown_format(&src_fmt).unwrap_or(src_fmt)
                 } else {
-                    buffer
+                    src_fmt
                 };
-                let origin = match (&source_color.icc_profile, source_color.cicp) {
-                    (Some(icc), Some(cicp)) => {
-                        zenpixels::ColorOrigin::from_icc_and_cicp(icc.clone(), cicp)
-                    }
-                    (Some(icc), None) => zenpixels::ColorOrigin::from_icc(icc.clone()),
-                    (None, Some(cicp)) => zenpixels::ColorOrigin::from_cicp(cicp),
-                    (None, None) => zenpixels::ColorOrigin::assumed(),
-                }
-                .with_color_authority(source_color.color_authority);
-                let ready = zenpixels_convert::finalize_for_output_with(
-                    &buffer,
-                    &origin,
-                    zenpixels_convert::output::OutputProfile::Named(zenpixels::Cicp::SRGB),
-                    zenpixels::PixelFormat::Rgba8,
-                    Some(&zenpixels_convert::cms_moxcms::MoxCms),
+                let buffer = buffer
+                    .relabel_format(src_fmt.clone())
+                    .map_err(|e| at!(CodecError::ColorManagement(alloc::format!("{e}"))))?;
+                let policy = zenpixels_convert::ConvertPolicy::permissive()
+                    .with_cms(alloc::sync::Arc::new(zenpixels_convert::cms::MoxCms));
+                let plan = zenpixels_convert::OutputPlan::build(
+                    &src_fmt,
+                    &PixelFormat::RGBA8_SRGB,
+                    &policy,
+                    zenpixels::PeakSource::Declared,
+                    zenpixels_convert::OutputSignaling::Strip,
                 )
                 .map_err(|e| at!(CodecError::ColorManagement(alloc::format!("{e}"))))?;
+                let ready = plan
+                    .execute_buf(buffer)
+                    .map_err(|e| at!(CodecError::ColorManagement(alloc::format!("{e}"))))?;
                 metadata.icc_profile = None;
                 metadata.cicp = Some(zencodec::Cicp::SRGB);
                 metadata.content_light_level = None;
                 metadata.mastering_display = None;
                 metadata.diffuse_white = None;
                 src_cicp = metadata.cicp;
-                ready.into_parts().0
+                ready
+                    .pixels
+                    .into_owned()
+                    .map_err(|e| at!(CodecError::ColorManagement(alloc::format!("{e}"))))?
             }
         }
     };
@@ -401,7 +414,11 @@ pub fn transcode(
         });
     }
 
-    let encode_output = request.encode(buffer.as_slice(), buffer.descriptor().has_alpha())?;
+    let has_alpha = matches!(
+        buffer.format().color.alpha(),
+        zenpixels::AlphaMode::Straight | zenpixels::AlphaMode::Premultiplied
+    );
+    let encode_output = request.encode(buffer.as_view(), has_alpha)?;
 
     Ok(TranscodeOutput {
         data: encode_output.into_vec(),
@@ -747,7 +764,7 @@ pub fn reconstruct_jpeg_from_jxl(jxl: &[u8]) -> Result<Option<Vec<u8>>> {
 /// ```
 pub struct TranscodeSink<'a> {
     encoder: Option<Box<dyn DynEncoder + 'a>>,
-    supported: &'static [PixelDescriptor],
+    supported: &'static [PixelFormat],
     /// What the encoder's `begin` reported (set when the decoder declared
     /// the image).
     timing: Option<zencodec::encode::OutputTiming>,
@@ -771,16 +788,16 @@ pub type TranscodeWriter<'a> =
 struct PendingStrip {
     width: u32,
     height: u32,
-    descriptor: PixelDescriptor,
+    format: PixelFormat,
 }
 
 impl<'a> TranscodeSink<'a> {
     /// Create a new streaming transcode sink.
     ///
     /// `encoder` — the `DynEncoder` to push strips into.
-    /// `supported` — the encoder's supported pixel descriptors
-    ///   (from `EncoderConfig::supported_descriptors()`).
-    pub fn new(encoder: Box<dyn DynEncoder + 'a>, supported: &'static [PixelDescriptor]) -> Self {
+    /// `supported` — the encoder's supported pixel formats
+    ///   (from `EncoderConfig::supported_pixel_formats()`).
+    pub fn new(encoder: Box<dyn DynEncoder + 'a>, supported: &'static [PixelFormat]) -> Self {
         Self {
             encoder: Some(encoder),
             supported,
@@ -907,22 +924,35 @@ impl<'a> TranscodeSink<'a> {
             .as_mut()
             .ok_or_else(|| -> SinkError { "encoder already finished".into() })?;
 
-        let stride = pending.descriptor.aligned_stride(pending.width);
-        let data_len = stride * pending.height as usize;
+        let stride = (pending.width as usize)
+            .checked_mul(pending.format.layout.bytes_per_pixel())
+            .ok_or_else(|| -> SinkError { "strip stride overflow".into() })?;
+        let data_len = stride
+            .checked_mul(pending.height as usize)
+            .ok_or_else(|| -> SinkError { "strip byte length overflow".into() })?;
         let strip_data = &self.strip_buf[..data_len];
-
-        // Adapt pixel format per-strip — zero-copy when format already matches
-        let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
+        let view = PixelView::new(
             strip_data,
-            pending.descriptor,
             pending.width,
             pending.height,
             stride,
+            &pending.format,
+        )
+        .map_err(|e| -> SinkError { alloc::format!("pixel view: {e}").into() })?;
+
+        // Adapt pixel format per-strip — zero-copy when format already matches
+        let view = crate::dispatch::normalize_unknown_for_encode(view, self.supported);
+        let (_, adapted) = zenpixels_convert::adapt_for_encode(
+            view,
+            &zenpixels::ColorOrigin::assumed(),
             self.supported,
+            &zenpixels_convert::ConvertPolicy::permissive(),
+            zenpixels::PeakSource::Declared,
+            zenpixels_convert::OutputSignaling::Strip,
         )
         .map_err(|e| -> SinkError { alloc::format!("adapt: {e}").into() })?;
 
-        encoder.push_rows(adapted.as_slice())?;
+        encoder.push_rows(adapted.pixels.as_view())?;
         self.drain()
     }
 }
@@ -932,28 +962,30 @@ impl DecodeRowSink for TranscodeSink<'_> {
         &mut self,
         width: u32,
         height: u32,
-        descriptor: PixelDescriptor,
+        pixel_format: PixelFormat,
     ) -> core::result::Result<(), SinkError> {
         if self.timing.is_some() || self.pending.is_some() {
             return Err("begin after an earlier declaration or rows".into());
         }
         self.pending = None;
         self.strip_buf.clear();
-        // Declare the image to the encoder in the descriptor the strips will
+        // Declare the image to the encoder in the format the strips will
         // arrive in after adaptation: adapt one pixel through the same
         // function the strips go through, so the two cannot disagree.
-        let one = alloc::vec![0u8; descriptor.bytes_per_pixel()];
-        let target = zenpixels_convert::adapt::adapt_for_encode_cow(
-            &one,
-            descriptor,
-            1,
-            1,
-            one.len(),
+        let one = alloc::vec![0u8; pixel_format.layout.bytes_per_pixel()];
+        let one_view = PixelView::new(&one, 1, 1, one.len(), &pixel_format)
+            .map_err(|e| -> SinkError { alloc::format!("pixel view: {e}").into() })?;
+        let one_view = crate::dispatch::normalize_unknown_for_encode(one_view, self.supported);
+        let (_, adapted) = zenpixels_convert::adapt_for_encode(
+            one_view,
+            &zenpixels::ColorOrigin::assumed(),
             self.supported,
+            &zenpixels_convert::ConvertPolicy::permissive(),
+            zenpixels::PeakSource::Declared,
+            zenpixels_convert::OutputSignaling::Strip,
         )
-        .map_err(|e| -> SinkError { alloc::format!("adapt: {e}").into() })?
-        .as_slice()
-        .descriptor();
+        .map_err(|e| -> SinkError { alloc::format!("adapt: {e}").into() })?;
+        let target = adapted.pixels.as_view().format().clone();
         let encoder = self
             .encoder
             .as_mut()
@@ -965,34 +997,38 @@ impl DecodeRowSink for TranscodeSink<'_> {
 
     fn provide_next_buffer(
         &mut self,
-        _y: u32,
-        height: u32,
-        width: u32,
-        descriptor: PixelDescriptor,
-    ) -> core::result::Result<PixelSliceMut<'_>, SinkError> {
+        strip: RowStrip,
+        pixel_format: PixelFormat,
+    ) -> core::result::Result<PixelViewMut<'_>, SinkError> {
         // The previous buffer (if any) has been fully written by the decoder.
         // Forward it to the encoder before providing the next buffer.
         self.flush_pending()?;
 
-        let stride = descriptor.aligned_stride(width);
-        let needed = stride * height as usize;
+        let width = strip.width;
+        let height = strip.height;
+        let stride = (width as usize)
+            .checked_mul(pixel_format.layout.bytes_per_pixel())
+            .ok_or_else(|| -> SinkError { "strip stride overflow".into() })?;
+        let needed = stride
+            .checked_mul(height as usize)
+            .ok_or_else(|| -> SinkError { "strip byte length overflow".into() })?;
 
         // Resize strip_buf for this strip
         self.strip_buf.resize(needed, 0);
-        self.pending = Some(PendingStrip {
+        let pending = self.pending.insert(PendingStrip {
             width,
             height,
-            descriptor,
+            format: pixel_format,
         });
 
-        PixelSliceMut::new(
+        PixelViewMut::new(
             &mut self.strip_buf[..needed],
             width,
             height,
             stride,
-            descriptor,
+            &pending.format,
         )
-        .map_err(|e| -> SinkError { alloc::format!("pixel slice: {e}").into() })
+        .map_err(|e| -> SinkError { alloc::format!("pixel view: {e}").into() })
     }
 
     fn finish(&mut self) -> core::result::Result<(), SinkError> {
@@ -1096,7 +1132,10 @@ mod tests {
         // Encode to JPEG first
         let jpeg_output = crate::EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality(75.0)
-            .encode(zenpixels::PixelSlice::from(img.as_ref()).erase(), false)
+            .encode(
+                PixelView::from_imgref(img.as_ref(), zenpixels::ColorSpace::SRGB).unwrap(),
+                false,
+            )
             .unwrap();
         assert!(!jpeg_output.data().is_empty());
 
@@ -1152,7 +1191,10 @@ mod tests {
         let img = imgref::ImgVec::new(px, w, h);
         let jpeg = crate::EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality(90.0)
-            .encode(zenpixels::PixelSlice::from(img.as_ref()).erase(), false)
+            .encode(
+                PixelView::from_imgref(img.as_ref(), zenpixels::ColorSpace::SRGB).unwrap(),
+                false,
+            )
             .unwrap();
 
         let out = transcode_to_quality(
@@ -1195,7 +1237,10 @@ mod tests {
         );
         let jpeg = crate::EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality(90.0)
-            .encode(zenpixels::PixelSlice::from(img.as_ref()).erase(), false)
+            .encode(
+                PixelView::from_imgref(img.as_ref(), zenpixels::ColorSpace::SRGB).unwrap(),
+                false,
+            )
             .unwrap();
 
         let result = transcode_to_quality(
@@ -1237,7 +1282,10 @@ mod tests {
 
         let jpeg_output = crate::EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality(90.0)
-            .encode(zenpixels::PixelSlice::from(img.as_ref()).erase(), false)
+            .encode(
+                PixelView::from_imgref(img.as_ref(), zenpixels::ColorSpace::SRGB).unwrap(),
+                false,
+            )
             .unwrap();
 
         let decision = FormatDecision {
@@ -1288,7 +1336,10 @@ mod tests {
         );
         let jpeg_output = crate::EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality(80.0)
-            .encode(zenpixels::PixelSlice::from(img.as_ref()).erase(), false)
+            .encode(
+                PixelView::from_imgref(img.as_ref(), zenpixels::ColorSpace::SRGB).unwrap(),
+                false,
+            )
             .unwrap();
 
         let info = crate::probe(jpeg_output.data(), &AllowedFormats::all()).unwrap();

@@ -105,8 +105,8 @@ impl WindowedFilterSource {
     ) -> crate::PipeResult<Self> {
         if upstream.format() != format::RGBAF32_LINEAR {
             return Err(at!(PipeError::FormatMismatch {
-                expected: format::RGBAF32_LINEAR,
-                got: upstream.format(),
+                expected: Box::new(format::RGBAF32_LINEAR),
+                got: Box::new(upstream.format()),
             }));
         }
 
@@ -222,8 +222,8 @@ impl WindowedFilterSource {
 
         let mut pending = PendingStrip {
             data: strip.as_strided_bytes().to_vec(),
-            stride: strip.stride(),
-            total_rows: strip.rows(),
+            stride: strip.stride_bytes(),
+            total_rows: strip.height(),
             next_row: 0,
         };
 

@@ -11,7 +11,7 @@ use zenpipe::graph::{EdgeKind, NodeOp, PipelineGraph};
 use zenpipe::ops::RowConverterOp;
 use zenpipe::sources::{CallbackSource, CropSource, MaterializedSource, TransformSource};
 use zenpipe::{
-    AlphaMode, ChannelLayout, ChannelType, ColorPrimaries, PixelFormat, Source, TransferFunction,
+    AlphaMode, ColorSpace, PixelFormat, Primaries, SampleLayout, SignalRange, Source, Transfer,
 };
 
 /// Collect all strips from a source into a flat Vec<u8>.
@@ -29,39 +29,51 @@ fn drain(source: &mut dyn Source) -> Vec<u8> {
 
 /// Display P3 RGBA f32, linear light, straight alpha.
 const P3_RGBAF32_LINEAR: PixelFormat = PixelFormat::new(
-    ChannelType::F32,
-    ChannelLayout::Rgba,
-    Some(AlphaMode::Straight),
-    TransferFunction::Linear,
-)
-.with_primaries(ColorPrimaries::DisplayP3);
+    SampleLayout::RGBAF32,
+    ColorSpace::Rgb {
+        primaries: Primaries::DisplayP3,
+        transfer: Transfer::Linear,
+        range: SignalRange::Full,
+        white: None,
+        alpha: AlphaMode::Straight,
+    },
+);
 
 /// BT.2020 RGBA f32, linear light, straight alpha.
 const BT2020_RGBAF32_LINEAR: PixelFormat = PixelFormat::new(
-    ChannelType::F32,
-    ChannelLayout::Rgba,
-    Some(AlphaMode::Straight),
-    TransferFunction::Linear,
-)
-.with_primaries(ColorPrimaries::Bt2020);
+    SampleLayout::RGBAF32,
+    ColorSpace::Rgb {
+        primaries: Primaries::Bt2020,
+        transfer: Transfer::Linear,
+        range: SignalRange::Full,
+        white: None,
+        alpha: AlphaMode::Straight,
+    },
+);
 
 /// BT.2020 RGBA f32, PQ transfer (HDR10).
 const BT2020_RGBAF32_PQ: PixelFormat = PixelFormat::new(
-    ChannelType::F32,
-    ChannelLayout::Rgba,
-    Some(AlphaMode::Straight),
-    TransferFunction::Pq,
-)
-.with_primaries(ColorPrimaries::Bt2020);
+    SampleLayout::RGBAF32,
+    ColorSpace::Rgb {
+        primaries: Primaries::Bt2020,
+        transfer: Transfer::Pq,
+        range: SignalRange::Full,
+        white: None,
+        alpha: AlphaMode::Straight,
+    },
+);
 
 /// Display P3 RGBA8, sRGB transfer.
 const P3_RGBA8_SRGB: PixelFormat = PixelFormat::new(
-    ChannelType::U8,
-    ChannelLayout::Rgba,
-    Some(AlphaMode::Straight),
-    TransferFunction::Srgb,
-)
-.with_primaries(ColorPrimaries::DisplayP3);
+    SampleLayout::RGBA8,
+    ColorSpace::Rgb {
+        primaries: Primaries::DisplayP3,
+        transfer: Transfer::Srgb,
+        range: SignalRange::Full,
+        white: None,
+        alpha: AlphaMode::Straight,
+    },
+);
 
 /// Create a solid-color source with a given pixel format.
 fn solid_f32_source(width: u32, height: u32, pixel: [f32; 4], fmt: PixelFormat) -> Box<dyn Source> {
@@ -367,26 +379,27 @@ fn pq_to_linear_conversion_exists() {
 #[test]
 fn rgba16_source_through_pipeline() {
     // RGBA16 sRGB source through crop — validates non-8-bit channel support.
-    let rgba16_srgb = PixelFormat::new(
-        ChannelType::U16,
-        ChannelLayout::Rgba,
-        Some(AlphaMode::Straight),
-        TransferFunction::Srgb,
-    );
+    let rgba16_srgb = PixelFormat::RGBA16_SRGB;
 
     let row_bytes = 4 * 8; // 4 pixels × 8 bytes/pixel (4 channels × 2 bytes)
     let mut rows_produced = 0u32;
-    let src: Box<dyn Source> = Box::new(CallbackSource::new(4, 4, rgba16_srgb, 16, move |buf| {
-        if rows_produced >= 4 {
-            return Ok(false);
-        }
-        // Fill with mid-gray: 32768 = 0x8000
-        for chunk in buf[..row_bytes].as_chunks_mut::<2>().0.iter_mut() {
-            chunk.copy_from_slice(&32768u16.to_ne_bytes());
-        }
-        rows_produced += 1;
-        Ok(true)
-    }));
+    let src: Box<dyn Source> = Box::new(CallbackSource::new(
+        4,
+        4,
+        rgba16_srgb.clone(),
+        16,
+        move |buf| {
+            if rows_produced >= 4 {
+                return Ok(false);
+            }
+            // Fill with mid-gray: 32768 = 0x8000
+            for chunk in buf[..row_bytes].as_chunks_mut::<2>().0.iter_mut() {
+                chunk.copy_from_slice(&32768u16.to_ne_bytes());
+            }
+            rows_produced += 1;
+            Ok(true)
+        },
+    ));
 
     let mut crop = CropSource::new(src, 1, 1, 2, 2).unwrap();
     assert_eq!(crop.format(), rgba16_srgb);
@@ -404,12 +417,7 @@ fn rgba16_source_through_pipeline() {
 #[test]
 fn gray_to_rgba_conversion() {
     // Gray8 sRGB → RGBA8 sRGB conversion should be supported.
-    let gray8_srgb = PixelFormat::new(
-        ChannelType::U8,
-        ChannelLayout::Gray,
-        None,
-        TransferFunction::Srgb,
-    );
+    let gray8_srgb = PixelFormat::GRAY8_SRGB;
 
     let op = RowConverterOp::new(gray8_srgb, format::RGBA8_SRGB);
     assert!(op.is_some(), "Gray8 → RGBA8 conversion should be supported");

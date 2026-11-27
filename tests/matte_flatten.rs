@@ -11,7 +11,7 @@ use zenpipe::job::ImageJob;
 fn transparent_png() -> Vec<u8> {
     let pixels = vec![0u8; 8 * 8 * 4]; // rgba all zero = transparent black
     let slice =
-        zenpixels::PixelSlice::new(&pixels, 8, 8, 8 * 4, zenpipe::format::RGBA8_SRGB).unwrap();
+        zenpixels::PixelView::new(&pixels, 8, 8, 8 * 4, &zenpixels::formats::RGBA8_SRGB).unwrap();
     zencodecs::EncodeRequest::new(zencodec::ImageFormat::Png)
         .encode(slice, true)
         .expect("encode fixture png")

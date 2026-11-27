@@ -15,7 +15,7 @@
 use imgref::{ImgRef, ImgVec};
 use rgb::{Rgb, Rgba};
 use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, Metadata};
-use zenpixels::PixelSlice;
+use zenpixels::{ColorSpace, PixelView};
 
 fn rgb8_image(w: usize, h: usize) -> ImgVec<Rgb<u8>> {
     let pixels: Vec<Rgb<u8>> = (0..w * h)
@@ -120,10 +120,10 @@ fn bmp_metadata_with_icc_input_silently_drops() {
     let icc = vec![0u8; 256];
     let meta = Metadata::none().with_icc(icc);
 
-    let typed: PixelSlice<'_, Rgb<u8>> = PixelSlice::from(img.as_ref());
+    let view = PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB).expect("from_imgref");
     let result = EncodeRequest::new(ImageFormat::Bmp)
         .with_metadata(meta)
-        .encode(typed.erase(), false);
+        .encode(view, false);
     assert!(
         result.is_ok(),
         "BMP encoder must accept (and silently drop) unsupported metadata"
@@ -201,7 +201,7 @@ fn farbfeld_rgba8_round_trip() {
 fn farbfeld_rgba16_round_trip_is_lossless_pixel_byte_equal() {
     use imgref::ImgVec;
     use rgb::Rgba;
-    use zenpixels::{ChannelType, PixelSlice};
+    use zenpixels::SampleType;
 
     // Source: distinct 16-bit pattern per channel — picks up narrowing
     // (each byte of the u16 matters).
@@ -214,22 +214,23 @@ fn farbfeld_rgba16_round_trip_is_lossless_pixel_byte_equal() {
         })
         .collect();
     let img = ImgVec::new(pixels, 32, 32);
-    let typed: PixelSlice<'_, Rgba<u16>> = PixelSlice::from(img.as_ref());
+    let view = PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB_ALPHA).expect("from_imgref");
 
     let bytes = EncodeRequest::new(ImageFormat::Farbfeld)
-        .encode(typed.erase(), false)
+        .encode(view, false)
         .expect("encode Farbfeld rgba16")
         .into_vec();
 
     let decoded = DecodeRequest::new(&bytes)
         .decode_full_frame()
         .expect("decode Farbfeld");
-    let desc = decoded.pixels().descriptor();
+    let pixels = decoded.pixels();
+    let fmt = pixels.format();
     assert_eq!(
-        desc.channel_type(),
-        ChannelType::U16,
+        fmt.layout.sample,
+        SampleType::U16,
         "Farbfeld decode must preserve 16-bit channel type, got {:?}",
-        desc.channel_type()
+        fmt.layout.sample
     );
 
     let actual: &[u8] = decoded.pixels().as_strided_bytes();

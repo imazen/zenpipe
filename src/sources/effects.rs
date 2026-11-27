@@ -86,14 +86,14 @@ impl EffectSource {
                 alloc::string::String::from("EffectSource requires RGBA8_SRGB input")
             )));
         }
-        limits.check(width, height, fmt)?;
+        limits.check(width, height, fmt.clone())?;
 
-        let row_bytes = fmt.aligned_stride(width);
+        let row_bytes = crate::format::aligned_stride(&fmt, width);
         let total = crate::limits::checked_stride_buffer(row_bytes, height)?;
         let mut data = vec![0u8; total];
         let mut y = 0u32;
         while let Some(strip) = upstream.next()? {
-            for r in 0..strip.rows() {
+            for r in 0..strip.height() {
                 let dst_start = (y as usize)
                     .checked_add(r as usize)
                     .and_then(|v| v.checked_mul(row_bytes))
@@ -115,7 +115,7 @@ impl EffectSource {
                 }
                 data[dst_start..dst_end].copy_from_slice(&src_row[..row_bytes]);
             }
-            y = y.saturating_add(strip.rows());
+            y = y.saturating_add(strip.height());
         }
 
         let mut cur_w = width;
@@ -161,7 +161,7 @@ impl EffectSource {
             // output_dims can be larger than input (e.g., RotateEffect::Expand).
             // Without this re-check, a chain of expanding effects would
             // bypass the perimeter limit (audit M3 / C3 partial mitigation).
-            limits.check(out_w, out_h, fmt)?;
+            limits.check(out_w, out_h, fmt.clone())?;
 
             // Inverse-mapping: for every output pixel, find source coordinate and interpolate.
             let out_stride = crate::limits::checked_buffer_size(out_w, 1, 4)?;
@@ -218,7 +218,7 @@ impl Source for EffectSource {
             return Ok(None);
         }
         let rows = self.strip_height.min(self.height - self.y);
-        let stride = self.format.aligned_stride(self.width);
+        let stride = crate::format::aligned_stride(&self.format, self.width);
         let start = self.y as usize * stride;
         let end = (self.y + rows) as usize * stride;
         self.y += rows;
@@ -228,7 +228,7 @@ impl Source for EffectSource {
                 self.width,
                 rows,
                 stride,
-                self.format,
+                &self.format,
             )
             .pipe_err()?,
         ))
@@ -241,7 +241,7 @@ impl Source for EffectSource {
         self.height
     }
     fn format(&self) -> PixelFormat {
-        self.format
+        self.format.clone()
     }
 }
 
@@ -338,7 +338,7 @@ mod tests {
         // Every pixel should still be red.
         let mut all_rows_red = true;
         while let Some(strip) = es.next().unwrap() {
-            for r in 0..strip.rows() {
+            for r in 0..strip.height() {
                 for x in 0..strip.width() {
                     let row = strip.row(r);
                     let px = &row[x as usize * 4..(x as usize + 1) * 4];
@@ -389,7 +389,7 @@ mod tests {
         assert_eq!(es.height(), oh);
         // All pixels of the inscribed crop should still be red (solid-color source).
         while let Some(strip) = es.next().unwrap() {
-            for r in 0..strip.rows() {
+            for r in 0..strip.height() {
                 let row = strip.row(r);
                 for x in 0..strip.width() {
                     let px = &row[x as usize * 4..(x as usize + 1) * 4];

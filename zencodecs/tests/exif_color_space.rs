@@ -5,7 +5,7 @@
 
 use zencodec::Metadata;
 use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::PixelView;
 
 /// II TIFF: IFD0 {ExifIFD ->}; Exif IFD {ColorSpace = `cs`}.
 fn exif_with_color_space(cs: u16) -> Vec<u8> {
@@ -25,7 +25,7 @@ fn exif_with_color_space(cs: u16) -> Vec<u8> {
 
 fn color_space_after_encode(meta: Metadata) -> u16 {
     let px = vec![128u8; 8 * 8 * 3];
-    let slice = PixelSlice::new(&px, 8, 8, 24, PixelDescriptor::RGB8_SRGB).unwrap();
+    let slice = PixelView::new(&px, 8, 8, 24, &zenpixels::formats::RGB8_SRGB).unwrap();
     let bytes = EncodeRequest::new(ImageFormat::Jpeg)
         .with_metadata(meta)
         .encode(slice, false)

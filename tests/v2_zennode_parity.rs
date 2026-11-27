@@ -1252,7 +1252,7 @@ fn translate_and_execute(nodes: Vec<Node>, src_w: u32, src_h: u32) -> (u32, u32)
     let pipeline =
         translate::translate_nodes(&nodes, &io_buffers).expect("translation should succeed");
 
-    let bpp = zenpipe::format::RGBA8_SRGB.bytes_per_pixel() as usize;
+    let bpp = zenpipe::format::RGBA8_SRGB.layout.bytes_per_pixel();
     let data = vec![128u8; src_w as usize * src_h as usize * bpp];
     let source: Box<dyn zenpipe::Source> =
         Box::new(zenpipe::sources::MaterializedSource::from_data(

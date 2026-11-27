@@ -4,7 +4,7 @@
 use zencodec::ImageFormat;
 use zencodecs::{BoolKeep, CodecIntent, DecodeRequest, EncodeRequest, FormatChoice};
 use zenpipe::job::{CmsMode, ImageJob};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::PixelView;
 
 #[test]
 fn png16_identity_job_preserves_every_sample() {
@@ -23,12 +23,12 @@ fn png16_identity_job_preserves_every_sample() {
                 .copy_from_slice(&sample.to_ne_bytes());
         }
     }
-    let pixels = PixelSlice::new(
+    let pixels = PixelView::new(
         &storage,
         width as u32,
         height as u32,
         stride,
-        PixelDescriptor::RGBA16_SRGB,
+        &zenpixels::formats::RGBA16_SRGB,
     )
     .unwrap();
     let input = EncodeRequest::new(ImageFormat::Png)
@@ -38,8 +38,8 @@ fn png16_identity_job_preserves_every_sample() {
         .into_vec();
     let baseline = DecodeRequest::new(&input).decode_full_frame().unwrap();
     assert_eq!(
-        baseline.pixels().descriptor().channel_type(),
-        zenpixels::ChannelType::U16
+        baseline.pixels().format().layout.sample,
+        zenpixels::SampleType::U16
     );
     for y in 0..height {
         assert_eq!(baseline.pixels().row(y as u32), pixels.row(y as u32));
@@ -58,7 +58,7 @@ fn png16_identity_job_preserves_every_sample() {
     let output = DecodeRequest::new(&result.encode_results[0].bytes)
         .decode_full_frame()
         .unwrap();
-    assert_eq!(output.pixels().descriptor(), baseline.pixels().descriptor());
+    assert_eq!(output.pixels().format(), baseline.pixels().format());
     for y in 0..height {
         assert_eq!(
             output.pixels().row(y as u32),

@@ -1,13 +1,13 @@
 //! A pipeline served to the planned row encoder.
 
 use alloc::boxed::Box;
-use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use whereat::at;
+use zencodec::decode::RowMetadata;
 use zencodec::operation::OutputSource;
 use zencodec_io::row_encode::{Description, Source as RowSource};
-use zenpixels::{ColorContext, PixelSliceMut};
+use zenpixels::{ColorOrigin, PixelViewMut};
 
 use super::Refusal;
 use crate::Source;
@@ -59,15 +59,18 @@ pub struct PipelineRows<S> {
 
 impl<S: Source> PipelineRows<S> {
     /// Fix the encode description from `source` and an explicitly declared
-    /// interpretation of its samples. Pass the context the pipeline's output
+    /// interpretation of its samples. Pass the color origin the pipeline's output
     /// actually has; prefer [`from_source`](Self::from_source), which takes it
-    /// from operators that vouch for it. `None` declares no color.
-    pub fn new(source: S, color: Option<Arc<ColorContext>>) -> PipeResult<Self> {
+    /// from operators that vouch for it. `None` declares no color origin.
+    pub fn new(source: S, origin: Option<ColorOrigin>) -> PipeResult<Self> {
         let (width, height, format) = (source.width(), source.height(), source.format());
-        let row_bytes = crate::limits::checked_buffer_size(width, 1, format.bytes_per_pixel())?;
+        let row_bytes =
+            crate::limits::checked_buffer_size(width, 1, format.layout.bytes_per_pixel())?;
         let mut description = Description::new(width, height, format);
-        if let Some(color) = color {
-            description = description.with_color_context(color);
+        if let Some(origin) = origin {
+            let mut meta = RowMetadata::default();
+            meta.origin = Some(origin);
+            description = description.with_pixel_metadata(meta);
         }
         Ok(Self {
             source,
@@ -82,14 +85,14 @@ impl<S: Source> PipelineRows<S> {
     }
 
     /// Declare the color the pipeline itself states through
-    /// [`Source::color_context`]. Refuses with [`Refusal::UnknownColor`] when
+    /// [`Source::color_origin`]. Refuses with [`Refusal::UnknownColor`] when
     /// it cannot: an operator that may change the interpretation does not
     /// vouch for it, so the caller must declare it with [`new`](Self::new).
     pub fn from_source(source: S) -> PipeResult<Self> {
-        let color = source
-            .color_context()
+        let origin = source
+            .color_origin()
             .ok_or_else(|| refused(Refusal::UnknownColor))?;
-        Self::new(source, Some(color))
+        Self::new(source, Some(origin))
     }
 
     /// Counters so far.
@@ -100,16 +103,16 @@ impl<S: Source> PipelineRows<S> {
     fn fill(
         &mut self,
         first: u32,
-        rows: &mut PixelSliceMut<'_>,
+        rows: &mut PixelViewMut<'_>,
         pulse: &dyn zencodec::Pulse,
     ) -> PipeResult<()> {
         if first != self.next_y
             || rows.width() != self.description.width
-            || rows.descriptor() != self.description.descriptor
+            || rows.format() != &self.description.descriptor
         {
             return Err(refused(Refusal::RowOrder));
         }
-        let wanted = rows.rows();
+        let wanted = rows.height();
         let row_bytes = self.row_bytes;
         let mut filled = 0;
         while filled < wanted {
@@ -131,14 +134,19 @@ impl<S: Source> PipelineRows<S> {
             let Some(strip) = self.source.next()? else {
                 return Err(refused(Refusal::MissingRows));
             };
-            let available = strip.rows();
+            let available = strip.height();
             if strip.width() != self.description.width
-                || strip.descriptor() != self.description.descriptor
+                || strip.format() != &self.description.descriptor
                 || available == 0
             {
                 return Err(refused(Refusal::SourceChanged));
             }
-            match (strip.color_context(), &self.description.color_context) {
+            let declared_origin = self
+                .description
+                .pixel_metadata
+                .as_ref()
+                .and_then(|m| m.origin.as_ref());
+            match (strip.origin(), declared_origin) {
                 (None, _) => self.stats.strips_without_color += 1,
                 (Some(actual), Some(declared)) if actual == declared => {}
                 (Some(_), _) => return Err(refused(Refusal::ColorChanged)),
@@ -190,7 +198,7 @@ impl<S: Source> RowSource for PipelineRows<S> {
     fn read_rows(
         &mut self,
         first: u32,
-        mut rows: PixelSliceMut<'_>,
+        mut rows: PixelViewMut<'_>,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {
         // Resolve absence only for the private fill loop's checkpoints.

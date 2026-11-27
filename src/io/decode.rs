@@ -2,24 +2,24 @@
 
 use alloc::boxed::Box;
 use alloc::collections::VecDeque;
-use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::num::NonZeroU32;
 
 use whereat::at;
 use zencodec::decode::{
     BoundaryAction, BoundaryId, ControlledIncrementalDecode, ControlledProgress, DecodeBoundary,
-    DecodeRowSink, DynControlledDecoder, ErasedError, Event, Fused, IncrementalDecode, Input,
-    InputRequest, InterpretationState, SinkError, StepError,
+    DecodeRowSink, DynControlledDecoder, ErasedError, Event, FusedIncrementalDecoder,
+    IncrementalDecode, Input, InputRequest, InterpretationState, RowStrip, SinkError, StepError,
 };
 use zencodec::operation::{
-    DecodeRequest, OperationPolicy, OperationReport, PolicySet, resolve_boundary,
+    DecodeOptions as CodecDecodeOptions, OperationPolicy, OperationReport, PolicySet,
+    resolve_boundary,
 };
 use zencodec::source::{ReadAt, SliceReadAt};
 use zencodec::storage::{OwnedStorage, StorageBudget};
 use zencodec::{CodecSet, ImageInfo, SharedPulse};
 use zencodec_io::{ByteStepper, DriveOptions, DriveStats, ReadAtCursor, Step, Stepped, Yield};
-use zenpixels::{ColorContext, PixelDescriptor, PixelSlice, PixelSliceMut};
+use zenpixels::{ColorOrigin, PixelView, PixelViewMut};
 
 use super::{Refusal, SharedBytes};
 use crate::error::{PipeError, PipeResult};
@@ -125,11 +125,11 @@ struct Slot {
     busy: bool,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 struct Layout {
     width: u32,
     height: u32,
-    descriptor: PixelDescriptor,
+    format: PixelFormat,
 }
 
 /// Fixed strip slots lent to the decoder in order; never grows past its limit.
@@ -185,22 +185,25 @@ impl DecodeRowSink for Queue {
         &mut self,
         width: u32,
         height: u32,
-        descriptor: PixelDescriptor,
+        pixel_format: PixelFormat,
     ) -> Result<(), SinkError> {
         let layout = Layout {
             width,
             height,
-            descriptor,
+            format: pixel_format,
         };
         if self.began.is_some()
             || width == 0
             || height == 0
-            || self.declared.is_some_and(|declared| declared != layout)
+            || self
+                .declared
+                .as_ref()
+                .is_some_and(|declared| declared != &layout)
         {
             return Err(Refusal::StripGeometry.into());
         }
         let stride = (width as usize)
-            .checked_mul(descriptor.bytes_per_pixel())
+            .checked_mul(layout.format.layout.bytes_per_pixel())
             .ok_or(Refusal::StripGeometry)?;
         self.began = Some((layout, stride));
         Ok(())
@@ -212,21 +215,23 @@ impl DecodeRowSink for Queue {
 
     fn provide_next_buffer(
         &mut self,
-        y: u32,
-        height: u32,
-        width: u32,
-        descriptor: PixelDescriptor,
-    ) -> Result<PixelSliceMut<'_>, SinkError> {
-        let (layout, stride) = self.began.ok_or(Refusal::MissingDescriptor)?;
-        if self.finished
-            || width != layout.width
-            || descriptor != layout.descriptor
-            || height == 0
-            || y != self.next_y
-            || y.checked_add(height).is_none_or(|end| end > layout.height)
-        {
-            return Err(Refusal::StripGeometry.into());
-        }
+        strip: RowStrip,
+        pixel_format: PixelFormat,
+    ) -> Result<PixelViewMut<'_>, SinkError> {
+        let RowStrip { y, width, height } = strip;
+        let stride = {
+            let (layout, stride) = self.began.as_ref().ok_or(Refusal::MissingDescriptor)?;
+            if self.finished
+                || width != layout.width
+                || pixel_format != layout.format
+                || height == 0
+                || y != self.next_y
+                || y.checked_add(height).is_none_or(|end| end > layout.height)
+            {
+                return Err(Refusal::StripGeometry.into());
+            }
+            *stride
+        };
         if height > self.strip_rows {
             return Err(Refusal::StripTooTall {
                 rows: height,
@@ -243,19 +248,25 @@ impl DecodeRowSink for Queue {
         self.stats.strips += 1;
         self.stats.max_strip_rows = self.stats.max_strip_rows.max(height);
         let len = stride * height as usize;
-        Ok(PixelSliceMut::new(
+        let format = &self.began.as_ref().expect("began checked above").0.format;
+        Ok(PixelViewMut::new(
             &mut self.slots[slot].data.as_mut_slice()[..len],
             width,
             height,
             stride,
-            descriptor,
+            format,
         )?)
     }
 
     fn finish(&mut self) -> Result<(), SinkError> {
-        let (layout, _) = self.began.ok_or(Refusal::MissingDescriptor)?;
+        let height = self
+            .began
+            .as_ref()
+            .ok_or(Refusal::MissingDescriptor)?
+            .0
+            .height;
         self.settle();
-        if self.finished || self.next_y != layout.height {
+        if self.finished || self.next_y != height {
             return Err(Refusal::MissingRows.into());
         }
         self.finished = true;
@@ -273,7 +284,7 @@ enum Produced {
 /// The native session and its strip queue, stepped through any byte cursor.
 /// A native, sink or cancellation failure drops the session.
 struct Stage {
-    decoder: Option<Fused<Box<DynControlledDecoder>>>,
+    decoder: Option<FusedIncrementalDecoder<Box<DynControlledDecoder>>>,
     queue: Queue,
 }
 
@@ -360,7 +371,7 @@ pub struct DecodeSource<R, P = PolicySet> {
     pending: Option<(BoundaryId, BoundaryAction)>,
     info: ImageInfo,
     layout: Layout,
-    color: Arc<ColorContext>,
+    origin: ColorOrigin,
     served: Option<usize>,
     done: bool,
     delivered: u32,
@@ -376,7 +387,7 @@ impl<'a> DecodeSource<SliceReadAt<'a>, PolicySet> {
     ) -> PipeResult<Self> {
         Self::new(
             codecs,
-            &DecodeRequest::new(),
+            &CodecDecodeOptions::new(),
             SliceReadAt::new(bytes),
             PolicySet::new(),
             options,
@@ -396,7 +407,7 @@ impl DecodeSource<SharedBytes, PolicySet> {
     ) -> PipeResult<Self> {
         Self::new(
             codecs,
-            &DecodeRequest::new(),
+            &CodecDecodeOptions::new(),
             bytes.into(),
             PolicySet::new(),
             options,
@@ -412,7 +423,7 @@ impl<R: ReadAt, P: OperationPolicy> DecodeSource<R, P> {
     /// callback runs, and a refusal names the unmet ones.
     pub fn new(
         codecs: &CodecSet,
-        request: &DecodeRequest,
+        request: &CodecDecodeOptions,
         source: R,
         policy: P,
         options: DecodeOptions,
@@ -439,7 +450,7 @@ impl<R: ReadAt, P: OperationPolicy> DecodeSource<R, P> {
         };
         let mut this = Self {
             stage: Stage {
-                decoder: Some(Fused::new(decoder)),
+                decoder: Some(FusedIncrementalDecoder::new(decoder)),
                 queue,
             },
             source,
@@ -452,9 +463,9 @@ impl<R: ReadAt, P: OperationPolicy> DecodeSource<R, P> {
             layout: Layout {
                 width: 0,
                 height: 0,
-                descriptor: PixelDescriptor::RGB8_SRGB,
+                format: PixelFormat::RGB8_SRGB,
             },
-            color: Arc::new(ColorContext::default()),
+            origin: ColorOrigin::assumed(),
             served: None,
             done: false,
             delivered: 0,
@@ -477,18 +488,18 @@ impl<R: ReadAt, P: OperationPolicy> DecodeSource<R, P> {
                 .map_err(failed)?;
             match produced {
                 Yield::Output(Produced::Suspended(boundary)) => {
-                    let action = self.decide(boundary)?;
+                    let action = self.decide(boundary.clone())?;
                     let facts = boundary.facts();
                     if facts.state == InterpretationState::Final
                         && action == BoundaryAction::AdoptInterpretation
-                        && let Some(descriptor) = facts.descriptor
+                        && let Some(format) = facts.pixel_format.clone()
                     {
                         let layout = Layout {
                             width: facts.width,
                             height: facts.height,
-                            descriptor,
+                            format,
                         };
-                        self.stage.queue.declared = Some(layout);
+                        self.stage.queue.declared = Some(layout.clone());
                         self.pending = Some((boundary.id(), action));
                         return self.declare(layout);
                     }
@@ -497,7 +508,7 @@ impl<R: ReadAt, P: OperationPolicy> DecodeSource<R, P> {
                         .map_err(failed)?;
                 }
                 Yield::Output(Produced::Decode) => {
-                    if let Some((layout, _)) = self.stage.queue.began {
+                    if let Some((layout, _)) = self.stage.queue.began.clone() {
                         return self.declare(layout);
                     }
                 }
@@ -507,6 +518,7 @@ impl<R: ReadAt, P: OperationPolicy> DecodeSource<R, P> {
                         .stage
                         .queue
                         .began
+                        .clone()
                         .ok_or_else(|| refused(Refusal::MissingDescriptor))?;
                     return self.declare(layout);
                 }
@@ -520,7 +532,7 @@ impl<R: ReadAt, P: OperationPolicy> DecodeSource<R, P> {
             .info()
             .cloned()
             .ok_or_else(|| refused(Refusal::MissingDescriptor))?;
-        self.color = Arc::new(info.source_color.to_color_context());
+        self.origin = info.source_color.authoritative_origin();
         self.info = info;
         self.layout = layout;
         Ok(())
@@ -595,9 +607,10 @@ impl<R: ReadAt, P: OperationPolicy> DecodeSource<R, P> {
                 .map_err(failed)?;
             match produced {
                 Yield::Output(Produced::Suspended(boundary)) => {
+                    let boundary_id = boundary.id();
                     let action = self.decide(boundary)?;
                     self.stage
-                        .resume(boundary.id(), action, Some(self.pulse.as_pulse()))
+                        .resume(boundary_id, action, Some(self.pulse.as_pulse()))
                         .map_err(failed)?;
                 }
                 Yield::Output(Produced::Decode) => {}
@@ -615,25 +628,29 @@ impl<R: ReadAt + Send, P: OperationPolicy + Send> crate::Source for DecodeSource
         let Some((slot, rows)) = self.pull()? else {
             return Ok(None);
         };
-        let (layout, stride) = self
-            .stage
-            .queue
-            .began
-            .ok_or_else(|| refused(Refusal::MissingDescriptor))?;
-        if layout != self.layout {
-            return Err(refused(Refusal::StripGeometry));
-        }
+        let stride = {
+            let (layout, stride) = self
+                .stage
+                .queue
+                .began
+                .as_ref()
+                .ok_or_else(|| refused(Refusal::MissingDescriptor))?;
+            if layout != &self.layout {
+                return Err(refused(Refusal::StripGeometry));
+            }
+            *stride
+        };
         self.served = Some(slot);
         self.delivered += rows;
-        let strip = PixelSlice::new(
+        let strip = PixelView::new(
             &self.stage.queue.slots[slot].data.as_slice()[..stride * rows as usize],
-            layout.width,
+            self.layout.width,
             rows,
             stride,
-            layout.descriptor,
+            &self.layout.format,
         )
         .map_err(failed)?
-        .with_color_context(self.color.clone());
+        .with_origin(&self.origin);
         Ok(Some(strip))
     }
 
@@ -646,11 +663,11 @@ impl<R: ReadAt + Send, P: OperationPolicy + Send> crate::Source for DecodeSource
     }
 
     fn format(&self) -> PixelFormat {
-        self.layout.descriptor
+        self.layout.format.clone()
     }
 
     /// The decoder's current interpretation, attached to every strip.
-    fn color_context(&self) -> Option<Arc<ColorContext>> {
-        Some(self.color.clone())
+    fn color_origin(&self) -> Option<ColorOrigin> {
+        Some(self.origin.clone())
     }
 }

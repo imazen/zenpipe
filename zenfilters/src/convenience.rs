@@ -1,4 +1,4 @@
-//! High-level convenience API for applying filters to `PixelBuffer`/`PixelSlice`.
+//! High-level convenience API for applying filters to `PixelBuf`/`PixelView`.
 //!
 //! This module handles the full conversion pipeline:
 //! 1. Convert input to linear f32 RGB(A) with the correct primaries
@@ -9,11 +9,13 @@
 
 use alloc::borrow::Cow;
 use whereat::{At, ResultAtExt, at};
-use zenpixels::buffer::PixelBuffer;
+use zenpixels::buffer::PixelBuf;
 use zenpixels::{
-    AlphaMode, ChannelLayout, ChannelType, ColorPrimaries, PixelDescriptor, TransferFunction,
+    AlphaMode, ChannelOrder, ColorOrigin, ColorSpace, PixelFormat, Primaries, SampleLayout,
+    SampleType, SignalRange, Transfer,
 };
-use zenpixels_convert::RowConverter;
+use zenpixels_convert::oklab::OklabSpace;
+use zenpixels_convert::{ConvertPolicy, RangePolicy, RowPlan};
 
 use crate::context::FilterContext;
 use crate::pipeline::{self, Pipeline, PipelineError};
@@ -46,9 +48,9 @@ pub enum ConvenienceError {
     /// Pixel format conversion error.
     Convert(zenpixels_convert::ConvertError),
     /// The input has unsupported primaries (Unknown).
-    UnsupportedPrimaries(ColorPrimaries),
+    UnsupportedPrimaries(Primaries),
     /// The input format is not RGB-based (e.g., grayscale Oklab).
-    UnsupportedLayout(ChannelLayout),
+    UnsupportedLayout(ChannelOrder),
 }
 
 impl From<zenpixels_convert::ConvertError> for ConvenienceError {
@@ -75,47 +77,64 @@ impl core::error::Error for ConvenienceError {}
 /// If the input has known primaries, use those. This preserves the gamut
 /// without any cross-gamut conversion (BT.2020 stays BT.2020, P3 stays P3).
 #[track_caller]
-fn working_primaries(desc: PixelDescriptor) -> Result<ColorPrimaries, At<ConvenienceError>> {
-    match desc.primaries {
-        ColorPrimaries::Bt709 | ColorPrimaries::Bt2020 | ColorPrimaries::DisplayP3 => {
-            Ok(desc.primaries)
+fn working_primaries(format: &PixelFormat) -> Result<Primaries, At<ConvenienceError>> {
+    let primaries = match &format.color {
+        ColorSpace::Rgb { primaries, .. } => *primaries,
+        _ => {
+            return Err(at!(ConvenienceError::UnsupportedLayout(
+                format.layout.order
+            )));
         }
+    };
+    match primaries {
+        Primaries::Bt709 | Primaries::Bt2020 | Primaries::DisplayP3 => Ok(primaries),
         other => Err(at!(ConvenienceError::UnsupportedPrimaries(other))),
     }
 }
 
-/// Build the intermediate linear f32 RGB(A) descriptor for the working space.
-fn linear_f32_descriptor(has_alpha: bool, primaries: ColorPrimaries) -> PixelDescriptor {
-    let layout = if has_alpha {
-        ChannelLayout::Rgba
+/// Build the intermediate linear f32 RGB(A) format for the working space.
+fn linear_f32_format(
+    has_alpha: bool,
+    primaries: Primaries,
+    white: Option<zenpixels::DiffuseWhite>,
+) -> PixelFormat {
+    let (order, alpha) = if has_alpha {
+        (ChannelOrder::Rgba, AlphaMode::Straight)
     } else {
-        ChannelLayout::Rgb
+        (ChannelOrder::Rgb, AlphaMode::None)
     };
-    let alpha = if has_alpha {
-        Some(AlphaMode::Straight)
-    } else {
-        None
-    };
-    PixelDescriptor::new_full(
-        ChannelType::F32,
-        layout,
-        alpha,
-        TransferFunction::Linear,
-        primaries,
+    PixelFormat::new(
+        SampleLayout::new(SampleType::F32, order),
+        ColorSpace::Rgb {
+            primaries,
+            transfer: Transfer::Linear,
+            alpha,
+            range: SignalRange::Full,
+            white,
+        },
     )
 }
 
-/// Apply a filter pipeline to a `PixelBuffer`, returning a new `PixelBuffer`.
+fn format_transfer(format: &PixelFormat) -> Transfer {
+    match &format.color {
+        ColorSpace::Rgb { transfer, .. } | ColorSpace::Gray { transfer, .. } => *transfer,
+        _ => Transfer::Unknown,
+    }
+}
+
+fn filter_convert_policy() -> ConvertPolicy {
+    ConvertPolicy::working_linear().with_range(RangePolicy::Forbid)
+}
+
+/// Apply a filter pipeline to a `PixelBuf`, returning a new `PixelBuf`.
 ///
-/// The input buffer's `PixelDescriptor` provides all the metadata needed:
-/// transfer function, primaries, alpha mode, and channel type. The pipeline
+/// The input buffer's `PixelFormat` provides all the metadata needed:
+/// transfer function, primaries, alpha mode, and sample layout. The pipeline
 /// automatically handles:
-/// - Linearization (sRGB/PQ/HLG/BT.709 → linear)
-/// - HDR normalization (÷ reference_white)
+/// - Linearization (sRGB/PQ/HLG/BT.709 → linear, normalized to diffuse white)
 /// - Scatter to planar Oklab
 /// - Filter application
 /// - Gather back to linear RGB
-/// - × reference_white
 /// - Convert back to original format (if `convert_back` is true)
 ///
 /// When `convert_back` is false, the output is linear f32 RGB(A) in the
@@ -124,31 +143,32 @@ fn linear_f32_descriptor(has_alpha: bool, primaries: ColorPrimaries) -> PixelDes
 #[track_caller]
 pub fn apply_to_buffer(
     pipeline: &Pipeline,
-    input: &PixelBuffer,
+    input: &PixelBuf,
     convert_back: bool,
     ctx: &mut FilterContext,
-) -> Result<PixelBuffer, At<ConvenienceError>> {
-    let desc = input.descriptor();
+) -> Result<PixelBuf, At<ConvenienceError>> {
+    let desc = input.format().clone();
     let width = input.width();
     let height = input.height();
-    let primaries = working_primaries(desc).at()?;
 
     // Validate layout is RGB-based
-    match desc.layout() {
-        ChannelLayout::Rgb | ChannelLayout::Rgba | ChannelLayout::Bgra => {}
+    match desc.layout.order {
+        ChannelOrder::Rgb | ChannelOrder::Rgba | ChannelOrder::Bgra => {}
         other => return Err(at!(ConvenienceError::UnsupportedLayout(other))),
     }
 
-    let has_alpha = desc.has_alpha();
+    let primaries = working_primaries(&desc).at()?;
+    let has_alpha = desc.layout.order.has_alpha_slot();
     let channels = if has_alpha { 4u32 } else { 3u32 };
 
-    // Step 1-3: Convert to linear f32, then scatter to planar Oklab
-    let linear_desc = linear_f32_descriptor(has_alpha, primaries);
-    let reference_white = desc.transfer().reference_white_nits();
-    let m1 = zenpixels_convert::oklab::rgb_to_lms_matrix(primaries)
+    // Step 1-3: Convert to linear f32 (normalized to diffuse white = 1.0),
+    // then scatter to planar Oklab.
+    let linear_desc = linear_f32_format(has_alpha, primaries, desc.color.white());
+    let reference_white = 1.0f32;
+    let space = OklabSpace::for_primaries(primaries)
         .ok_or_else(|| at!(ConvenienceError::UnsupportedPrimaries(primaries)))?;
-    let m1_inv = zenpixels_convert::oklab::lms_to_rgb_matrix(primaries)
-        .ok_or_else(|| at!(ConvenienceError::UnsupportedPrimaries(primaries)))?;
+    let m1 = *space.rgb_to_lms();
+    let m1_inv = *space.lms_to_rgb();
 
     // sRGB passthrough: skip linearization, normalize u8→f32 directly.
     // Only for WorkingSpace::Srgb. LinearRgb uses the standard linearization
@@ -162,26 +182,20 @@ pub fn apply_to_buffer(
     // Detect if we can use the fused sRGB u8 path (eliminates intermediate
     // linear f32 buffer — ~48MB savings at 2048² RGB).
     let use_fused = !is_srgb_passthrough
-        && desc.channel_type() == ChannelType::U8
-        && desc.transfer() == TransferFunction::Srgb
-        && matches!(desc.layout(), ChannelLayout::Rgb | ChannelLayout::Rgba);
+        && desc.layout.sample == SampleType::U8
+        && format_transfer(&desc) == Transfer::Srgb
+        && desc.color.range() == Some(SignalRange::Full)
+        && matches!(desc.layout.order, ChannelOrder::Rgb | ChannelOrder::Rgba);
 
-    let color_ctx = input.color_context().cloned();
+    let origin = input.origin().clone();
+    let hdr = input.hdr();
 
     // sRGB passthrough: normalize u8→f32, filter in sRGB, denormalize back.
     // No linearization, no Oklab conversion — matches ImageMagick's behavior.
     #[cfg(feature = "srgb-compat")]
     if is_srgb_passthrough && convert_back {
         return apply_srgb_passthrough(
-            pipeline,
-            input,
-            ctx,
-            desc,
-            width,
-            height,
-            channels,
-            has_alpha,
-            color_ctx.as_ref(),
+            pipeline, input, ctx, &desc, width, height, channels, has_alpha, &origin, hdr,
         )
         .map_err(|e| at!(e));
     }
@@ -191,17 +205,8 @@ pub fn apply_to_buffer(
     // Neighborhood filters are handled via overlapping halo rows per strip.
     if use_fused && convert_back {
         return apply_fused_stripped(
-            pipeline,
-            input,
-            ctx,
-            desc,
-            width,
-            height,
-            channels,
-            has_alpha,
-            &m1,
-            &m1_inv,
-            color_ctx.as_ref(),
+            pipeline, input, ctx, &desc, width, height, channels, has_alpha, &m1, &m1_inv, &origin,
+            hdr,
         )
         .at();
     }
@@ -218,7 +223,7 @@ pub fn apply_to_buffer(
         scatter_srgb_u8_to_oklab(&input_bytes, &mut planes, channels, &m1);
         ctx.return_u8(input_bytes);
     } else {
-        let linear_bytes = convert_buffer_bytes_pooled(input, linear_desc, ctx)
+        let linear_bytes = convert_buffer_bytes_pooled(input, &linear_desc, ctx)
             .map_err_at(ConvenienceError::Convert)
             .at_crate(crate::at_crate_info())?;
         let linear_f32 = as_f32_slice(&linear_bytes);
@@ -234,15 +239,14 @@ pub fn apply_to_buffer(
         gather_oklab_to_srgb_u8(&planes, &mut output_bytes, channels, &m1_inv);
         planes.return_to_ctx(ctx);
 
-        let mut output_buf =
-            PixelBuffer::from_vec(output_bytes, width, height, desc).map_err(|_| {
+        let output_buf = PixelBuf::from_bytes(output_bytes, width, height, desc)
+            .map_err(|_| {
                 at!(ConvenienceError::Convert(
                     zenpixels_convert::ConvertError::AllocationFailed
                 ))
-            })?;
-        if let Some(cc) = &color_ctx {
-            output_buf = output_buf.with_color_context(alloc::sync::Arc::clone(cc));
-        }
+            })?
+            .with_origin(origin)
+            .with_hdr(hdr);
         Ok(output_buf)
     } else {
         let n = (width as usize) * (height as usize) * (channels as usize);
@@ -251,14 +255,15 @@ pub fn apply_to_buffer(
         planes.return_to_ctx(ctx);
 
         if convert_back && desc != linear_desc {
-            let mut converter = RowConverter::new(linear_desc, desc)
+            let policy = filter_convert_policy();
+            let converter = RowPlan::build(&linear_desc, &desc, &policy, None)
                 .map_err_at(ConvenienceError::Convert)
                 .at_crate(crate::at_crate_info())?;
-            let dst_bpp = desc.bytes_per_pixel();
+            let dst_bpp = desc.layout.bytes_per_pixel();
             let dst_stride = (width as usize) * dst_bpp;
             let total = dst_stride * height as usize;
             let mut final_bytes = ctx.take_u8(total);
-            let src_bpp = linear_desc.bytes_per_pixel();
+            let src_bpp = linear_desc.layout.bytes_per_pixel();
             let src_stride = (width as usize) * src_bpp;
 
             {
@@ -268,39 +273,39 @@ pub fn apply_to_buffer(
                     let src_end = src_start + src_stride;
                     let dst_start = y as usize * dst_stride;
                     let dst_end = dst_start + dst_stride;
-                    converter.convert_row(
-                        &output_bytes[src_start..src_end],
-                        &mut final_bytes[dst_start..dst_end],
-                        width,
-                    );
+                    converter
+                        .convert_row(
+                            &output_bytes[src_start..src_end],
+                            &mut final_bytes[dst_start..dst_end],
+                            width,
+                        )
+                        .map_err_at(ConvenienceError::Convert)
+                        .at_crate(crate::at_crate_info())?;
                 }
             }
 
             ctx.return_f32(output_f32);
-            let mut final_buf =
-                PixelBuffer::from_vec(final_bytes, width, height, desc).map_err(|_| {
+            let final_buf = PixelBuf::from_bytes(final_bytes, width, height, desc)
+                .map_err(|_| {
                     at!(ConvenienceError::Convert(
                         zenpixels_convert::ConvertError::AllocationFailed
                     ))
-                })?;
-            if let Some(cc) = &color_ctx {
-                final_buf = final_buf.with_color_context(alloc::sync::Arc::clone(cc));
-            }
+                })?
+                .with_origin(origin)
+                .with_hdr(hdr);
             Ok(final_buf)
         } else {
             let output_bytes: &[u8] = bytemuck::cast_slice(&output_f32);
-            let mut output_buf =
-                PixelBuffer::from_vec(output_bytes.to_vec(), width, height, linear_desc).map_err(
-                    |_| {
+            let output_buf =
+                PixelBuf::from_bytes(output_bytes.to_vec(), width, height, linear_desc)
+                    .map_err(|_| {
                         at!(ConvenienceError::Convert(
                             zenpixels_convert::ConvertError::AllocationFailed
                         ))
-                    },
-                )?;
+                    })?
+                    .with_origin(origin)
+                    .with_hdr(hdr);
             ctx.return_f32(output_f32);
-            if let Some(cc) = &color_ctx {
-                output_buf = output_buf.with_color_context(alloc::sync::Arc::clone(cc));
-            }
             Ok(output_buf)
         }
     }
@@ -316,15 +321,16 @@ pub fn apply_to_buffer(
 #[track_caller]
 fn apply_srgb_passthrough(
     pipeline: &Pipeline,
-    input: &PixelBuffer,
+    input: &PixelBuf,
     ctx: &mut FilterContext,
-    desc: PixelDescriptor,
+    desc: &PixelFormat,
     width: u32,
     height: u32,
     channels: u32,
     has_alpha: bool,
-    color_ctx: Option<&alloc::sync::Arc<zenpixels::ColorContext>>,
-) -> Result<PixelBuffer, ConvenienceError> {
+    origin: &ColorOrigin,
+    hdr: zenpixels::HdrMetadata,
+) -> Result<PixelBuf, ConvenienceError> {
     use crate::scatter_gather::{gather_srgb_u8_passthrough, scatter_srgb_u8_passthrough};
 
     let input_bytes = copy_input_bytes_pooled(input, ctx);
@@ -345,13 +351,10 @@ fn apply_srgb_passthrough(
     gather_srgb_u8_passthrough(&planes, &mut output_bytes, channels);
     planes.return_to_ctx(ctx);
 
-    let mut output_buf =
-        PixelBuffer::from_vec(output_bytes, width, height, desc).map_err(|_| {
-            ConvenienceError::Convert(zenpixels_convert::ConvertError::AllocationFailed)
-        })?;
-    if let Some(cc) = color_ctx {
-        output_buf = output_buf.with_color_context(alloc::sync::Arc::clone(cc));
-    }
+    let output_buf = PixelBuf::from_bytes(output_bytes, width, height, desc.clone())
+        .map_err(|_| ConvenienceError::Convert(zenpixels_convert::ConvertError::AllocationFailed))?
+        .with_origin(origin.clone())
+        .with_hdr(hdr);
     Ok(output_buf)
 }
 
@@ -363,17 +366,18 @@ fn apply_srgb_passthrough(
 #[track_caller]
 fn apply_fused_stripped(
     pipeline: &Pipeline,
-    input: &PixelBuffer,
+    input: &PixelBuf,
     ctx: &mut FilterContext,
-    desc: PixelDescriptor,
+    desc: &PixelFormat,
     width: u32,
     height: u32,
     channels: u32,
     has_alpha: bool,
     m1: &zenpixels_convert::gamut::GamutMatrix,
     m1_inv: &zenpixels_convert::gamut::GamutMatrix,
-    color_ctx: Option<&alloc::sync::Arc<zenpixels::ColorContext>>,
-) -> Result<PixelBuffer, At<ConvenienceError>> {
+    origin: &ColorOrigin,
+    hdr: zenpixels::HdrMetadata,
+) -> Result<PixelBuf, At<ConvenienceError>> {
     let w = width as usize;
     let ch = channels as usize;
     let halo = pipeline.total_halo(width, height) as usize;
@@ -385,7 +389,7 @@ fn apply_fused_stripped(
     let total_out = w * (height as usize) * ch;
     let mut output_bytes = ctx.take_u8(total_out);
 
-    let src_slice = input.as_slice();
+    let src_slice = input.as_view();
 
     for y_start in (0..height as usize).step_by(strip_h) {
         let y_end = (y_start + strip_h).min(height as usize);
@@ -447,63 +451,66 @@ fn apply_fused_stripped(
 
     ctx.return_u8(strip_input);
 
-    let mut buf = PixelBuffer::from_vec(output_bytes, width, height, desc).map_err(|_| {
-        at!(ConvenienceError::Convert(
-            zenpixels_convert::ConvertError::AllocationFailed
-        ))
-    })?;
-    if let Some(cc) = color_ctx {
-        buf = buf.with_color_context(alloc::sync::Arc::clone(cc));
-    }
+    let buf = PixelBuf::from_bytes(output_bytes, width, height, desc.clone())
+        .map_err(|_| {
+            at!(ConvenienceError::Convert(
+                zenpixels_convert::ConvertError::AllocationFailed
+            ))
+        })?
+        .with_origin(origin.clone())
+        .with_hdr(hdr);
     Ok(buf)
 }
 
-/// Convert a PixelBuffer to the target descriptor using a pooled output buffer.
+/// Convert a PixelBuf to the target format using a pooled output buffer.
 fn convert_buffer_bytes_pooled(
-    input: &PixelBuffer,
-    target: PixelDescriptor,
+    input: &PixelBuf,
+    target: &PixelFormat,
     ctx: &mut FilterContext,
 ) -> Result<alloc::vec::Vec<u8>, At<zenpixels_convert::ConvertError>> {
-    let desc = input.descriptor();
+    let desc = input.format();
     let width = input.width();
     let height = input.height();
-    let dst_bpp = target.bytes_per_pixel();
+    let dst_bpp = target.layout.bytes_per_pixel();
     let dst_stride = (width as usize) * dst_bpp;
     let total = dst_stride * height as usize;
     let mut output = ctx.take_u8(total);
 
     if desc == target {
         // Direct copy from input into pooled buffer
-        let src_slice = input.as_slice();
+        let src_slice = input.as_view();
         for y in 0..height {
             let src_row = src_slice.row(y);
             let dst_start = y as usize * dst_stride;
             output[dst_start..dst_start + src_row.len()].copy_from_slice(src_row);
         }
     } else {
-        let mut converter = RowConverter::new(desc, target).at()?;
-        let src_slice = input.as_slice();
+        let policy = filter_convert_policy();
+        let converter = RowPlan::build(desc, target, &policy, None).at()?;
+        let src_slice = input.as_view();
         for y in 0..height {
             let src_row = src_slice.row(y);
             let dst_start = y as usize * dst_stride;
             let dst_end = dst_start + dst_stride;
-            converter.convert_row(src_row, &mut output[dst_start..dst_end], width);
+            converter
+                .convert_row(src_row, &mut output[dst_start..dst_end], width)
+                .at()?;
         }
     }
     Ok(output)
 }
 
-/// Copy raw bytes from a PixelBuffer into a pooled contiguous buffer.
+/// Copy raw bytes from a PixelBuf into a pooled contiguous buffer.
 ///
-/// Used by the fused sRGB u8 path to avoid the RowConverter entirely.
-fn copy_input_bytes_pooled(input: &PixelBuffer, ctx: &mut FilterContext) -> alloc::vec::Vec<u8> {
+/// Used by the fused sRGB u8 path to avoid the RowPlan entirely.
+fn copy_input_bytes_pooled(input: &PixelBuf, ctx: &mut FilterContext) -> alloc::vec::Vec<u8> {
     let width = input.width();
     let height = input.height();
-    let bpp = input.descriptor().bytes_per_pixel();
+    let bpp = input.format().layout.bytes_per_pixel();
     let stride = (width as usize) * bpp;
     let total = stride * height as usize;
     let mut buf = ctx.take_u8(total);
-    let src_slice = input.as_slice();
+    let src_slice = input.as_view();
     for y in 0..height {
         let src_row = src_slice.row(y);
         let dst_start = y as usize * stride;
@@ -514,37 +521,37 @@ fn copy_input_bytes_pooled(input: &PixelBuffer, ctx: &mut FilterContext) -> allo
 
 /// Extension trait for [`Pipeline`] that adds buffer convenience methods.
 pub trait PipelineBufferExt {
-    /// Apply this pipeline to a `PixelBuffer`, converting back to original format.
+    /// Apply this pipeline to a `PixelBuf`, converting back to original format.
     fn apply_buffer(
         &self,
-        input: &PixelBuffer,
+        input: &PixelBuf,
         ctx: &mut FilterContext,
-    ) -> Result<PixelBuffer, At<ConvenienceError>>;
+    ) -> Result<PixelBuf, At<ConvenienceError>>;
 
-    /// Apply this pipeline to a `PixelBuffer`, returning linear f32 RGB(A).
+    /// Apply this pipeline to a `PixelBuf`, returning linear f32 RGB(A).
     fn apply_buffer_linear(
         &self,
-        input: &PixelBuffer,
+        input: &PixelBuf,
         ctx: &mut FilterContext,
-    ) -> Result<PixelBuffer, At<ConvenienceError>>;
+    ) -> Result<PixelBuf, At<ConvenienceError>>;
 }
 
 impl PipelineBufferExt for Pipeline {
     #[track_caller]
     fn apply_buffer(
         &self,
-        input: &PixelBuffer,
+        input: &PixelBuf,
         ctx: &mut FilterContext,
-    ) -> Result<PixelBuffer, At<ConvenienceError>> {
+    ) -> Result<PixelBuf, At<ConvenienceError>> {
         apply_to_buffer(self, input, true, ctx).at()
     }
 
     #[track_caller]
     fn apply_buffer_linear(
         &self,
-        input: &PixelBuffer,
+        input: &PixelBuf,
         ctx: &mut FilterContext,
-    ) -> Result<PixelBuffer, At<ConvenienceError>> {
+    ) -> Result<PixelBuf, At<ConvenienceError>> {
         apply_to_buffer(self, input, false, ctx).at()
     }
 }
@@ -554,10 +561,9 @@ mod tests {
     use super::*;
     use crate::PipelineConfig;
     use crate::filters;
-    use crate::gamut_map::GamutMapping;
     use crate::prelude::*;
 
-    fn make_srgb_u8_buffer(width: u32, height: u32) -> PixelBuffer {
+    fn make_srgb_u8_buffer(width: u32, height: u32) -> PixelBuf {
         let n = (width as usize) * (height as usize);
         let mut data = alloc::vec::Vec::with_capacity(n * 3);
         for i in 0..n {
@@ -566,10 +572,10 @@ mod tests {
             data.push(((1.0 - t) * 180.0 + 40.0) as u8);
             data.push((t * 100.0 + 80.0) as u8);
         }
-        PixelBuffer::from_vec(data, width, height, PixelDescriptor::RGB8_SRGB).unwrap()
+        PixelBuf::from_bytes(data, width, height, PixelFormat::RGB8_SRGB).unwrap()
     }
 
-    fn make_srgba_u8_buffer(width: u32, height: u32) -> PixelBuffer {
+    fn make_srgba_u8_buffer(width: u32, height: u32) -> PixelBuf {
         let n = (width as usize) * (height as usize);
         let mut data = alloc::vec::Vec::with_capacity(n * 4);
         for i in 0..n {
@@ -579,10 +585,10 @@ mod tests {
             data.push((t * 100.0 + 80.0) as u8);
             data.push(200u8); // alpha
         }
-        PixelBuffer::from_vec(data, width, height, PixelDescriptor::RGBA8_SRGB).unwrap()
+        PixelBuf::from_bytes(data, width, height, PixelFormat::RGBA8_SRGB).unwrap()
     }
 
-    fn make_p3_f32_buffer(width: u32, height: u32) -> PixelBuffer {
+    fn make_p3_f32_buffer(width: u32, height: u32) -> PixelBuf {
         let n = (width as usize) * (height as usize);
         let mut data = alloc::vec::Vec::with_capacity(n * 3 * 4);
         for i in 0..n {
@@ -594,8 +600,8 @@ mod tests {
             data.extend_from_slice(&g);
             data.extend_from_slice(&b);
         }
-        let desc = PixelDescriptor::RGBF32_LINEAR.with_primaries(ColorPrimaries::DisplayP3);
-        PixelBuffer::from_vec(data, width, height, desc).unwrap()
+        let desc = PixelFormat::RGBF32_LINEAR.with_primaries(Primaries::DisplayP3);
+        PixelBuf::from_bytes(data, width, height, desc).unwrap()
     }
 
     #[test]
@@ -604,13 +610,13 @@ mod tests {
         let pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
 
         let output = apply_to_buffer(&pipeline, &input, true, &mut FilterContext::new()).unwrap();
-        assert_eq!(output.descriptor(), input.descriptor());
+        assert_eq!(output.format(), input.format());
         assert_eq!(output.width(), input.width());
         assert_eq!(output.height(), input.height());
 
         // Check roundtrip accuracy
-        let src = input.copy_to_contiguous_bytes();
-        let dst = output.copy_to_contiguous_bytes();
+        let src = input.as_view().to_contiguous_bytes().unwrap();
+        let dst = output.as_view().to_contiguous_bytes().unwrap();
         let mut max_err = 0u8;
         for (a, b) in src.iter().zip(dst.iter()) {
             let err = (*a as i16 - *b as i16).unsigned_abs() as u8;
@@ -628,10 +634,10 @@ mod tests {
         let pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
 
         let output = apply_to_buffer(&pipeline, &input, true, &mut FilterContext::new()).unwrap();
-        assert_eq!(output.descriptor(), input.descriptor());
+        assert_eq!(output.format(), input.format());
 
-        let src = input.copy_to_contiguous_bytes();
-        let dst = output.copy_to_contiguous_bytes();
+        let src = input.as_view().to_contiguous_bytes().unwrap();
+        let dst = output.as_view().to_contiguous_bytes().unwrap();
         let mut max_err = 0u8;
         for (a, b) in src.iter().zip(dst.iter()) {
             let err = (*a as i16 - *b as i16).unsigned_abs() as u8;
@@ -644,16 +650,16 @@ mod tests {
     fn p3_linear_f32_roundtrip() {
         let input = make_p3_f32_buffer(16, 16);
         let pipeline = Pipeline::new(PipelineConfig {
-            primaries: ColorPrimaries::DisplayP3,
+            primaries: Primaries::DisplayP3,
             ..PipelineConfig::default()
         })
         .unwrap();
 
         let output = apply_to_buffer(&pipeline, &input, true, &mut FilterContext::new()).unwrap();
-        assert_eq!(output.descriptor(), input.descriptor());
+        assert_eq!(output.format(), input.format());
 
-        let src_bytes = input.copy_to_contiguous_bytes();
-        let dst_bytes = output.copy_to_contiguous_bytes();
+        let src_bytes = input.as_view().to_contiguous_bytes().unwrap();
+        let dst_bytes = output.as_view().to_contiguous_bytes().unwrap();
         let src: &[f32] = bytemuck::cast_slice(&src_bytes);
         let dst: &[f32] = bytemuck::cast_slice(&dst_bytes);
         let mut max_err = 0.0f32;
@@ -670,11 +676,11 @@ mod tests {
         pipeline.push(Box::new(filters::Exposure { stops: 0.5 }));
 
         let output = apply_to_buffer(&pipeline, &input, true, &mut FilterContext::new()).unwrap();
-        assert_eq!(output.descriptor(), PixelDescriptor::RGB8_SRGB);
+        assert_eq!(output.format(), &PixelFormat::RGB8_SRGB);
 
         // Output should be brighter on average
-        let src = input.copy_to_contiguous_bytes();
-        let dst = output.copy_to_contiguous_bytes();
+        let src = input.as_view().to_contiguous_bytes().unwrap();
+        let dst = output.as_view().to_contiguous_bytes().unwrap();
         let src_avg: f32 = src.iter().map(|&v| v as f32).sum::<f32>() / src.len() as f32;
         let dst_avg: f32 = dst.iter().map(|&v| v as f32).sum::<f32>() / dst.len() as f32;
         assert!(
@@ -689,8 +695,8 @@ mod tests {
         let pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
 
         let output = apply_to_buffer(&pipeline, &input, false, &mut FilterContext::new()).unwrap();
-        assert_eq!(output.descriptor().channel_type(), ChannelType::F32);
-        assert_eq!(output.descriptor().transfer(), TransferFunction::Linear);
+        assert_eq!(output.format().layout.sample, SampleType::F32);
+        assert_eq!(format_transfer(output.format()), Transfer::Linear);
     }
 
     #[test]
@@ -701,19 +707,19 @@ mod tests {
         let output = pipeline
             .apply_buffer(&input, &mut FilterContext::new())
             .unwrap();
-        assert_eq!(output.descriptor(), PixelDescriptor::RGB8_SRGB);
+        assert_eq!(output.format(), &PixelFormat::RGB8_SRGB);
 
         let linear = pipeline
             .apply_buffer_linear(&input, &mut FilterContext::new())
             .unwrap();
-        assert_eq!(linear.descriptor().channel_type(), ChannelType::F32);
+        assert_eq!(linear.format().layout.sample, SampleType::F32);
     }
 
     #[test]
     fn unknown_primaries_rejected() {
         let data = vec![128u8; 8 * 8 * 3];
-        let desc = PixelDescriptor::RGB8_SRGB.with_primaries(ColorPrimaries::Unknown);
-        let input = PixelBuffer::from_vec(data, 8, 8, desc).unwrap();
+        let desc = PixelFormat::RGB8_SRGB.with_primaries(Primaries::Unknown);
+        let input = PixelBuf::from_bytes(data, 8, 8, desc).unwrap();
         let pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
 
         let result = apply_to_buffer(&pipeline, &input, true, &mut FilterContext::new());
@@ -723,7 +729,7 @@ mod tests {
     #[test]
     fn grayscale_layout_rejected() {
         let data = vec![128u8; 8 * 8];
-        let input = PixelBuffer::from_vec(data, 8, 8, PixelDescriptor::GRAY8_SRGB).unwrap();
+        let input = PixelBuf::from_bytes(data, 8, 8, PixelFormat::GRAY8_SRGB).unwrap();
         let pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
 
         let result = apply_to_buffer(&pipeline, &input, true, &mut FilterContext::new());
@@ -745,27 +751,30 @@ mod tests {
             data.extend_from_slice(&g);
             data.extend_from_slice(&b);
         }
-        let desc = PixelDescriptor::new_full(
-            ChannelType::F32,
-            ChannelLayout::Rgb,
-            None,
-            TransferFunction::Pq,
-            ColorPrimaries::Bt2020,
+        let desc = PixelFormat::new(
+            SampleLayout::new(SampleType::F32, ChannelOrder::Rgb),
+            ColorSpace::Rgb {
+                primaries: Primaries::Bt2020,
+                transfer: Transfer::Pq,
+                alpha: AlphaMode::None,
+                range: SignalRange::Full,
+                white: None,
+            },
         );
-        let input = PixelBuffer::from_vec(data, 16, 16, desc).unwrap();
+        let input = PixelBuf::from_bytes(data, 16, 16, desc.clone()).unwrap();
 
         let pipeline = Pipeline::new(PipelineConfig {
-            primaries: ColorPrimaries::Bt2020,
+            primaries: Primaries::Bt2020,
             reference_white: 203.0,
             ..PipelineConfig::default()
         })
         .unwrap();
 
         let output = apply_to_buffer(&pipeline, &input, true, &mut FilterContext::new()).unwrap();
-        assert_eq!(output.descriptor(), desc);
+        assert_eq!(output.format(), &desc);
 
-        let src_bytes = input.copy_to_contiguous_bytes();
-        let dst_bytes = output.copy_to_contiguous_bytes();
+        let src_bytes = input.as_view().to_contiguous_bytes().unwrap();
+        let dst_bytes = output.as_view().to_contiguous_bytes().unwrap();
         let src: &[f32] = bytemuck::cast_slice(&src_bytes);
         let dst: &[f32] = bytemuck::cast_slice(&dst_bytes);
         let mut max_err = 0.0f32;
@@ -786,7 +795,7 @@ mod tests {
         let output = pipeline
             .apply_buffer(&input, &mut FilterContext::new())
             .unwrap();
-        assert_eq!(output.descriptor(), PixelDescriptor::RGB8_SRGB);
+        assert_eq!(output.format(), &PixelFormat::RGB8_SRGB);
         assert_eq!(output.width(), 32);
         assert_eq!(output.height(), 32);
     }
@@ -797,16 +806,14 @@ mod tests {
     /// ...decompose().0)` pattern that discarded the inner trace).
     #[test]
     fn convert_error_preserves_whereat_trace() {
-        use zenpixels::SignalRange;
-
-        // f32 linear input forces the non-fused convert path. Marking it
-        // `Narrow` while the working space is `Full` makes the RowConverter
-        // refuse the signal-range crossing (`ConvertError::NoPath`), so the
-        // error originates in `zenpixels_convert` and propagates through the
-        // convenience layer's conversion call.
-        let data = vec![0u8; 4 * 4 * 3 * 4]; // 4x4 RGB f32
-        let desc = PixelDescriptor::RGBF32_LINEAR.with_signal_range(SignalRange::Narrow);
-        let input = PixelBuffer::from_vec(data, 4, 4, desc).unwrap();
+        // u16 narrow-range input forces the non-fused convert path. Marking it
+        // `Narrow` while the working space is `Full` with `RangePolicy::Forbid`
+        // makes RowPlan refuse the signal-range crossing, so the error originates
+        // in `zenpixels_convert` and propagates through the convenience layer's
+        // conversion call.
+        let data = vec![0u8; 4 * 4 * 3 * 2]; // 4x4 RGB u16
+        let desc = PixelFormat::RGB16_SRGB.with_range(SignalRange::Narrow);
+        let input = PixelBuf::from_bytes(data, 4, 4, desc).unwrap();
         let pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
 
         let err = apply_to_buffer(&pipeline, &input, true, &mut FilterContext::new())

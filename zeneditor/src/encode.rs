@@ -35,14 +35,14 @@ pub(crate) fn encode_pixels(
     let image_format = parse_image_format(format)?;
 
     let stride = width as usize * 4;
-    let pixels = zenpixels::PixelSlice::new(
+    let pixels = zenpixels::PixelView::new(
         rgba_data,
         width,
         height,
         stride,
-        zenpixels::PixelDescriptor::RGBA8_SRGB,
+        &zenpixels::formats::RGBA8_SRGB,
     )
-    .map_err(|e| format!("PixelSlice: {e}"))?;
+    .map_err(|e| format!("PixelView: {e}"))?;
 
     let quality = options
         .get("quality")

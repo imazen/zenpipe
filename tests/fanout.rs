@@ -128,7 +128,7 @@ fn tee_cursor_strip_height() {
     let mut cursor = tee.cursor_with_strip_height(3);
     let mut strip_heights = Vec::new();
     while let Ok(Some(strip)) = cursor.next() {
-        strip_heights.push(strip.rows());
+        strip_heights.push(strip.height());
     }
     assert_eq!(strip_heights, vec![3, 3, 3, 1]);
 }
@@ -140,7 +140,7 @@ fn tee_cursor_y_offsets() {
 
     let mut cursor = tee.cursor(); // strip_height = 16, but image is 8 rows
     let strip = cursor.next().unwrap().unwrap();
-    assert_eq!(strip.rows(), 8); // single strip covers the whole image
+    assert_eq!(strip.height(), 8); // single strip covers the whole image
 
     let next = cursor.next().unwrap();
     assert!(next.is_none());
@@ -276,26 +276,31 @@ fn tee_cursor_exhausted_returns_none() {
 fn tee_preserves_format() {
     // Wide-gamut format should be preserved through tee.
     let p3_linear = zenpipe::PixelFormat::new(
-        zenpipe::ChannelType::F32,
-        zenpipe::ChannelLayout::Rgba,
-        Some(zenpipe::AlphaMode::Straight),
-        zenpipe::TransferFunction::Linear,
-    )
-    .with_primaries(zenpipe::ColorPrimaries::DisplayP3);
+        zenpipe::SampleLayout::new(zenpipe::SampleType::F32, zenpipe::ChannelOrder::Rgba),
+        zenpipe::ColorSpace::LINEAR_SRGB
+            .with_alpha(zenpipe::AlphaMode::Straight)
+            .with_primaries(zenpipe::Primaries::DisplayP3),
+    );
 
     let row_bytes = 4 * 16; // 4 pixels × 16 bytes (RGBA f32)
     let mut rows_produced = 0u32;
-    let src: Box<dyn Source> = Box::new(CallbackSource::new(4, 4, p3_linear, 16, move |buf| {
-        if rows_produced >= 4 {
-            return Ok(false);
-        }
-        let f32_row: &mut [f32] = bytemuck::cast_slice_mut(&mut buf[..row_bytes]);
-        for px in f32_row.as_chunks_mut::<4>().0.iter_mut() {
-            px.copy_from_slice(&[0.5f32, 0.3, 0.1, 1.0]);
-        }
-        rows_produced += 1;
-        Ok(true)
-    }));
+    let src: Box<dyn Source> = Box::new(CallbackSource::new(
+        4,
+        4,
+        p3_linear.clone(),
+        16,
+        move |buf| {
+            if rows_produced >= 4 {
+                return Ok(false);
+            }
+            let f32_row: &mut [f32] = bytemuck::cast_slice_mut(&mut buf[..row_bytes]);
+            for px in f32_row.as_chunks_mut::<4>().0.iter_mut() {
+                px.copy_from_slice(&[0.5f32, 0.3, 0.1, 1.0]);
+            }
+            rows_produced += 1;
+            Ok(true)
+        },
+    ));
 
     let tee = TeeSource::new(src).unwrap();
     assert_eq!(tee.format(), p3_linear);

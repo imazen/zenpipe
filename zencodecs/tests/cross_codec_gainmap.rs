@@ -120,7 +120,8 @@ fn jpeg_ultrahdr_gainmap_re_embeds_into_avif_tmap() {
     // accepts whatever format its EncodeRequest takes; the gain map
     // attaches via with_gain_map).
     let img = make_hdr_gradient(64, 64, 1.0); // peak=1.0 → SDR-only base
-    let typed: zenpixels::PixelSlice<'_, Rgb<f32>> = zenpixels::PixelSlice::from(img.as_ref());
+    let view = zenpixels::PixelView::from_imgref(img.as_ref(), zenpixels::ColorSpace::LINEAR_SRGB)
+        .expect("from_imgref");
 
     let avif_bytes = EncodeRequest::new(ImageFormat::Avif)
         .with_quality(85.0)
@@ -128,7 +129,7 @@ fn jpeg_ultrahdr_gainmap_re_embeds_into_avif_tmap() {
             gain_map: &donor.gain_map,
             metadata: &donor.metadata,
         })
-        .encode(typed.erase(), false)
+        .encode(view, false)
         .expect("AVIF encode with precomputed gain map");
 
     // Decode back and verify a gain map appears.
@@ -159,14 +160,15 @@ fn avif_tmap_gainmap_re_embeds_into_jpeg_ultrahdr() {
     // Build an AVIF donor by going JPEG → AVIF first, then re-extract.
     let jpeg_donor = build_jpeg_donor(48, 48, 3.5);
     let img = make_hdr_gradient(48, 48, 1.0);
-    let typed: zenpixels::PixelSlice<'_, Rgb<f32>> = zenpixels::PixelSlice::from(img.as_ref());
+    let view = zenpixels::PixelView::from_imgref(img.as_ref(), zenpixels::ColorSpace::LINEAR_SRGB)
+        .expect("from_imgref");
     let avif_bytes = EncodeRequest::new(ImageFormat::Avif)
         .with_quality(85.0)
         .with_gain_map(GainMapSource::Precomputed {
             gain_map: &jpeg_donor.gain_map,
             metadata: &jpeg_donor.metadata,
         })
-        .encode(typed.erase(), false)
+        .encode(view, false)
         .expect("AVIF re-encode")
         .into_vec();
 
@@ -189,8 +191,8 @@ fn avif_tmap_gainmap_re_embeds_into_jpeg_ultrahdr() {
         })
         .collect();
     let sdr_img = imgref::ImgVec::new(sdr_u8, 48, 48);
-    let typed_sdr: zenpixels::PixelSlice<'_, rgb::Rgb<u8>> =
-        zenpixels::PixelSlice::from(sdr_img.as_ref());
+    let view_sdr = zenpixels::PixelView::from_imgref(sdr_img.as_ref(), zenpixels::ColorSpace::SRGB)
+        .expect("from_imgref");
 
     let jpeg_bytes = EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(90.0)
@@ -198,7 +200,7 @@ fn avif_tmap_gainmap_re_embeds_into_jpeg_ultrahdr() {
             gain_map: &avif_donor.gain_map,
             metadata: &avif_donor.metadata,
         })
-        .encode(typed_sdr.erase(), false)
+        .encode(view_sdr, false)
         .expect("JPEG re-encode with AVIF-derived gain map")
         .into_vec();
 
@@ -231,7 +233,8 @@ fn jpeg_ultrahdr_gainmap_re_embeds_into_jxl_jhgm() {
     // For a JXL encode with the JXL convention, the base image should
     // be HDR. We provide HDR pixels here.
     let hdr = make_hdr_gradient(32, 32, 4.0);
-    let typed: zenpixels::PixelSlice<'_, Rgb<f32>> = zenpixels::PixelSlice::from(hdr.as_ref());
+    let view = zenpixels::PixelView::from_imgref(hdr.as_ref(), zenpixels::ColorSpace::LINEAR_SRGB)
+        .expect("from_imgref");
 
     let jxl_bytes = EncodeRequest::new(ImageFormat::Jxl)
         .with_quality(95.0)
@@ -239,7 +242,7 @@ fn jpeg_ultrahdr_gainmap_re_embeds_into_jxl_jhgm() {
             gain_map: &donor.gain_map,
             metadata: &donor.metadata,
         })
-        .encode(typed.erase(), false)
+        .encode(view, false)
         .expect("JXL encode with precomputed gain map")
         .into_vec();
 
@@ -265,10 +268,11 @@ fn avif_encode_without_with_gain_map_produces_plain_avif() {
     // Sanity: omitting `with_gain_map` must not somehow magic a gain map
     // into the output. This pins the negative case for the resplit path.
     let img = make_hdr_gradient(32, 32, 4.0);
-    let typed: zenpixels::PixelSlice<'_, Rgb<f32>> = zenpixels::PixelSlice::from(img.as_ref());
+    let view = zenpixels::PixelView::from_imgref(img.as_ref(), zenpixels::ColorSpace::LINEAR_SRGB)
+        .expect("from_imgref");
     let bytes = EncodeRequest::new(ImageFormat::Avif)
         .with_quality(85.0)
-        .encode(typed.erase(), false)
+        .encode(view, false)
         .expect("plain AVIF encode")
         .into_vec();
 

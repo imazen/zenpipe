@@ -9,8 +9,8 @@ use std::sync::Arc;
 use zenbench::{Suite, Throughput};
 use zenfilters::filters::FusedAdjust;
 use zenfilters::{FilterContext, FusedAdjustParams, Pipeline, PipelineConfig};
-use zenpixels::ColorPrimaries;
-use zenpixels_convert::oklab;
+use zenpixels::Primaries;
+use zenpixels_convert::oklab::OklabSpace;
 
 fn make_rgb_data(w: usize, h: usize) -> Vec<f32> {
     let n = w * h;
@@ -27,8 +27,9 @@ fn make_rgb_data(w: usize, h: usize) -> Vec<f32> {
 fn bench_fused_group(suite: &mut Suite, w: u32, h: u32, label: &str) {
     let n = (w as usize) * (h as usize);
     let src = Arc::new(make_rgb_data(w as usize, h as usize));
-    let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
-    let m1_inv = oklab::lms_to_rgb_matrix(ColorPrimaries::Bt709).unwrap();
+    let space = OklabSpace::for_primaries(Primaries::Bt709).unwrap();
+    let m1 = space.rgb_to_lms();
+    let m1_inv = space.lms_to_rgb();
 
     // Build a realistic FusedAdjust and derive params
     let mut adj = FusedAdjust::new();

@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use streaming_encoder::{Failure, TestEncoder};
 use zenpipe::{Sink, codec::EncoderSink};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelFormat, PixelView};
 
 struct OwnedTransport(Arc<AtomicBool>);
 
@@ -17,8 +17,8 @@ impl Drop for OwnedTransport {
     }
 }
 
-fn rows() -> PixelSlice<'static> {
-    PixelSlice::new(&[1, 2, 3], 1, 1, 3, PixelDescriptor::RGB8_SRGB).unwrap()
+fn rows() -> PixelView<'static> {
+    PixelView::new(&[1, 2, 3], 1, 1, 3, &zenpixels::formats::RGB8_SRGB).unwrap()
 }
 
 #[test]
@@ -32,7 +32,7 @@ fn failed_push_after_header_cannot_be_finished() {
             failure: Failure::Push,
             ..Default::default()
         }),
-        PixelDescriptor::RGB8_SRGB,
+        PixelFormat::RGB8_SRGB,
     )
     .with_writer(move |b| {
         let _transport = &transport;
@@ -58,7 +58,7 @@ fn failed_push_after_header_cannot_be_finished() {
 fn failed_writer_cannot_retry_or_finish() {
     let bytes = Arc::new(Mutex::new(Vec::new()));
     let out = bytes.clone();
-    let mut sink = EncoderSink::new(Box::<TestEncoder>::default(), PixelDescriptor::RGB8_SRGB)
+    let mut sink = EncoderSink::new(Box::<TestEncoder>::default(), PixelFormat::RGB8_SRGB)
         .with_writer(move |b| {
             out.lock().unwrap().push(b[0]);
             Err(whereat::at!(zenpipe::PipeError::Op(
@@ -84,7 +84,7 @@ fn failed_finish_never_emits_a_completion() {
             failure: Failure::Finish,
             ..Default::default()
         }),
-        PixelDescriptor::RGB8_SRGB,
+        PixelFormat::RGB8_SRGB,
     )
     .with_writer(move |b| {
         out.lock().unwrap().extend_from_slice(b);
@@ -99,7 +99,7 @@ fn failed_finish_never_emits_a_completion() {
 
 #[test]
 fn repeated_begin_is_refused_by_the_sink() {
-    let mut sink = EncoderSink::new(Box::<TestEncoder>::default(), PixelDescriptor::RGB8_SRGB);
+    let mut sink = EncoderSink::new(Box::<TestEncoder>::default(), PixelFormat::RGB8_SRGB);
     let timing = sink.begin(1, 1).unwrap();
     assert!(sink.begin(2, 2).is_err());
     assert_eq!(sink.output_timing(), Some(timing));
@@ -108,7 +108,7 @@ fn repeated_begin_is_refused_by_the_sink() {
 
 #[test]
 fn begin_after_rows_is_refused_by_the_sink() {
-    let mut sink = EncoderSink::new(Box::<TestEncoder>::default(), PixelDescriptor::RGB8_SRGB);
+    let mut sink = EncoderSink::new(Box::<TestEncoder>::default(), PixelFormat::RGB8_SRGB);
     sink.consume(&rows()).unwrap();
     assert!(sink.begin(1, 1).is_err());
 }
@@ -117,12 +117,12 @@ fn begin_after_rows_is_refused_by_the_sink() {
 fn uneven_drains_and_owned_handoffs_preserve_strided_rows() {
     use zencodec::encode::DynEncoder;
     let px = [1, 2, 3, 255, 255, 255, 4, 5, 6];
-    let pixels = PixelSlice::new(&px, 1, 2, 6, PixelDescriptor::RGB8_SRGB).unwrap();
+    let pixels = PixelView::new(&px, 1, 2, 6, &zenpixels::formats::RGB8_SRGB).unwrap();
     let want = Box::<TestEncoder>::default()
         .encode(pixels.clone())
         .unwrap();
     for take in [false, true] {
-        let mut sink = EncoderSink::new(Box::<TestEncoder>::default(), PixelDescriptor::RGB8_SRGB);
+        let mut sink = EncoderSink::new(Box::<TestEncoder>::default(), PixelFormat::RGB8_SRGB);
         sink.begin(1, 2).unwrap();
         let mut bytes = Vec::new();
         bytes.extend_from_slice(&sink.pending_output()[..1]);
@@ -149,7 +149,7 @@ fn at_finish_encoder_exposes_no_prefix() {
             buffered: true,
             ..Default::default()
         }),
-        PixelDescriptor::RGB8_SRGB,
+        PixelFormat::RGB8_SRGB,
     );
     assert_eq!(
         sink.begin(1, 1).unwrap(),

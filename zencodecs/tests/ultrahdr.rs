@@ -327,22 +327,29 @@ fn decode_gain_map_roundtrip_reconstruct_hdr() {
     let gm = gainmap.expect("gain map should be present");
 
     // Reconstruct HDR from SDR base + gain map via ultrahdr-core directly
-    use zencodecs::PixelBufferConvertTypedExt as _;
     use zenjpeg::ultrahdr::{
         HdrOutputFormat, UhdrColorGamut, UhdrColorTransfer, UhdrPixelFormat, Unstoppable,
         apply_gainmap,
     };
-    let rgb8 = output.into_buffer().to_rgb8();
-    let img_ref = rgb8.as_imgref();
-    let base_bytes: &[u8] = bytemuck::cast_slice(img_ref.buf());
-    let width = img_ref.width() as u32;
-    let height = img_ref.height() as u32;
+    let width = output.width();
+    let height = output.height();
+    let rgb8 = zenpixels_convert::convert_to_buf(
+        &output.pixels(),
+        zenpixels::PixelFormat::RGB8_SRGB,
+        &zenpixels_convert::ConvertPolicy::permissive(),
+    )
+    .expect("to rgb8");
+    let base_bytes = rgb8
+        .as_view()
+        .to_contiguous_bytes()
+        .expect("contiguous")
+        .into_owned();
 
     let sdr = ultrahdr_core::pixel_buffer_from_vec(
-        base_bytes.to_vec(),
+        base_bytes,
         width,
         height,
-        UhdrPixelFormat::Rgb8,
+        UhdrPixelFormat::RGB8,
         UhdrColorGamut::Bt709,
         UhdrColorTransfer::Srgb,
     )
@@ -357,7 +364,7 @@ fn decode_gain_map_roundtrip_reconstruct_hdr() {
         Unstoppable,
     )
     .expect("apply_gainmap failed");
-    let hdr_data = hdr_result.as_slice().as_strided_bytes().to_vec();
+    let hdr_data = hdr_result.as_view().as_strided_bytes().to_vec();
 
     // HDR output is linear f32 RGBA: 4 floats per pixel = 16 bytes per pixel
     let expected_len = width as usize * height as usize * 16;
@@ -470,7 +477,7 @@ fn reconstruct_hdr_returns_hdr_pixels() {
         .decode_full_frame()
         .expect("SDR decode failed");
     let (w, h) = (sdr.width(), sdr.height());
-    let sdr_bytes = sdr.into_buffer().as_slice().as_strided_bytes().len();
+    let sdr_bytes = sdr.into_buffer().as_view().as_strided_bytes().len();
 
     // Registry-driven reconstruction at the gain map's encoded maximum.
     let hdr = DecodeRequest::new(encoded.data())
@@ -484,7 +491,7 @@ fn reconstruct_hdr_returns_hdr_pixels() {
     // Reconstructed HDR is a float pixel format — strictly wider than the SDR
     // u8 base. (If reconstruction had silently fallen back to the SDR base the
     // byte counts would match — so `>` is the load-bearing signal.)
-    let hdr_bytes = hdr.into_buffer().as_slice().as_strided_bytes().len();
+    let hdr_bytes = hdr.into_buffer().as_view().as_strided_bytes().len();
     assert!(
         hdr_bytes > sdr_bytes,
         "HDR reconstruction should yield wider float pixels: hdr={hdr_bytes} sdr={sdr_bytes}"

@@ -50,11 +50,12 @@ fn zenavif_trait_path_with_metadata_writes_exif_item() {
     let cfg = zenavif::AvifEncoderConfig::new();
     let mut job = cfg.job();
     let meta = zencodec::Metadata::none().with_exif(exif);
-    job = job.with_metadata_policy(meta, zencodec::MetadataPolicy::PreserveExact);
+    job = job.with_unfiltered_metadata(meta);
     let encoder = job.encoder().expect("build encoder");
 
-    let typed: zenpixels::PixelSlice<'_, Rgb<u8>> = zenpixels::PixelSlice::from(base.as_ref());
-    let result = encoder.encode(typed.erase()).expect("encode");
+    let view = zenpixels::PixelView::from_imgref(base.as_ref(), zenpixels::ColorSpace::SRGB)
+        .expect("from_imgref");
+    let result = encoder.encode(view).expect("encode");
 
     let parser = zenavif_parse::AvifParser::from_bytes(result.as_ref()).expect("parse");
     let exif_result = parser.exif();
@@ -160,11 +161,12 @@ fn compare_bare_vs_zencodecs_exif_byte_search() {
     .expect("bare encode");
 
     // zencodecs full path
-    let typed: zenpixels::PixelSlice<'_, Rgb<u8>> = zenpixels::PixelSlice::from(img.as_ref());
+    let view = zenpixels::PixelView::from_imgref(img.as_ref(), zenpixels::ColorSpace::SRGB)
+        .expect("from_imgref");
     let zen = EncodeRequest::new(ImageFormat::Avif)
         .with_quality(80.0)
         .with_metadata(Metadata::none().with_exif(exif.clone()))
-        .encode(typed.erase(), false)
+        .encode(view, false)
         .expect("zencodecs encode");
     let zen_bytes = zen.into_vec();
 
@@ -214,7 +216,8 @@ fn zencodecs_with_metadata_exif_actually_writes_exif_item() {
         })
         .collect();
     let base = imgref::ImgVec::new(base_pixels, 16, 16);
-    let typed: zenpixels::PixelSlice<'_, Rgb<u8>> = zenpixels::PixelSlice::from(base.as_ref());
+    let view = zenpixels::PixelView::from_imgref(base.as_ref(), zenpixels::ColorSpace::SRGB)
+        .expect("from_imgref");
 
     // Minimal valid EXIF blob: TIFF header + 1 IFD entry (Orientation=6).
     let mut exif = Vec::new();
@@ -231,7 +234,7 @@ fn zencodecs_with_metadata_exif_actually_writes_exif_item() {
     let avif_bytes = EncodeRequest::new(ImageFormat::Avif)
         .with_quality(80.0)
         .with_metadata(meta)
-        .encode(typed.erase(), false)
+        .encode(view, false)
         .expect("zencodecs encode AVIF with EXIF metadata")
         .into_vec();
 
@@ -286,7 +289,8 @@ fn zencodecs_encode_with_precomputed_gainmap_actually_embeds_tmap() {
         })
         .collect();
     let base = imgref::ImgVec::new(base_pixels, 32, 32);
-    let typed: zenpixels::PixelSlice<'_, Rgb<u8>> = zenpixels::PixelSlice::from(base.as_ref());
+    let view = zenpixels::PixelView::from_imgref(base.as_ref(), zenpixels::ColorSpace::SRGB)
+        .expect("from_imgref");
 
     let avif_bytes = EncodeRequest::new(ImageFormat::Avif)
         .with_quality(80.0)
@@ -294,7 +298,7 @@ fn zencodecs_encode_with_precomputed_gainmap_actually_embeds_tmap() {
             gain_map: &gain_map,
             metadata: &metadata,
         })
-        .encode(typed.erase(), false)
+        .encode(view, false)
         .expect("zencodecs encode with gain map")
         .into_vec();
 

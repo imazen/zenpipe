@@ -31,8 +31,7 @@ fn noisy_png_sized(w: u32, h: u32) -> Vec<u8> {
         p[1] = (seed >> 8) as u8;
         p[2] = (seed >> 16) as u8;
     }
-    let ps = zenpixels::PixelSlice::new(&px, w, h, stride, zenpixels::PixelDescriptor::RGB8_SRGB)
-        .unwrap();
+    let ps = zenpixels::PixelView::new(&px, w, h, stride, &zenpixels::formats::RGB8_SRGB).unwrap();
     zencodecs::EncodeRequest::new(zencodecs::ImageFormat::Png)
         .with_lossless(true)
         .encode(ps, false)

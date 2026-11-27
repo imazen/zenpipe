@@ -64,7 +64,7 @@ impl CropSource {
         }
 
         let sh = 16u32.min(h);
-        let buf = StripBuf::try_new(w, sh, fmt)?;
+        let buf = StripBuf::try_new(w, sh, fmt.clone())?;
         Ok(Self {
             upstream,
             x,
@@ -97,10 +97,11 @@ impl Source for CropSource {
         }
 
         let rows_wanted = self.strip_height.min(self.crop_h - self.out_y);
-        self.buf.reconfigure(self.crop_w, rows_wanted, self.format);
+        self.buf
+            .reconfigure(self.crop_w, rows_wanted, self.format.clone());
         self.buf.reset();
 
-        let bpp = self.format.bytes_per_pixel();
+        let bpp = self.format.layout.bytes_per_pixel();
         let row_bytes = self.crop_w as usize * bpp;
 
         // Rows left over from the previous upstream strip come first.
@@ -116,12 +117,12 @@ impl Source for CropSource {
             let strip = self.upstream.next()?;
             let Some(strip) = strip else { break };
             let first_y = self.upstream_y;
-            self.upstream_y = self.upstream_y.saturating_add(strip.rows());
+            self.upstream_y = self.upstream_y.saturating_add(strip.height());
             // The carry was drained above (the buffer is not full yet).
             self.carry.clear();
             self.carry_rows = 0;
             self.carry_next = 0;
-            for r in 0..strip.rows() {
+            for r in 0..strip.height() {
                 let abs_y = first_y.saturating_add(r);
                 // Skip rows before the crop region; stop after it.
                 if abs_y < self.y {
@@ -155,10 +156,10 @@ impl Source for CropSource {
         self.crop_h
     }
     fn format(&self) -> PixelFormat {
-        self.format
+        self.format.clone()
     }
-    fn color_context(&self) -> Option<alloc::sync::Arc<zenpixels::ColorContext>> {
-        self.upstream.color_context()
+    fn color_origin(&self) -> Option<zenpixels::ColorOrigin> {
+        self.upstream.color_origin()
     }
 }
 
@@ -174,11 +175,11 @@ mod tests {
 
     /// Helper: collect all pixel rows from a Source.
     fn drain_rows(src: &mut dyn Source) -> Vec<Vec<u8>> {
-        let bpp = src.format().bytes_per_pixel();
+        let bpp = src.format().layout.bytes_per_pixel();
         let w = src.width() as usize;
         let mut rows = Vec::new();
         while let Some(strip) = src.next().unwrap() {
-            for r in 0..strip.rows() {
+            for r in 0..strip.height() {
                 rows.push(strip.row(r)[..w * bpp].to_vec());
             }
         }
@@ -190,7 +191,7 @@ mod tests {
         let w = 4u32;
         let h = 4u32;
         let fmt = RGBA8_SRGB;
-        let stride = fmt.aligned_stride(w); // 16
+        let stride = crate::format::aligned_stride(&fmt, w); // 16
 
         // Build a 4x4 image where each pixel is (x, y, 0, 255).
         let mut data = vec![0u8; stride * h as usize];
@@ -225,7 +226,7 @@ mod tests {
         let w = 3u32;
         let h = 2u32;
         let fmt = RGBA8_SRGB;
-        let stride = fmt.aligned_stride(w); // 12
+        let stride = crate::format::aligned_stride(&fmt, w); // 12
 
         let data: Vec<u8> = (0..stride * h as usize).map(|i| i as u8).collect();
         let data_copy = data.clone();

@@ -5,13 +5,13 @@
 //!
 //! # Generic conversion
 //!
-//! [`RowConverterOp`] wraps a [`zenpixels_convert::RowConverter`] as a
+//! [`RowConverterOp`] wraps a [`zenpixels_convert::RowPlan`] as a
 //! [`PixelOp`], supporting any format pair that zenpixels-convert can handle
 //! (P3, BT.2020, PQ, HLG, etc.). Use [`RowConverterOp::must`] for common
 //! conversions like `RGBA8_SRGB → RGBAF32_LINEAR`.
 
 use crate::PixelFormat;
-use crate::format::{self};
+use crate::format::{self, aligned_stride};
 
 /// A per-pixel operation applied to strip data.
 ///
@@ -29,23 +29,23 @@ pub trait PixelOp: Send {
     fn output_format(&self) -> PixelFormat;
 
     /// If this op is a `RowConverterOp`, return a reference to its inner
-    /// `RowConverter` for composition with adjacent converter ops.
-    fn as_row_converter(&self) -> Option<&zenpixels_convert::RowConverter> {
+    /// `RowPlan` for composition with adjacent converter ops.
+    fn as_row_plan(&self) -> Option<&zenpixels_convert::RowPlan> {
         None
     }
 }
 
 // =========================================================================
-// Generic RowConverter-based op
+// Generic RowPlan-based op
 // =========================================================================
 
-/// A [`PixelOp`] wrapping [`zenpixels_convert::RowConverter`].
+/// A [`PixelOp`] wrapping [`zenpixels_convert::RowPlan`].
 ///
 /// Handles any format conversion that zenpixels-convert supports, including
 /// P3, BT.2020, PQ, HLG, depth changes, alpha mode changes, and gamut
 /// mapping — all via pre-computed conversion plans with no per-row allocation.
 pub struct RowConverterOp {
-    converter: zenpixels_convert::RowConverter,
+    plan: zenpixels_convert::RowPlan,
     from: PixelFormat,
     to: PixelFormat,
 }
@@ -55,76 +55,66 @@ impl RowConverterOp {
     ///
     /// Returns `None` if no conversion path exists.
     pub fn new(from: PixelFormat, to: PixelFormat) -> Option<Self> {
-        let converter = zenpixels_convert::RowConverter::new(from, to).ok()?;
-        Some(Self {
-            converter,
-            from,
-            to,
-        })
+        let policy = zenpixels_convert::ConvertPolicy::permissive()
+            .with_sdr_white(zenpixels::DiffuseWhite::BT2408);
+        let plan = zenpixels_convert::RowPlan::build(&from, &to, &policy, None).ok()?;
+        Some(Self { plan, from, to })
     }
 
     /// Create a conversion op with explicit policy options.
     ///
     /// Validates alpha/depth/luma policies before creating the plan. Returns
-    /// `None` if forbidden by options or no path exists.
+    /// `None` if forbidden by policy or no path exists.
     pub fn new_explicit(
         from: PixelFormat,
         to: PixelFormat,
-        options: &zenpixels_convert::policy::ConvertOptions,
+        policy: &zenpixels_convert::ConvertPolicy,
     ) -> Option<Self> {
-        let converter = zenpixels_convert::RowConverter::new_explicit(from, to, options).ok()?;
-        Some(Self {
-            converter,
-            from,
-            to,
-        })
+        let plan = zenpixels_convert::RowPlan::build(&from, &to, policy, None).ok()?;
+        Some(Self { plan, from, to })
     }
 
-    /// Create from a pre-built `RowConverter` with known format endpoints.
-    pub fn from_converter(
-        converter: zenpixels_convert::RowConverter,
-        from: PixelFormat,
-        to: PixelFormat,
-    ) -> Self {
-        Self {
-            converter,
-            from,
-            to,
-        }
+    /// Create from a pre-built `RowPlan`.
+    pub fn from_plan(plan: zenpixels_convert::RowPlan) -> Self {
+        let from = plan.source_format().clone();
+        let to = plan.destination_format().clone();
+        Self { plan, from, to }
     }
 
     /// Create a conversion op, panicking if no path exists.
     #[track_caller]
     pub fn must(from: PixelFormat, to: PixelFormat) -> Self {
-        Self::new(from, to).unwrap_or_else(|| {
-            panic!("no conversion path from {from} to {to}");
+        Self::new(from.clone(), to.clone()).unwrap_or_else(|| {
+            panic!("no conversion path from {from:?} to {to:?}");
         })
     }
 }
 
 impl PixelOp for RowConverterOp {
     fn apply(&mut self, input: &[u8], output: &mut [u8], width: u32, height: u32) {
-        let src_stride = self.from.aligned_stride(width);
-        let dst_stride = self.to.aligned_stride(width);
+        let src_stride = aligned_stride(&self.from, width);
+        let dst_stride = aligned_stride(&self.to, width);
         for r in 0..height {
             let src_start = r as usize * src_stride;
             let dst_start = r as usize * dst_stride;
-            self.converter.convert_row(
-                &input[src_start..src_start + src_stride],
-                &mut output[dst_start..dst_start + dst_stride],
-                width,
-            );
+            self.plan
+                .convert_row(
+                    &input[src_start..src_start + src_stride],
+                    &mut output[dst_start..dst_start + dst_stride],
+                    width,
+                )
+                .expect("RowPlan::convert_row failed");
         }
     }
 
     fn input_format(&self) -> PixelFormat {
-        self.from
+        self.from.clone()
     }
     fn output_format(&self) -> PixelFormat {
-        self.to
+        self.to.clone()
     }
-    fn as_row_converter(&self) -> Option<&zenpixels_convert::RowConverter> {
-        Some(&self.converter)
+    fn as_row_plan(&self) -> Option<&zenpixels_convert::RowPlan> {
+        Some(&self.plan)
     }
 }
 
@@ -250,12 +240,12 @@ mod tests {
         assert_eq!(op.output_format(), RGB8_SRGB);
     }
 
-    // ── RowConverterOp::as_row_converter ────────────────────────────────
+    // ── RowConverterOp::as_row_plan ─────────────────────────────────────
 
     #[test]
-    fn row_converter_as_row_converter_returns_some() {
+    fn row_converter_as_row_plan_returns_some() {
         let op = RowConverterOp::must(RGBA8_SRGB, RGB8_SRGB);
-        assert!(op.as_row_converter().is_some());
+        assert!(op.as_row_plan().is_some());
     }
 
     // ── RowConverterOp::apply ───────────────────────────────────────────

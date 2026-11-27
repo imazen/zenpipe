@@ -33,11 +33,10 @@ impl MaskTransformSource {
         upstream: Box<dyn Source>,
         mask: Box<dyn zenblend::mask::MaskSource + Send>,
     ) -> crate::PipeResult<Self> {
-        let fmt = format::RGBAF32_LINEAR_PREMUL;
-        if upstream.format() != fmt {
+        if upstream.format() != format::RGBAF32_LINEAR_PREMUL {
             return Err(at!(PipeError::FormatMismatch {
-                expected: fmt,
-                got: upstream.format(),
+                expected: Box::new(format::RGBAF32_LINEAR_PREMUL),
+                got: Box::new(upstream.format()),
             }));
         }
         let w = upstream.width();
@@ -47,7 +46,7 @@ impl MaskTransformSource {
         Ok(Self {
             upstream,
             mask,
-            buf: StripBuf::new(w, sh, fmt),
+            buf: StripBuf::new(w, sh, format::RGBAF32_LINEAR_PREMUL),
             mask_buf,
             y: 0,
         })
@@ -62,10 +61,10 @@ impl Source for MaskTransformSource {
         };
 
         self.buf
-            .reconfigure(strip.width(), strip.rows(), strip.descriptor());
+            .reconfigure(strip.width(), strip.height(), strip.format().clone());
         self.buf.reset();
 
-        for r in 0..strip.rows() {
+        for r in 0..strip.height() {
             let src_row = strip.row(r);
             self.buf.push_row(src_row);
             let dst_row = self.buf.row_mut(r);

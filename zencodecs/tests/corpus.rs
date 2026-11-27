@@ -9,7 +9,7 @@
 use std::path::Path;
 
 use codec_corpus::Corpus;
-use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, PixelBufferConvertTypedExt as _};
+use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, to_rgba8};
 
 fn corpus() -> Corpus {
     Corpus::new().expect("failed to initialize codec-corpus")
@@ -43,12 +43,13 @@ fn roundtrip_ok(path: &Path, format: ImageFormat, quality: f32) {
     let h = decoded.height();
 
     // Convert to RGBA8 for a uniform encode path
-    let rgba_buf = decoded.into_buffer().to_rgba8();
-    let rgba_ref = rgba_buf.as_imgref();
+    let rgba_buf = to_rgba8(&decoded.pixels()).unwrap();
+    let rgba_vec: Vec<rgb::Rgba<u8>> = rgba_buf.into_vec().unwrap();
+    let rgba_img = imgref::ImgVec::new(rgba_vec, w as usize, h as usize);
 
     let encoded = EncodeRequest::new(format)
         .with_quality(quality)
-        .encode_full_frame_rgba8(rgba_ref)
+        .encode_full_frame_rgba8(rgba_img.as_ref())
         .unwrap_or_else(|e| panic!("encode {}: {e}", path.display()));
 
     let re_decoded = DecodeRequest::new(encoded.as_ref())
@@ -670,12 +671,13 @@ fn corpus_avif_roundtrip() {
         };
         let w = decoded.width();
         let h = decoded.height();
-        let rgba_buf = decoded.into_buffer().to_rgba8();
-        let rgba_ref = rgba_buf.as_imgref();
+        let rgba_buf = to_rgba8(&decoded.pixels()).unwrap();
+        let rgba_vec: Vec<rgb::Rgba<u8>> = rgba_buf.into_vec().unwrap();
+        let rgba_img = imgref::ImgVec::new(rgba_vec, w as usize, h as usize);
 
         let encoded = EncodeRequest::new(ImageFormat::Avif)
             .with_quality(60.0)
-            .encode_full_frame_rgba8(rgba_ref)
+            .encode_full_frame_rgba8(rgba_img.as_ref())
             .unwrap_or_else(|e| panic!("AVIF encode {}: {e}", path.display()));
 
         let re = DecodeRequest::new(encoded.as_ref())
@@ -714,12 +716,18 @@ fn corpus_jxl_roundtrip() {
         let h = decoded.height();
 
         // Use RGB8 for JXL to avoid alpha decode bug
-        let rgb_buf = decoded.into_buffer().to_rgb8();
-        let rgb_ref = rgb_buf.as_imgref();
+        let rgb_buf = zenpixels_convert::convert_to_buf(
+            &decoded.pixels(),
+            zenpixels::PixelFormat::RGB8_SRGB,
+            &zenpixels_convert::ConvertPolicy::permissive(),
+        )
+        .unwrap();
+        let rgb_vec: Vec<rgb::Rgb<u8>> = rgb_buf.into_vec().unwrap();
+        let rgb_img = imgref::ImgVec::new(rgb_vec, w as usize, h as usize);
 
         let encoded = EncodeRequest::new(ImageFormat::Jxl)
             .with_quality(75.0)
-            .encode_full_frame_rgb8(rgb_ref)
+            .encode_full_frame_rgb8(rgb_img.as_ref())
             .unwrap_or_else(|e| panic!("JXL encode {}: {e}", path.display()));
 
         let re = DecodeRequest::new(encoded.as_ref())

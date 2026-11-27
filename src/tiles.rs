@@ -200,7 +200,7 @@ impl TilePyramidConfig {
 }
 
 /// One tile handed to a [`TileWriter`]: packed pixels (stride = `width × bpp`).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct TileRef<'a> {
     /// Level number (0 = apex, `levels - 1` = full resolution).
     pub level: u32,
@@ -223,7 +223,7 @@ impl TileRef<'_> {
     /// `background` (the first `bpp` bytes are compared) — a tile a viewer
     /// can substitute with a flat fill.
     pub fn is_blank(&self, background: &[u8], threshold: u8) -> bool {
-        let bpp = self.format.bytes_per_pixel();
+        let bpp = self.format.layout.bytes_per_pixel();
         if background.len() < bpp {
             return false;
         }
@@ -278,7 +278,7 @@ pub trait TileWriter: Send {
     /// parallel override this.
     fn write_tile_row(&mut self, tiles: &[TileRef<'_>]) -> PipeResult<()> {
         for t in tiles {
-            self.write_tile(*t)?;
+            self.write_tile(t.clone())?;
         }
         Ok(())
     }
@@ -413,7 +413,7 @@ impl<W: TileWriter> TilePyramidSink<W> {
                 config.overlap
             ))));
         }
-        let bpp = format.bytes_per_pixel();
+        let bpp = format.layout.bytes_per_pixel();
         if !(1..=4).contains(&bpp) {
             return Err(at!(PipeError::Op(alloc::format!(
                 "TilePyramidSink: only 8-bit-channel formats (1-4 bytes/pixel) are supported, got {bpp} bytes/pixel"
@@ -525,7 +525,7 @@ impl<W: TileWriter> TilePyramidSink<W> {
     fn push_row(&mut self, li: usize, row: Vec<u8>) -> PipeResult<()> {
         let bpp = self.bpp;
         let has_next = li + 1 < self.levels.len();
-        let alpha = self.format.has_alpha();
+        let alpha = crate::format::format_has_alpha(&self.format);
         let lw = self.levels[li].info.width;
         debug_assert_eq!(row.len(), lw as usize * bpp);
         {
@@ -648,7 +648,7 @@ impl<W: TileWriter> TilePyramidSink<W> {
                 row: r,
                 width: tw,
                 height: th,
-                format: self.format,
+                format: self.format.clone(),
                 data: &scratch[start..end],
             })
             .collect();
@@ -815,21 +815,22 @@ impl<W: TileWriter> crate::Sink for TilePyramidSink<W> {
                 "TilePyramidSink: consume after finish"
             ))));
         }
-        if strip.width() != self.width || strip.descriptor() != self.format {
+        if strip.width() != self.width || strip.format() != &self.format {
             return Err(at!(PipeError::DimensionMismatch(alloc::format!(
                 "TilePyramidSink: strip {}x? {:?} does not match {}x{} {:?}",
                 strip.width(),
-                strip.descriptor(),
+                strip.format(),
                 self.width,
                 self.height,
                 self.format
             ))));
         }
-        if self.rows_consumed == 0 && strip.rows() > 0 {
+        if self.rows_consumed == 0 && strip.height() > 0 {
             let infos = self.level_infos();
-            self.writer.begin(&infos, self.config, self.format)?;
+            self.writer
+                .begin(&infos, self.config, self.format.clone())?;
         }
-        for r in 0..strip.rows() {
+        for r in 0..strip.height() {
             if self.rows_consumed >= self.height {
                 return Err(at!(PipeError::DimensionMismatch(alloc::format!(
                     "TilePyramidSink: more than {} rows received",
@@ -873,7 +874,14 @@ impl<W: TileWriter> crate::Sink for TilePyramidSink<W> {
             let mut s = vec![0u8; lw.div_ceil(2) as usize * self.bpp];
             {
                 let last = &self.levels[li].rows[(idx - base) as usize];
-                shrink_rows_into(&mut s, last, last, lw, self.bpp, self.format.has_alpha());
+                shrink_rows_into(
+                    &mut s,
+                    last,
+                    last,
+                    lw,
+                    self.bpp,
+                    crate::format::format_has_alpha(&self.format),
+                );
             }
             self.push_row(li + 1, s)?;
         }
@@ -1644,7 +1652,7 @@ impl<L: TileLayout, S: TileStore> TileWriter for PyramidWriter<L, S> {
             self.tiles_skipped += 1;
             return Ok(());
         }
-        let bytes = (self.encode)(tile)?;
+        let bytes = (self.encode)(tile.clone())?;
         self.put_encoded(&tile, &bytes)
     }
 
@@ -1662,7 +1670,7 @@ impl<L: TileLayout, S: TileStore> TileWriter for PyramidWriter<L, S> {
             .collect();
         if self.threads <= 1 || keep.len() <= 1 {
             for t in keep {
-                let bytes = (self.encode)(*t)?;
+                let bytes = (self.encode)((*t).clone())?;
                 self.put_encoded(t, &bytes)?;
             }
             return Ok(());
@@ -1683,7 +1691,7 @@ impl<L: TileLayout, S: TileStore> TileWriter for PyramidWriter<L, S> {
                         if i >= keep.len() {
                             break;
                         }
-                        let r = encode(*keep[i]);
+                        let r = encode(keep[i].clone());
                         *slots[i].lock().unwrap_or_else(|e| e.into_inner()) = Some(r);
                     }
                 });
@@ -2027,7 +2035,7 @@ mod tests {
             TilePyramidSink::new(
                 0,
                 5,
-                f,
+                f.clone(),
                 TilePyramidConfig::default(),
                 MemoryTileWriter::default()
             )
@@ -2037,7 +2045,7 @@ mod tests {
             TilePyramidSink::new(
                 5,
                 5,
-                f,
+                f.clone(),
                 TilePyramidConfig::new(4, 4),
                 MemoryTileWriter::default()
             )

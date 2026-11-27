@@ -133,7 +133,7 @@ fn process_single(opts: &ProcessOptions) -> Result<(), CliError> {
             d.format_name(),
             encode.width,
             encode.height,
-            &encode.extension,
+            encode.extension,
             format_size(encode.bytes.len()),
             elapsed.as_secs_f64() * 1000.0,
         );

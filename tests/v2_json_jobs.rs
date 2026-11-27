@@ -35,9 +35,8 @@ fn make_test_jpeg() -> Vec<u8> {
             pixels[offset + 2] = 128; // B
         }
     }
-    let ps =
-        zenpixels::PixelSlice::new(&pixels, w, h, stride, zenpixels::PixelDescriptor::RGB8_SRGB)
-            .expect("pixel slice");
+    let ps = zenpixels::PixelView::new(&pixels, w, h, stride, &zenpixels::formats::RGB8_SRGB)
+        .expect("pixel view");
     zencodecs::EncodeRequest::new(zencodec::ImageFormat::Jpeg)
         .with_quality(90.0)
         .encode(ps, false)
@@ -1207,9 +1206,14 @@ fn solid_png(w: u32, h: u32, rgba: [u8; 4]) -> Vec<u8> {
     for _ in 0..w * h {
         pixels.extend_from_slice(&rgba);
     }
-    let slice =
-        zenpixels::PixelSlice::new(&pixels, w, h, (w * 4) as usize, zenpipe::format::RGBA8_SRGB)
-            .unwrap();
+    let slice = zenpixels::PixelView::new(
+        &pixels,
+        w,
+        h,
+        (w * 4) as usize,
+        &zenpixels::formats::RGBA8_SRGB,
+    )
+    .unwrap();
     zencodecs::EncodeRequest::new(zencodec::ImageFormat::Png)
         .encode(slice, true)
         .expect("fixture png")
@@ -1224,9 +1228,9 @@ fn sample_png(data: &[u8], x: u32, y: u32) -> [u8; 4] {
         .expect("decode output");
     let px = decoded.pixels();
     let bytes = px.as_strided_bytes();
-    let desc = px.descriptor();
-    let bpp = desc.bytes_per_pixel();
-    let stride = px.stride();
+    let desc = px.format();
+    let bpp = desc.layout.bytes_per_pixel();
+    let stride = px.stride_bytes();
     let off = y as usize * stride + x as usize * bpp;
     let mut out = [0u8, 0, 0, 255];
     out[..bpp.min(4)].copy_from_slice(&bytes[off..off + bpp.min(4)]);

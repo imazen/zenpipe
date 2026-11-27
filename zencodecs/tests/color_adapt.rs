@@ -14,47 +14,42 @@ use std::sync::Arc;
 use zencodec::Metadata;
 use zencodecs::{AllowedFormats, DecodeRequest, EncodeRequest, ImageFormat};
 use zenpixels::{
-    Cicp, ColorContext, ColorOrigin, ColorPrimaries, PixelBuffer, PixelDescriptor, PixelFormat,
-    PixelSlice, TransferFunction,
+    Cicp, ColorOrigin, ColorSpace, OriginKind, PeakSource, PixelBuf, PixelFormat, PixelView,
+    Primaries, RenderingIntent, SampleType, Transfer,
 };
-use zenpixels_convert::{OutputProfile, finalize_for_output_with};
+use zenpixels_convert::{ConvertPolicy, OutputPlan, OutputSignaling};
 
 const W: u32 = 6;
 const H: u32 = 3;
 
-/// The colours `buf` (described by `ctx`) show as, in 8-bit sRGB. Converts
+/// The colours `buf` (with provenance `origin`) show as, in 8-bit sRGB. Converts
 /// at the buffer's own sample type (CMS steps don't change depth), then
 /// rounds to 8 bits.
-fn as_srgb8(buf: PixelBuffer, ctx: Option<ColorContext>) -> Vec<u8> {
-    use zenpixels::ChannelType;
-    let ty = buf.descriptor().channel_type();
-    let format = match ty {
-        ChannelType::U8 => PixelFormat::Rgb8,
-        ChannelType::U16 => PixelFormat::Rgb16,
-        _ => PixelFormat::RgbF32,
+fn as_srgb8(buf: PixelBuf, origin: ColorOrigin) -> Vec<u8> {
+    let ty = buf.format().layout.sample;
+    let dst = match ty {
+        SampleType::U8 => PixelFormat::RGB8_SRGB,
+        SampleType::U16 => PixelFormat::RGB16_SRGB,
+        _ => PixelFormat::RGBF32_LINEAR.with_transfer(Transfer::Srgb),
     };
-    let buf = match ctx {
-        Some(c) => buf.with_color_context(Arc::new(c)),
-        None => buf,
-    };
-    let origin = ColorOrigin::from_cicp(Cicp::SRGB);
-    let ready = finalize_for_output_with(
-        &buf,
-        &origin,
-        OutputProfile::Named(Cicp::SRGB),
-        format,
-        Some(&zenpixels_convert::cms_moxcms::MoxCms),
+    let policy = ConvertPolicy::permissive().with_cms(Arc::new(zenpixels_convert::cms::MoxCms));
+    let plan = OutputPlan::build(
+        buf.format(),
+        &dst,
+        &policy,
+        PeakSource::Declared,
+        OutputSignaling::Strip,
     )
-    .expect("to sRGB");
-    let out = ready.into_parts().0;
-    let s = out.as_slice();
+    .expect("plan to sRGB");
+    let ready = plan.execute_view(buf.as_view(), &origin).expect("to sRGB");
+    let s = ready.pixels.as_view();
     let mut v = Vec::new();
-    for y in 0..s.rows() {
+    for y in 0..s.height() {
         let row = s.row(y);
         for x in 0..(s.width() * 3) as usize {
             v.push(match ty {
-                ChannelType::U8 => row[x],
-                ChannelType::U16 => {
+                SampleType::U8 => row[x],
+                SampleType::U16 => {
                     let u = u16::from_ne_bytes([row[2 * x], row[2 * x + 1]]);
                     ((u32::from(u) * 255 + 32767) / 65535) as u8
                 }
@@ -68,49 +63,81 @@ fn as_srgb8(buf: PixelBuffer, ctx: Option<ColorContext>) -> Vec<u8> {
     v
 }
 
-/// What the decoded file says its pixels are: the colour context the
+/// What the decoded file says its pixels are: the format/origin the
 /// decoder attached to the buffer (for RGB output it describes the RGB
 /// samples, matrix 0, not the coded YUV matrix `source_color` reports), else
 /// `source_color`. A file with no colour description is read by convention:
 /// float samples (PFM) are linear BT.709, integer samples sRGB.
-fn declared(d: &zencodecs::DecodeOutput) -> Option<ColorContext> {
-    if let Some(ctx) = d.pixels().color_context() {
-        return Some(ColorContext::clone(ctx));
-    }
-    let c = &d.info().source_color;
-    if let Some(icc) = &c.icc_profile {
-        Some(ColorContext::from_icc(icc.clone()))
-    } else if let Some(cicp) = c.cicp {
-        Some(ColorContext::from_cicp(cicp))
-    } else if d.descriptor().channel_type() == zenpixels::ChannelType::F32 {
-        Some(ColorContext::from_cicp(Cicp::new(1, 8, 0, true)))
-    } else {
-        Some(ColorContext::from_cicp(Cicp::SRGB))
-    }
-}
-
-/// The decoded buffer labelled with the transfer its description declares
-/// (the conversion trusts the descriptor's transfer over the context).
-fn labelled(d: zencodecs::DecodeOutput, ctx: &Option<ColorContext>) -> PixelBuffer {
-    let tf = ctx
-        .as_ref()
-        .and_then(|c| c.cicp)
-        .and_then(|c| TransferFunction::from_cicp(c.transfer_characteristics));
+fn declared_and_labelled(d: zencodecs::DecodeOutput) -> (PixelBuf, ColorOrigin) {
+    let source_color = d.info().source_color.clone();
+    let buf_origin = d.pixels().origin().cloned();
     let buf = d.into_buffer();
-    match tf {
-        Some(tf) if buf.descriptor().transfer() == TransferFunction::Unknown => {
-            buf.with_transfer(tf)
-        }
-        _ => buf,
+    let fmt = buf.format().clone();
+    let alpha = fmt.color.alpha();
+
+    // If the decoder attached a concrete ICC ColorSpace or non-assumed origin, keep it.
+    if matches!(fmt.color, ColorSpace::Icc { .. }) {
+        let origin = buf_origin.unwrap_or_else(|| source_color.authoritative_origin());
+        return (buf, origin);
+    }
+
+    if let Some(icc) = &source_color.icc_profile
+        && !matches!(buf_origin.as_ref().map(|o| o.kind), Some(OriginKind::Cicp))
+    {
+        let icc_cs = ColorSpace::Icc {
+            profile: icc.clone(),
+            color_channels: (fmt.layout.order.channels()
+                - usize::from(
+                    fmt.layout.order.has_alpha_slot() || fmt.layout.order.has_padding_slot(),
+                )) as u8,
+            alpha,
+            intent: RenderingIntent::Perceptual,
+        };
+        let relabelled = buf.relabel_color(icc_cs).unwrap();
+        return (relabelled, ColorOrigin::from_icc(icc.clone()));
+    }
+
+    if let Some(cicp) = source_color.cicp {
+        let rgb_cicp = Cicp::new(
+            cicp.color_primaries,
+            cicp.transfer_characteristics,
+            0,
+            cicp.full_range,
+        );
+        let buf = if let Ok(cs) = rgb_cicp.to_color_space(alpha) {
+            if matches!(
+                fmt.color,
+                ColorSpace::Rgb {
+                    transfer: Transfer::Unknown,
+                    ..
+                } | ColorSpace::Gray {
+                    transfer: Transfer::Unknown,
+                    ..
+                }
+            ) {
+                buf.relabel_color(cs).unwrap()
+            } else {
+                buf
+            }
+        } else {
+            buf
+        };
+        return (buf, ColorOrigin::from_cicp(rgb_cicp));
+    }
+
+    if fmt.layout.sample == SampleType::F32 {
+        (buf, ColorOrigin::from_cicp(Cicp::LINEAR_SRGB))
+    } else {
+        (buf, ColorOrigin::from_cicp(Cicp::SRGB))
     }
 }
 
 struct Case {
     name: &'static str,
     bytes: Vec<u8>,
-    desc: PixelDescriptor,
+    desc: PixelFormat,
     meta: Metadata,
-    ctx: ColorContext,
+    origin: ColorOrigin,
 }
 
 fn linear_f32() -> Case {
@@ -121,9 +148,9 @@ fn linear_f32() -> Case {
     Case {
         name: "linear f32 + linear CICP",
         bytes: v.iter().flat_map(|f| f.to_ne_bytes()).collect(),
-        desc: PixelDescriptor::RGBF32_LINEAR,
+        desc: PixelFormat::RGBF32_LINEAR,
         meta: Metadata::none().with_cicp(linear),
-        ctx: ColorContext::from_cicp(linear),
+        origin: ColorOrigin::from_cicp(linear),
     }
 }
 
@@ -134,9 +161,9 @@ fn display_p3_u8() -> Case {
     Case {
         name: "Display P3 RGB8 + P3 CICP",
         bytes: v,
-        desc: PixelDescriptor::RGB8_SRGB.with_primaries(ColorPrimaries::DisplayP3),
+        desc: PixelFormat::RGB8_SRGB.with_primaries(Primaries::DisplayP3),
         meta: Metadata::none().with_cicp(Cicp::DISPLAY_P3),
-        ctx: ColorContext::from_cicp(Cicp::DISPLAY_P3),
+        origin: ColorOrigin::from_cicp(Cicp::DISPLAY_P3),
     }
 }
 
@@ -148,9 +175,9 @@ fn linear_u16() -> Case {
     Case {
         name: "linear u16 + linear CICP",
         bytes: v.iter().flat_map(|s| s.to_ne_bytes()).collect(),
-        desc: PixelDescriptor::RGB16_SRGB.with_transfer(TransferFunction::Linear),
+        desc: PixelFormat::RGB16_SRGB.with_transfer(Transfer::Linear),
         meta: Metadata::none().with_cicp(linear),
-        ctx: ColorContext::from_cicp(linear),
+        origin: ColorOrigin::from_cicp(linear),
     }
 }
 
@@ -161,9 +188,9 @@ fn srgb_u8() -> Case {
     Case {
         name: "sRGB RGB8 + sRGB CICP",
         bytes: v,
-        desc: PixelDescriptor::RGB8_SRGB,
+        desc: PixelFormat::RGB8_SRGB,
         meta: Metadata::none().with_cicp(Cicp::SRGB),
-        ctx: ColorContext::from_cicp(Cicp::SRGB),
+        origin: ColorOrigin::from_cicp(Cicp::SRGB),
     }
 }
 
@@ -187,15 +214,15 @@ fn a_converted_encode_describes_the_written_pixels() {
     let mut bad = Vec::new();
     let mut checked = 0;
     for case in [srgb_u8(), linear_f32(), display_p3_u8(), linear_u16()] {
-        let src = PixelBuffer::from_vec(case.bytes.clone(), W, H, case.desc).unwrap();
-        let want = as_srgb8(src, Some(case.ctx.clone()));
+        let src = PixelBuf::from_bytes(case.bytes.clone(), W, H, case.desc.clone()).unwrap();
+        let want = as_srgb8(src, case.origin.clone());
         for f in formats.encodable_formats() {
             let Some(req) = lossless(f) else { continue };
             if !formats.can_decode(f) {
                 continue;
             }
-            let bpp = case.desc.bytes_per_pixel();
-            let slice = PixelSlice::new(&case.bytes, W, H, W as usize * bpp, case.desc).unwrap();
+            let bpp = case.desc.layout.bytes_per_pixel();
+            let slice = PixelView::new(&case.bytes, W, H, W as usize * bpp, &case.desc).unwrap();
             let bytes = match req.with_metadata(case.meta.clone()).encode(slice, false) {
                 Ok(o) => o.into_vec(),
                 Err(e) => {
@@ -204,14 +231,14 @@ fn a_converted_encode_describes_the_written_pixels() {
                 }
             };
             let d = DecodeRequest::new(&bytes).decode_full_frame().unwrap();
-            let ctx = declared(&d);
             let label = format!(
                 "{} -> {f:?} (decoded {:?}, declares {:?})",
                 case.name,
-                d.descriptor(),
+                d.pixel_format(),
                 d.info().source_color.cicp
             );
-            let got = as_srgb8(labelled(d, &ctx), ctx);
+            let (buf, origin) = declared_and_labelled(d);
+            let got = as_srgb8(buf, origin);
             checked += 1;
             let worst = want
                 .iter()

@@ -96,7 +96,7 @@ pub fn transcode_to_hdr_pq_png(
         .job()
         .encoder()
         .map_err_at(|e| CodecError::from_codec(crate::ImageFormat::Png, e))?
-        .encode(pq.as_slice())
+        .encode(pq.as_view())
         .map_err_at(|e| CodecError::from_codec(crate::ImageFormat::Png, e))?
         .data()
         .to_vec();
@@ -265,11 +265,11 @@ fn decode_gain_map_av1_obu(
     let (pixel_data, width, height, channels) = zenavif::decode_av1_obu(&source.data)
         .map_err(|e| at!(crate::CodecError::from_codec(ImageFormat::Avif, e)))?;
 
-    // Build a PixelBuffer from the raw decoded bytes.
-    let descriptor = match channels {
-        1 => zenpixels::PixelDescriptor::GRAY8,
-        3 => zenpixels::PixelDescriptor::RGB8_SRGB,
-        4 => zenpixels::PixelDescriptor::RGBA8_SRGB,
+    // Build a PixelBuf from the raw decoded bytes.
+    let pixel_format = match channels {
+        1 => zenpixels::PixelFormat::GRAY8_SRGB,
+        3 => zenpixels::PixelFormat::RGB8_SRGB,
+        4 => zenpixels::PixelFormat::RGBA8_SRGB,
         _ => {
             return Err(at!(crate::CodecError::InvalidInput(alloc::format!(
                 "unexpected AV1 gain map channel count: {channels}"
@@ -278,9 +278,9 @@ fn decode_gain_map_av1_obu(
     };
 
     let buffer =
-        zenpixels::PixelBuffer::from_vec(pixel_data, width, height, descriptor).map_err(|_| {
+        zenpixels::PixelBuf::from_bytes(pixel_data, width, height, pixel_format).map_err(|_| {
             at!(crate::CodecError::InvalidInput(
-                "failed to create PixelBuffer from AV1 gain map decode".into()
+                "failed to create PixelBuf from AV1 gain map decode".into()
             ))
         })?;
 
@@ -380,39 +380,47 @@ mod tests {
     any(feature = "jpeg-ultrahdr", feature = "heic-decode")
 ))]
 fn prepare_hdr_png(
-    pixels: zenpixels::PixelSlice<'_>,
+    pixels: zenpixels::PixelView<'_>,
 ) -> crate::error::Result<(
-    zenpixels::PixelBuffer,
+    zenpixels::PixelBuf,
     zencodec::Cicp,
     Option<zenpixels::hdr::ContentLightLevel>,
 )> {
     use crate::CodecError;
     use whereat::at;
-    use zenpixels::{
-        PixelDescriptor,
-        hdr::{ContentLightLevel, DiffuseWhite},
-    };
-    use zenpixels_convert::hdr::measure::{CllMeasure, LightLevelMethod};
+    use zenpixels::{ColorSpace, PixelFormat, Primaries, hdr::DiffuseWhite};
+    use zenpixels_convert::measure::LightLevelMethod;
     // PQ (ST 2084) quantize. The diffuse-white anchor travels with the pixels
-    // (`ColorContext.diffuse_white`), set by the reconstruction.
+    // (`ColorSpace.white()`), set by the reconstruction.
     // Reconstruction may change the working primaries. Use current pixels,
     // not source-file provenance, for both conversion and output tags.
-    let primaries = pixels.descriptor().primaries;
+    let primaries = match pixels.format().color {
+        ColorSpace::Rgb { primaries, .. } => primaries,
+        _ => Primaries::Unknown,
+    };
     let primaries_code = primaries.to_cicp().ok_or_else(|| {
         at!(CodecError::InvalidInput(
             "reconstructed HDR has unresolved primaries".into()
         ))
     })?;
-    let target = PixelDescriptor::RGB16_BT2100_PQ.with_primaries(primaries);
-    let pq = zenpixels_convert::hdr::quantize_to(pixels.clone(), target)
+    let white = pixels
+        .format()
+        .color
+        .white()
+        .unwrap_or(DiffuseWhite::BT2408);
+    let target = PixelFormat::RGB16_BT2100_PQ.with_primaries(primaries);
+    let policy = zenpixels_convert::ConvertPolicy::working_linear().with_sdr_white(white);
+    let pq = zenpixels_convert::convert_to_buf(&pixels, &target, &policy)
         .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("PQ quantize: {e}"))))?;
 
     // Explicit full scan, with the same luminance anchor used by quantization.
-    let white = pixels
-        .color_context()
-        .and_then(|c| c.diffuse_white)
-        .unwrap_or(DiffuseWhite::BT2408);
-    let cll = ContentLightLevel::measure_max(pixels, white, LightLevelMethod::MaxRgb);
+    let cll = zenpixels_convert::measure_content_light_level(
+        &pixels,
+        white,
+        None,
+        LightLevelMethod::MaxRgb,
+    )
+    .ok();
 
     Ok((pq, zencodec::Cicp::new(primaries_code, 16, 0, true), cll))
 }
@@ -424,24 +432,25 @@ fn prepare_hdr_png(
 ))]
 mod finalization_tests {
     use super::prepare_hdr_png;
-    use zenpixels::{
-        Cicp, ColorContext, ColorPrimaries, PixelBuffer, PixelDescriptor, hdr::DiffuseWhite,
-    };
+    use zenpixels::{Cicp, ColorSpace, PixelBuf, PixelFormat, Primaries, hdr::DiffuseWhite};
     #[test]
     fn hdr_png_uses_current_primaries_and_the_quantizers_white_anchor() {
-        let descriptor = PixelDescriptor::RGBF32_LINEAR.with_primaries(ColorPrimaries::DisplayP3);
+        let format = PixelFormat::RGBF32_LINEAR
+            .with_primaries(Primaries::DisplayP3)
+            .with_white(DiffuseWhite::new(100.0).unwrap());
         let bytes = [1.0_f32, 0.5, 0.25]
             .into_iter()
             .flat_map(f32::to_ne_bytes)
             .collect();
-        let buffer = PixelBuffer::from_vec(bytes, 1, 1, descriptor)
-            .unwrap()
-            .with_color_context(alloc::sync::Arc::new(
-                ColorContext::from_cicp(Cicp::new(12, 8, 0, true))
-                    .with_diffuse_white(DiffuseWhite::new(100.0)),
-            ));
-        let (pq, cicp, cll) = prepare_hdr_png(buffer.as_slice()).unwrap();
-        assert_eq!(pq.descriptor().primaries, ColorPrimaries::DisplayP3);
+        let buffer = PixelBuf::from_bytes(bytes, 1, 1, format).unwrap();
+        let (pq, cicp, cll) = prepare_hdr_png(buffer.as_view()).unwrap();
+        assert!(matches!(
+            pq.format().color,
+            ColorSpace::Rgb {
+                primaries: Primaries::DisplayP3,
+                ..
+            }
+        ));
         assert_eq!(cicp, Cicp::new(12, 16, 0, true));
         let cll = cll.unwrap();
         assert_eq!(cll.max_content_light_level, 100);
@@ -449,11 +458,12 @@ mod finalization_tests {
     }
     #[test]
     fn hdr_png_refuses_to_guess_unknown_primaries() {
-        let buffer = PixelBuffer::new(
+        let buffer = PixelBuf::new(
             1,
             1,
-            PixelDescriptor::RGBF32_LINEAR.with_primaries(ColorPrimaries::Unknown),
-        );
-        assert!(prepare_hdr_png(buffer.as_slice()).is_err());
+            PixelFormat::RGBF32_LINEAR.with_primaries(Primaries::Unknown),
+        )
+        .unwrap();
+        assert!(prepare_hdr_png(buffer.as_view()).is_err());
     }
 }

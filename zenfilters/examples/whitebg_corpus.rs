@@ -40,8 +40,8 @@ use zensim::{RgbSlice, Zensim, ZensimProfile};
 /// Run `BackgroundFlatten` at the given strength over an sRGB8 image.
 fn flatten(img: &RgbImage, strength: f32) -> RgbImage {
     let (w, h) = img.dimensions();
-    let desc = zenpixels::PixelDescriptor::RGB8_SRGB;
-    let input = zenpixels::buffer::PixelBuffer::from_vec(img.as_raw().clone(), w, h, desc).unwrap();
+    let desc = zenpixels::PixelFormat::RGB8_SRGB;
+    let input = zenpixels::buffer::PixelBuf::from_bytes(img.as_raw().clone(), w, h, desc).unwrap();
 
     let mut pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
     let mut bg = BackgroundFlatten::default();
@@ -50,7 +50,12 @@ fn flatten(img: &RgbImage, strength: f32) -> RgbImage {
 
     let mut ctx = FilterContext::new();
     let out = apply_to_buffer(&pipeline, &input, true, &mut ctx).unwrap();
-    ImageBuffer::from_raw(w, h, out.copy_to_contiguous_bytes()).unwrap()
+    ImageBuffer::from_raw(
+        w,
+        h,
+        out.as_view().to_contiguous_bytes().unwrap().into_owned(),
+    )
+    .unwrap()
 }
 
 /// zensim similarity (≈100 = identical, lower = more visible change).

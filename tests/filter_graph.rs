@@ -155,7 +155,7 @@ fn filter_source_small_strips() {
     let mut src = FilterSource::new(upstream, pipeline).unwrap();
     let mut strip_count = 0;
     while let Ok(Some(strip)) = src.next() {
-        assert_eq!(strip.rows(), 1);
+        assert_eq!(strip.height(), 1);
         strip_count += 1;
     }
     assert_eq!(strip_count, 4);
@@ -312,7 +312,7 @@ fn filter_graph_neighborhood_large_image() {
     let mut total_rows = 0u32;
     let mut strip_count = 0u32;
     while let Ok(Some(strip)) = compiled.next() {
-        total_rows += strip.rows();
+        total_rows += strip.height();
         strip_count += 1;
     }
     assert_eq!(total_rows, height);

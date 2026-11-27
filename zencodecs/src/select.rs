@@ -60,8 +60,8 @@ impl ImageFacts {
             pixel_count: info.width as u64 * info.height as u64,
             is_hdr: info.source_color.cicp.as_ref().is_some_and(|c| {
                 matches!(
-                    c.transfer_function_enum(),
-                    zenpixels::TransferFunction::Pq | zenpixels::TransferFunction::Hlg
+                    zenpixels::Transfer::from_cicp(c.transfer_characteristics),
+                    Some(zenpixels::Transfer::Pq | zenpixels::Transfer::Hlg(_))
                 )
             }),
             source_format: Some(info.format),

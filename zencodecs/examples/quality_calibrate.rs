@@ -376,14 +376,14 @@ fn decode_output_to_rgb8(output: &zencodecs::DecodeOutput) -> Option<ImgVec<[u8;
     let w = output.width() as usize;
     let h = output.height() as usize;
     let pixels = output.pixels();
-    let bytes = pixels.contiguous_bytes();
-    let desc = pixels.descriptor();
-    let bpp = desc.bytes_per_pixel();
-    let channel_type = desc.channel_type();
+    let bytes = pixels.to_contiguous_bytes().ok()?;
+    let fmt = pixels.format();
+    let bpp = fmt.layout.bytes_per_pixel();
+    let sample_type = fmt.layout.sample;
 
-    use zenpixels::ChannelType;
-    match (channel_type, bpp) {
-        (ChannelType::U8, 3) => {
+    use zenpixels::SampleType;
+    match (sample_type, bpp) {
+        (SampleType::U8, 3) => {
             // RGB8
             let data: Vec<[u8; 3]> = bytes
                 .as_chunks::<3>()
@@ -393,7 +393,7 @@ fn decode_output_to_rgb8(output: &zencodecs::DecodeOutput) -> Option<ImgVec<[u8;
                 .collect();
             (data.len() == w * h).then(|| ImgVec::new(data, w, h))
         }
-        (ChannelType::U8, 4) => {
+        (SampleType::U8, 4) => {
             // RGBA8 -> RGB8 (drop alpha)
             let data: Vec<[u8; 3]> = bytes
                 .as_chunks::<4>()
@@ -403,12 +403,12 @@ fn decode_output_to_rgb8(output: &zencodecs::DecodeOutput) -> Option<ImgVec<[u8;
                 .collect();
             (data.len() == w * h).then(|| ImgVec::new(data, w, h))
         }
-        (ChannelType::U8, 1) => {
+        (SampleType::U8, 1) => {
             // Gray8 -> RGB8
             let data: Vec<[u8; 3]> = bytes.iter().map(|&g| [g, g, g]).collect();
             (data.len() == w * h).then(|| ImgVec::new(data, w, h))
         }
-        (ChannelType::U16, 6) => {
+        (SampleType::U16, 6) => {
             // RGB16 -> RGB8 (shift down)
             let data: Vec<[u8; 3]> = bytes
                 .as_chunks::<6>()
@@ -423,7 +423,7 @@ fn decode_output_to_rgb8(output: &zencodecs::DecodeOutput) -> Option<ImgVec<[u8;
                 .collect();
             (data.len() == w * h).then(|| ImgVec::new(data, w, h))
         }
-        (ChannelType::U16, 8) => {
+        (SampleType::U16, 8) => {
             // RGBA16 -> RGB8 (shift down, drop alpha)
             let data: Vec<[u8; 3]> = bytes
                 .as_chunks::<8>()
@@ -438,7 +438,7 @@ fn decode_output_to_rgb8(output: &zencodecs::DecodeOutput) -> Option<ImgVec<[u8;
                 .collect();
             (data.len() == w * h).then(|| ImgVec::new(data, w, h))
         }
-        (ChannelType::F32, 12) => {
+        (SampleType::F32, 12) => {
             // RGB f32 -> RGB8 (clamp + scale)
             let floats: &[f32] = bytemuck::cast_slice(&bytes[..w * h * 12]);
             let data: Vec<[u8; 3]> = floats
@@ -458,7 +458,7 @@ fn decode_output_to_rgb8(output: &zencodecs::DecodeOutput) -> Option<ImgVec<[u8;
         _ => {
             eprintln!(
                 "  WARN: unsupported pixel format {:?} bpp={} for SSIM2 measurement",
-                channel_type, bpp
+                sample_type, bpp
             );
             None
         }

@@ -8,14 +8,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use zencodec::encode::{EncodeJob, EncoderConfig};
 use zencodec::exif::{Exif, TextEncoding};
-use zencodec::operation::{DecodeRequest, PolicySet};
+use zencodec::operation::{DecodeOptions as CodecDecodeOptions, PolicySet};
 use zencodec::storage::{StorageBudget, StorageError};
 use zencodec::{CodecSet, Metadata, MetadataPolicy, NoPulse, Orientation};
 use zencodec_io::row_encode::{self, Options};
 use zenpipe::io::{DecodeOptions, DecodeSource, OrientationCost, PipelineRows, render_orientation};
 use zenpipe::sources::MaterializedSource;
 use zenpipe::{PipeResult, Source, Strip};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelFormat, PixelView};
 
 const W: u32 = 97;
 const H: u32 = 65;
@@ -52,11 +52,18 @@ fn exif(orientation: Orientation, private: bool) -> Vec<u8> {
 }
 
 fn png_with(samples: &[u8], meta: Metadata) -> Vec<u8> {
-    let pixels =
-        PixelSlice::new(samples, W, H, (W * 3) as usize, PixelDescriptor::RGB8_SRGB).unwrap();
+    let pixels = PixelView::new(
+        samples,
+        W,
+        H,
+        (W * 3) as usize,
+        &zenpixels::formats::RGB8_SRGB,
+    )
+    .unwrap();
     zenpng::PngEncoderConfig::new()
         .job()
-        .with_metadata_policy(meta, MetadataPolicy::PreserveExact)
+        .try_with_metadata_policy(meta, MetadataPolicy::PreserveExact)
+        .unwrap()
         .encode(pixels)
         .unwrap()
         .into_vec()
@@ -80,7 +87,7 @@ fn upright_reference(samples: &[u8], o: Orientation) -> (Vec<u8>, u32, u32) {
 fn collect(source: &mut dyn Source) -> Vec<u8> {
     let mut out = Vec::new();
     while let Some(strip) = source.next().unwrap() {
-        for r in 0..strip.rows() {
+        for r in 0..strip.height() {
             out.extend_from_slice(strip.row(r));
         }
     }
@@ -116,15 +123,15 @@ impl<S: Source> Source for Counted<S> {
     fn format(&self) -> zenpipe::PixelFormat {
         self.inner.format()
     }
-    fn color_context(&self) -> Option<std::sync::Arc<zenpixels::ColorContext>> {
-        self.inner.color_context()
+    fn color_origin(&self) -> Option<zenpixels::ColorOrigin> {
+        self.inner.color_origin()
     }
 }
 
 #[test]
 fn costs_name_reversed_rows_and_axis_swaps() {
     for o in ALL {
-        let cost = OrientationCost::new(o, W, H, PixelDescriptor::RGB8_SRGB);
+        let cost = OrientationCost::new(o, W, H, PixelFormat::RGB8_SRGB);
         let local = matches!(o, Orientation::Identity | Orientation::FlipH);
         assert_eq!(cost.streams(), local, "{o:?}");
         assert_eq!(cost.held_rows, if local { 0 } else { H }, "{o:?}");
@@ -149,7 +156,7 @@ fn rendering_matches_the_whole_raster_reference_for_all_eight() {
         for strip_rows in [1, 7, 64] {
             let budget = StorageBudget::new(1 << 20, 4);
             let source =
-                MaterializedSource::from_data(samples.clone(), W, H, PixelDescriptor::RGB8_SRGB);
+                MaterializedSource::from_data(samples.clone(), W, H, PixelFormat::RGB8_SRGB);
             let mut upright = render_orientation(Box::new(source), o, &budget, strip_rows).unwrap();
             let (expected, w, h) = upright_reference(&samples, o);
             assert_eq!((upright.width(), upright.height()), (w, h), "{o:?}");
@@ -208,7 +215,8 @@ fn passthrough_keeps_stored_pixels_and_orientation_without_private_exif() {
     let job = zenpng::PngEncoderConfig::new()
         .with_generic_effort(0)
         .job()
-        .with_metadata_policy(meta, MetadataPolicy::ColorAndRotation);
+        .try_with_metadata_policy(meta, MetadataPolicy::ColorAndRotation)
+        .unwrap();
     let mut out = Vec::new();
     row_encode::encode_job(
         job,
@@ -249,7 +257,8 @@ fn rendered_output_is_upright_and_clears_orientation() {
     let job = zenpng::PngEncoderConfig::new()
         .with_generic_effort(0)
         .job()
-        .with_metadata_policy(meta, MetadataPolicy::ColorAndRotation);
+        .try_with_metadata_policy(meta, MetadataPolicy::ColorAndRotation)
+        .unwrap();
     let mut out = Vec::new();
     row_encode::encode_job(
         job,
@@ -271,7 +280,7 @@ fn rendered_output_is_upright_and_clears_orientation() {
         .and_then(|e| e.orientation())
         .unwrap_or(Orientation::Identity);
     assert_eq!(orientation, Orientation::Identity, "double rotation");
-    let decoded = DecodeRequest::new().decode(&codecs, &out).unwrap();
+    let decoded = CodecDecodeOptions::new().decode(&codecs, &out).unwrap();
     assert_eq!(decoded.output().info().orientation, Orientation::Identity);
 }
 
@@ -301,9 +310,8 @@ fn a_direct_job_carries_orientation_without_a_source_exif_blob() {
     // Each layer is checked so a loss names the layer that lost it.
     let samples = samples();
     let meta = Metadata::none().with_orientation(Orientation::Rotate90);
-    // 1. Retention keeps the authoritative field (what `with_metadata_policy`
+    // 1. Retention keeps the authoritative field (what `try_with_metadata_policy`
     //    hands the codec).
-    #[allow(deprecated)]
     let filtered = meta.filtered(&MetadataPolicy::PreserveExact);
     assert_eq!(
         filtered.orientation,
@@ -311,17 +319,27 @@ fn a_direct_job_carries_orientation_without_a_source_exif_blob() {
         "retention dropped the field"
     );
     assert!(filtered.exif.is_none());
-    let pixels =
-        || PixelSlice::new(&samples, W, H, (W * 3) as usize, PixelDescriptor::RGB8_SRGB).unwrap();
+    let pixels = || {
+        PixelView::new(
+            &samples,
+            W,
+            H,
+            (W * 3) as usize,
+            &zenpixels::formats::RGB8_SRGB,
+        )
+        .unwrap()
+    };
     let png = zenpng::PngEncoderConfig::new()
         .job()
-        .with_metadata_policy(meta.clone(), MetadataPolicy::PreserveExact)
+        .try_with_metadata_policy(meta.clone(), MetadataPolicy::PreserveExact)
+        .unwrap()
         .encode(pixels())
         .unwrap()
         .into_vec();
     let jpeg = zenjpeg::JpegEncoderConfig::new()
         .job()
-        .with_metadata_policy(meta, MetadataPolicy::PreserveExact)
+        .try_with_metadata_policy(meta, MetadataPolicy::PreserveExact)
+        .unwrap()
         .encode(pixels())
         .unwrap()
         .into_vec();
@@ -343,7 +361,7 @@ fn a_direct_job_carries_orientation_without_a_source_exif_blob() {
             ));
         }
         // 3. What a reader of the output sees.
-        let decoded = DecodeRequest::new().decode(&codecs, file).unwrap();
+        let decoded = CodecDecodeOptions::new().decode(&codecs, file).unwrap();
         let seen = decoded.output().info().orientation;
         if seen != Orientation::Rotate90 {
             lost.push(format!("{name}: decoded orientation {seen:?}"));

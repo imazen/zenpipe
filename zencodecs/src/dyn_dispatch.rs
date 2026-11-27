@@ -43,7 +43,7 @@ pub(crate) struct DecodeParams<'a> {
     pub codec_config: Option<&'a CodecConfig>,
     pub limits: Option<&'a Limits>,
     pub pulse: SharedPulse,
-    pub preferred: &'a [zenpixels::PixelDescriptor],
+    pub preferred: &'a [zenpixels::PixelFormat],
     pub decode_policy: Option<zencodec::decode::DecodePolicy>,
     /// When true, codecs that support gain maps will extract and attach
     /// gain map data to the `DecodeOutput` extras.
@@ -304,19 +304,28 @@ struct TotalPixelGuard {
 }
 
 impl TotalPixelGuard {
+    fn charge_counters(
+        consumed: &mut u64,
+        max: u64,
+        width: u32,
+        height: u32,
+    ) -> core::result::Result<(), zencodec::decode::BoxedError> {
+        *consumed = consumed.saturating_add(width as u64 * height as u64);
+        if *consumed > max {
+            return Err(Box::new(zencodec::LimitExceeded::TotalPixels {
+                actual: *consumed,
+                max,
+            }));
+        }
+        Ok(())
+    }
+
     fn charge(
         &mut self,
         width: u32,
         height: u32,
     ) -> core::result::Result<(), zencodec::decode::BoxedError> {
-        self.consumed = self.consumed.saturating_add(width as u64 * height as u64);
-        if self.consumed > self.max {
-            return Err(Box::new(zencodec::LimitExceeded::TotalPixels {
-                actual: self.consumed,
-                max: self.max,
-            }));
-        }
-        Ok(())
+        Self::charge_counters(&mut self.consumed, self.max, width, height)
     }
 }
 
@@ -345,6 +354,21 @@ impl zencodec::decode::DynAnimationFrameDecoder for TotalPixelGuard {
         self.inner.loop_count()
     }
 
+    fn render_next_frame(
+        &mut self,
+        pulse: Option<&dyn zencodec::Pulse>,
+    ) -> core::result::Result<
+        Option<zencodec::decode::AnimationFrame<'_>>,
+        zencodec::decode::BoxedError,
+    > {
+        let frame = self.inner.render_next_frame(pulse)?;
+        if let Some(f) = &frame {
+            let px = f.pixels();
+            Self::charge_counters(&mut self.consumed, self.max, px.width(), px.height())?;
+        }
+        Ok(frame)
+    }
+
     fn render_next_frame_owned(
         &mut self,
         pulse: Option<&dyn zencodec::Pulse>,
@@ -355,7 +379,7 @@ impl zencodec::decode::DynAnimationFrameDecoder for TotalPixelGuard {
         let frame = self.inner.render_next_frame_owned(pulse)?;
         if let Some(f) = &frame {
             let px = f.pixels();
-            self.charge(px.width(), px.rows())?;
+            self.charge(px.width(), px.height())?;
         }
         Ok(frame)
     }
@@ -403,7 +427,7 @@ impl<S: zencodec::decode::StreamingDecode + Send> zencodec::decode::DynStreaming
 {
     fn next_batch(
         &mut self,
-    ) -> core::result::Result<Option<(u32, zenpixels::PixelSlice<'_>)>, zencodec::decode::BoxedError>
+    ) -> core::result::Result<Option<(u32, zenpixels::PixelView<'_>)>, zencodec::decode::BoxedError>
     {
         self.0
             .next_batch()
@@ -638,10 +662,9 @@ pub(crate) fn dyn_animation_frame_encoder(
                 job = job.with_limits(to_resource_limits(lim));
             }
             if let Some(meta) = _params.metadata {
-                job = job.with_metadata_policy(
-                    crate::color_fit::exif_color_space(meta),
-                    _params.metadata_policy,
-                );
+                let filtered =
+                    crate::color_fit::exif_color_space(meta).filtered(&_params.metadata_policy);
+                job = job.with_unfiltered_metadata(filtered);
             }
             if let Some(mode) = _params.orientation_mode {
                 job.try_set_orientation_mode(mode)

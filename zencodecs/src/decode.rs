@@ -123,7 +123,7 @@ impl<'a> DecodeRequest<'a> {
     ///
     /// let data: &[u8] = &[];
     /// let request = DecodeRequest::new(data)
-    ///     .with_decode_policy(DecodePolicy::strict().with_allow_icc(true));
+    ///     .with_decode_policy(DecodePolicy::untrusted_minimal().with_allow_icc(true));
     /// ```
     pub fn with_decode_policy(mut self, policy: DecodePolicy) -> Self {
         self.decode_policy = Some(policy);
@@ -481,11 +481,8 @@ impl<'a> DecodeRequest<'a> {
         let info = crate::info::probe_format(self.data, format)?;
         // The pipeline decodes to a 4-byte RGBA8/BGRA8 frame; size the estimate to
         // that intermediate (conservative for narrower native outputs).
-        let image = ImageCharacteristics::new(
-            info.width,
-            info.height,
-            zenpixels::PixelDescriptor::RGBA8_SRGB,
-        );
+        let image =
+            ImageCharacteristics::new(info.width, info.height, zenpixels::PixelFormat::RGBA8_SRGB);
         let est =
             crate::estimate::estimate_decode(format, &image, &ComputeEnvironment::conservative());
         Ok((image, est))
@@ -691,27 +688,30 @@ fn extract_jxl_gainmap(output: &DecodeOutput) -> Option<crate::gainmap::DecodedG
     let metadata = source.metadata.params.clone();
 
     // Decode the bare JXL codestream to get gain map pixels.
-    use alloc::vec::Vec;
     let gm_output = zenjxl::decode(&source.data, None, &[]).ok()?;
-    use zenpixels_convert::PixelBufferConvertTypedExt as _;
-    let gm_rgb8 = gm_output.pixels.to_rgb8();
-    let gm_ref = gm_rgb8.as_imgref();
-    let gm_w = gm_ref.width() as u32;
-    let gm_h = gm_ref.height() as u32;
-    let gm_bytes: Vec<u8> = bytemuck::cast_slice(gm_ref.buf()).to_vec();
+    let gm_rgb8 = zenpixels_convert::convert_to_buf(
+        &gm_output.pixels.as_view(),
+        &zenpixels::PixelFormat::RGB8_SRGB,
+        &zenpixels_convert::ConvertPolicy::permissive(),
+    )
+    .ok()?;
+    let gm_w = gm_rgb8.width();
+    let gm_h = gm_rgb8.height();
 
-    // Collapse to single-channel when provably achromatic. `try_reduce_to_
-    // load_bearing_format` runs the same R==G==B analysis AND the bit-exact
-    // byte selection in one call, so the hand-rolled `chunks_exact(3).map(px[0])`
-    // is gone. The source is RGB8 — no alpha lane, already 8-bit — so chroma
-    // is the only axis of the report that can fire here.
-    use zenpixels_convert::PixelSliceLoadBearingExt as _;
-    let (data, channels) = match gm_rgb8.as_slice().try_reduce_to_load_bearing_format() {
+    // Collapse to single-channel when provably achromatic. `compact_to_buf`
+    // runs the R==G==B analysis AND bit-exact byte selection in one call.
+    // The source is RGB8 — no alpha lane, already 8-bit — so chroma is the
+    // only axis of the report that can fire here.
+    let (data, channels) = match zenpixels_convert::compact_to_buf(&gm_rgb8.as_view()).ok()? {
         Some(reduced) => {
-            let channels = reduced.descriptor().channels() as u8;
-            (reduced.copy_to_contiguous_bytes(), channels)
+            let channels = reduced.format().layout.channels() as u8;
+            let bytes = reduced.as_view().to_contiguous_bytes().ok()?.into_owned();
+            (bytes, channels)
         }
-        None => (gm_bytes, 3u8),
+        None => (
+            gm_rgb8.as_view().to_contiguous_bytes().ok()?.into_owned(),
+            3u8,
+        ),
     };
 
     Some(DecodedGainMap {

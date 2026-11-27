@@ -2,13 +2,13 @@
 #![cfg(feature = "png")]
 
 use zencodecs::{EncodeRequest, ImageFormat};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::PixelView;
 
 #[test]
 fn encode_accepts_strided_views_without_final_padding() {
     let packed: Vec<u8> = (1..=18).collect();
     let encode = |data: &[u8], stride| {
-        let pixels = PixelSlice::new(data, 2, 3, stride, PixelDescriptor::RGB8_SRGB).unwrap();
+        let pixels = PixelView::new(data, 2, 3, stride, &zenpixels::formats::RGB8_SRGB).unwrap();
         EncodeRequest::new(ImageFormat::Png)
             .encode(pixels, false)
             .unwrap()

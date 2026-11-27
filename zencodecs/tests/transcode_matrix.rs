@@ -25,7 +25,8 @@
 use std::sync::{Arc, Mutex};
 
 use zencodecs::{AllowedFormats, DecodeRequest, EncodeRequest, ImageFormat, TranscodeSink};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{ColorOrigin, PeakSource, PixelFormat, PixelView};
+use zenpixels_convert::{ConvertPolicy, OutputSignaling, adapt_for_encode};
 
 /// Odd sizes, so chroma subsampling, block and strip edges are partial.
 const W: u32 = 67;
@@ -40,7 +41,7 @@ fn noise(x: u32, y: u32) -> u8 {
 
 /// A gradient with a little texture; `alpha` adds a translucent ramp and a
 /// fully transparent block.
-fn source_pixels(alpha: bool) -> (Vec<u8>, PixelDescriptor) {
+fn source_pixels(alpha: bool) -> (Vec<u8>, PixelFormat) {
     let bpp = if alpha { 4 } else { 3 };
     let mut px = Vec::with_capacity((W * H) as usize * bpp);
     for y in 0..H {
@@ -59,16 +60,16 @@ fn source_pixels(alpha: bool) -> (Vec<u8>, PixelDescriptor) {
         }
     }
     let desc = if alpha {
-        PixelDescriptor::RGBA8_SRGB
+        PixelFormat::RGBA8_SRGB
     } else {
-        PixelDescriptor::RGB8_SRGB
+        PixelFormat::RGB8_SRGB
     };
     (px, desc)
 }
 
 fn encode_source(format: ImageFormat, alpha: bool) -> Result<Vec<u8>, String> {
     let (px, desc) = source_pixels(alpha);
-    let slice = PixelSlice::new(&px, W, H, W as usize * desc.bytes_per_pixel(), desc)
+    let slice = PixelView::new(&px, W, H, W as usize * desc.layout.bytes_per_pixel(), &desc)
         .map_err(|e| format!("{e:?}"))?;
     EncodeRequest::new(format)
         .with_quality(92.0)
@@ -92,12 +93,13 @@ impl InputPolicy {
         }
     }
 
-    fn supported(self, native: &'static [PixelDescriptor]) -> &'static [PixelDescriptor] {
+    fn supported(self, native: &'static [PixelFormat]) -> &'static [PixelFormat] {
+        static RGB8_ONLY: &[PixelFormat] = &[PixelFormat::RGB8_SRGB];
         match self {
             Self::Native => native,
             Self::ClipToSrgb8 => {
-                assert!(native.contains(&PixelDescriptor::RGB8_SRGB));
-                &[PixelDescriptor::RGB8_SRGB]
+                assert!(native.contains(&zenpixels::formats::RGB8_SRGB));
+                RGB8_ONLY
             }
         }
     }
@@ -118,18 +120,17 @@ fn one_shot(src: &[u8], target: ImageFormat, input_policy: InputPolicy) -> Resul
         InputPolicy::Native => encode(dec.pixels()),
         InputPolicy::ClipToSrgb8 => {
             let pixels = dec.pixels();
-            let bytes = pixels.contiguous_bytes();
             // Select the same conversion that TranscodeSink applies per strip.
-            let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
-                &bytes,
-                pixels.descriptor(),
-                pixels.width(),
-                pixels.rows(),
-                pixels.width() as usize * pixels.descriptor().bytes_per_pixel(),
-                &[PixelDescriptor::RGB8_SRGB],
+            let (_, adapted) = adapt_for_encode(
+                pixels,
+                &ColorOrigin::assumed(),
+                &[PixelFormat::RGB8_SRGB],
+                &ConvertPolicy::permissive(),
+                PeakSource::Declared,
+                OutputSignaling::Strip,
             )
             .map_err(|e| format!("clip to sRGB8: {e}"))?;
-            encode(adapted.as_slice())
+            encode(adapted.pixels.as_view())
         }
     }
 }
@@ -162,7 +163,8 @@ fn streaming(
 #[cfg(all(feature = "bitmaps-hdr", feature = "gif"))]
 fn hdr_white_to_gif_requires_explicit_clipping_in_both_paths() {
     let white = vec![255; (W * H * 3) as usize];
-    let pixels = PixelSlice::new(&white, W, H, W as usize * 3, PixelDescriptor::RGB8_SRGB).unwrap();
+    let pixels =
+        PixelView::new(&white, W, H, W as usize * 3, &zenpixels::formats::RGB8_SRGB).unwrap();
     let source = EncodeRequest::new(ImageFormat::Hdr)
         .encode(pixels, false)
         .unwrap();
@@ -170,25 +172,25 @@ fn hdr_white_to_gif_requires_explicit_clipping_in_both_paths() {
         .decode_full_frame()
         .unwrap();
     assert_eq!(
-        decoded.descriptor().channel_type(),
-        zenpixels::ChannelType::F32
+        decoded.pixel_format().layout.sample,
+        zenpixels::SampleType::F32
     );
     assert!(matches!(
-        decoded.descriptor().layout(),
-        zenpixels::ChannelLayout::Rgb | zenpixels::ChannelLayout::Rgba
+        decoded.pixel_format().layout.order,
+        zenpixels::ChannelOrder::Rgb | zenpixels::ChannelOrder::Rgba
     ));
     let pixels = decoded.pixels();
     // The materialized decoder may add opaque alpha; inspect RGB separately.
     for y in 0..H {
         for pixel in pixels
             .row(y)
-            .chunks_exact(decoded.descriptor().bytes_per_pixel())
+            .chunks_exact(decoded.pixel_format().layout.bytes_per_pixel())
         {
             for sample in pixel[..12].as_chunks::<4>().0 {
                 let value = f32::from_ne_bytes(*sample);
                 assert!(value.is_finite() && value > 1.0);
             }
-            if decoded.descriptor().layout() == zenpixels::ChannelLayout::Rgba {
+            if decoded.pixel_format().layout.order == zenpixels::ChannelOrder::Rgba {
                 assert_eq!(f32::from_ne_bytes(pixel[12..16].try_into().unwrap()), 1.0);
             }
         }
@@ -255,17 +257,17 @@ impl Pixels {
 }
 
 fn decoded_pixels(bytes: &[u8]) -> Result<Pixels, String> {
-    use zenpixels::{ChannelLayout, ChannelType};
+    use zenpixels::{ChannelOrder, SampleType};
     let d = DecodeRequest::new(bytes)
         .decode_full_frame()
         .map_err(|e| format!("decode: {e}"))?;
     if (d.width(), d.height()) != (W, H) {
         return Err(format!("decodes at {}x{}", d.width(), d.height()));
     }
-    let desc = d.descriptor();
+    let fmt = d.pixel_format().clone();
     let px = d.pixels();
-    let n = desc.layout().channels();
-    let float = desc.channel_type() == ChannelType::F32;
+    let n = fmt.layout.order.channels();
+    let float = fmt.layout.sample == SampleType::F32;
     let (opaque, mut out) = if float {
         (1.0f32.to_bits(), Vec::with_capacity((W * H) as usize * 4))
     } else {
@@ -276,12 +278,12 @@ fn decoded_pixels(bytes: &[u8]) -> Result<Pixels, String> {
         for x in 0..W as usize {
             let sample = |c: usize| -> Result<u32, String> {
                 let i = x * n + c;
-                match desc.channel_type() {
-                    ChannelType::U8 => Ok(u32::from(row[i]) * 257),
-                    ChannelType::U16 => {
+                match fmt.layout.sample {
+                    SampleType::U8 => Ok(u32::from(row[i]) * 257),
+                    SampleType::U16 => {
                         Ok(u32::from(u16::from_ne_bytes([row[i * 2], row[i * 2 + 1]])))
                     }
-                    ChannelType::F32 => Ok(u32::from_ne_bytes([
+                    SampleType::F32 => Ok(u32::from_ne_bytes([
                         row[i * 4],
                         row[i * 4 + 1],
                         row[i * 4 + 2],
@@ -290,12 +292,12 @@ fn decoded_pixels(bytes: &[u8]) -> Result<Pixels, String> {
                     t => Err(format!("unhandled channel type {t:?}")),
                 }
             };
-            let rgba = match desc.layout() {
-                ChannelLayout::Gray => [sample(0)?, sample(0)?, sample(0)?, opaque],
-                ChannelLayout::GrayAlpha => [sample(0)?, sample(0)?, sample(0)?, sample(1)?],
-                ChannelLayout::Rgb => [sample(0)?, sample(1)?, sample(2)?, opaque],
-                ChannelLayout::Rgba => [sample(0)?, sample(1)?, sample(2)?, sample(3)?],
-                ChannelLayout::Bgra => [sample(2)?, sample(1)?, sample(0)?, sample(3)?],
+            let rgba = match fmt.layout.order {
+                ChannelOrder::Gray => [sample(0)?, sample(0)?, sample(0)?, opaque],
+                ChannelOrder::GrayAlpha => [sample(0)?, sample(0)?, sample(0)?, sample(1)?],
+                ChannelOrder::Rgb => [sample(0)?, sample(1)?, sample(2)?, opaque],
+                ChannelOrder::Rgba => [sample(0)?, sample(1)?, sample(2)?, sample(3)?],
+                ChannelOrder::Bgra => [sample(2)?, sample(1)?, sample(0)?, sample(3)?],
                 l => return Err(format!("unhandled layout {l:?}")),
             };
             out.extend_from_slice(&rgba);

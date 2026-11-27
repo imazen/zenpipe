@@ -12,7 +12,7 @@ use std::borrow::Cow;
 use zencodec::decode::{DecodeJob, DecoderConfig, StreamingDecode};
 use zenjpeg::JpegDecoderConfig;
 use zenjpeg::encoder::{ChromaSubsampling, EncoderConfig, PixelLayout};
-use zenpixels::PixelDescriptor;
+use zenpixels::PixelFormat;
 
 const WIDTH: u32 = 3840;
 const HEIGHT: u32 = 2160;
@@ -70,7 +70,7 @@ fn stream_4k_jpeg_decode_encode() {
     let dec_config = JpegDecoderConfig::default();
     let job = dec_config.job();
     let mut decoder = job
-        .streaming_decoder(Cow::Borrowed(&jpeg_data), &[PixelDescriptor::RGBA8_SRGB])
+        .streaming_decoder(Cow::Borrowed(&jpeg_data), &[PixelFormat::RGBA8_SRGB])
         .expect("streaming decoder creation");
 
     let info = decoder.info().clone();
@@ -93,9 +93,9 @@ fn stream_4k_jpeg_decode_encode() {
     let mut strip_count: u32 = 0;
 
     while let Some((_y, pixels)) = decoder.next_batch().expect("next_batch") {
-        let rows: u32 = pixels.rows();
+        let rows: u32 = pixels.height();
         let data = pixels.as_strided_bytes();
-        let stride_bytes = pixels.stride();
+        let stride_bytes = pixels.stride_bytes();
 
         encoder
             .push(data, rows as usize, stride_bytes, zencodec::Unstoppable)
@@ -176,7 +176,7 @@ fn codec_bridge_roundtrip() {
     let dec_config = JpegDecoderConfig::default();
     let job = dec_config.job();
     let streaming: Box<dyn zencodec::decode::DynStreamingDecoder> = {
-        job.dyn_streaming_decoder(Cow::Borrowed(&jpeg_data), &[PixelDescriptor::RGBA8_SRGB])
+        job.dyn_streaming_decoder(Cow::Borrowed(&jpeg_data), &[PixelFormat::RGBA8_SRGB])
             .expect("streaming decoder")
     };
 
@@ -236,23 +236,19 @@ impl<E: zencodec::encode::Encoder + Send> zencodec::encode::DynEncoder for SendE
 
     fn encode(
         self: Box<Self>,
-        pixels: zenpixels::PixelSlice<'_>,
+        pixels: zenpixels::PixelView<'_>,
     ) -> Result<zencodec::encode::EncodeOutput, zencodec::encode::BoxedError> {
         self.0
             .encode(pixels)
             .map_err(|e| Box::new(e) as zencodec::encode::BoxedError)
     }
 
-    fn encode_srgba8(
+    fn encode_in_place(
         self: Box<Self>,
-        data: &mut [u8],
-        make_opaque: bool,
-        width: u32,
-        height: u32,
-        stride_pixels: u32,
+        pixels: zenpixels::PixelViewMut<'_>,
     ) -> Result<zencodec::encode::EncodeOutput, zencodec::encode::BoxedError> {
         self.0
-            .encode_srgba8(data, make_opaque, width, height, stride_pixels)
+            .encode_in_place(pixels)
             .map_err(|e| Box::new(e) as zencodec::encode::BoxedError)
     }
 
@@ -260,10 +256,10 @@ impl<E: zencodec::encode::Encoder + Send> zencodec::encode::DynEncoder for SendE
         &mut self,
         width: u32,
         height: u32,
-        descriptor: zenpixels::PixelDescriptor,
+        format: zenpixels::PixelFormat,
     ) -> Result<zencodec::encode::OutputTiming, zencodec::encode::BoxedError> {
         self.0
-            .begin(width, height, descriptor)
+            .begin(width, height, format)
             .map_err(|e| Box::new(e) as zencodec::encode::BoxedError)
     }
 
@@ -281,7 +277,7 @@ impl<E: zencodec::encode::Encoder + Send> zencodec::encode::DynEncoder for SendE
 
     fn push_rows(
         &mut self,
-        rows: zenpixels::PixelSlice<'_>,
+        rows: zenpixels::PixelView<'_>,
     ) -> Result<(), zencodec::encode::BoxedError> {
         self.0
             .push_rows(rows)
@@ -298,7 +294,7 @@ impl<E: zencodec::encode::Encoder + Send> zencodec::encode::DynEncoder for SendE
 
     fn encode_from(
         self: Box<Self>,
-        source: &mut dyn FnMut(u32, zenpixels::PixelSliceMut<'_>) -> usize,
+        source: &mut dyn FnMut(u32, zenpixels::PixelViewMut<'_>) -> usize,
     ) -> Result<zencodec::encode::EncodeOutput, zencodec::encode::BoxedError> {
         self.0
             .encode_from(source)

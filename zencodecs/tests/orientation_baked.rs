@@ -8,7 +8,7 @@
 
 use zencodec::{Metadata, Orientation};
 use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelFormat, PixelView};
 
 const W: u32 = 7;
 const H: u32 = 4;
@@ -31,8 +31,8 @@ fn source(frame: u8) -> Vec<u8> {
         .collect()
 }
 
-fn slice(px: &[u8]) -> PixelSlice<'_> {
-    PixelSlice::new(px, W, H, W as usize * 3, PixelDescriptor::RGB8_SRGB).unwrap()
+fn slice(px: &[u8]) -> PixelView<'_> {
+    PixelView::new(px, W, H, W as usize * 3, &zenpixels::formats::RGB8_SRGB).unwrap()
 }
 
 /// `px` as it displays under `o`.
@@ -41,7 +41,7 @@ fn displayed(px: &[u8], o: Orientation) -> (u32, u32, Vec<[u8; 3]>) {
     let mut out = vec![[0u8; 3]; (dw * dh) as usize];
     for y in 0..H {
         for x in 0..W {
-            let (dx, dy) = o.forward_map(x, y, W, H);
+            let (dx, dy) = o.map_pixel_coordinates((x, y), (W, H));
             let i = ((y * W + x) * 3) as usize;
             out[(dy * dw + dx) as usize] = [px[i], px[i + 1], px[i + 2]];
         }
@@ -50,17 +50,17 @@ fn displayed(px: &[u8], o: Orientation) -> (u32, u32, Vec<[u8; 3]>) {
 }
 
 /// RGB samples of a decoded RGB8 or RGBA8 image.
-fn rgb(px: &PixelSlice<'_>) -> (u32, u32, Vec<[u8; 3]>) {
-    let n = px.descriptor().layout().channels();
-    assert!(n == 3 || n == 4, "{:?}", px.descriptor());
+fn rgb(px: &PixelView<'_>) -> (u32, u32, Vec<[u8; 3]>) {
+    let n = px.format().layout.order.channels();
+    assert!(n == 3 || n == 4, "{:?}", px.format());
     let mut out = Vec::new();
-    for y in 0..px.rows() {
+    for y in 0..px.height() {
         let row = px.row(y);
         for x in 0..px.width() as usize {
             out.push([row[x * n], row[x * n + 1], row[x * n + 2]]);
         }
     }
-    (px.width(), px.rows(), out)
+    (px.width(), px.height(), out)
 }
 
 // `Exif::to_bytes` is deprecated on zencodec main; the registry zencodec
@@ -105,12 +105,13 @@ fn one_shot_and_streaming_encodes_write_every_orientation_upright() {
                 .with_metadata(meta)
                 .build_streaming_encoder(W, H)
                 .unwrap();
-            se.encoder.begin(W, H, PixelDescriptor::RGB8_SRGB).unwrap();
+            se.encoder.begin(W, H, PixelFormat::RGB8_SRGB).unwrap();
             for y in 0..H {
                 let row = &px[(y * W * 3) as usize..((y + 1) * W * 3) as usize];
                 se.encoder
                     .push_rows(
-                        PixelSlice::new(row, W, 1, row.len(), PixelDescriptor::RGB8_SRGB).unwrap(),
+                        PixelView::new(row, W, 1, row.len(), &zenpixels::formats::RGB8_SRGB)
+                            .unwrap(),
                     )
                     .unwrap();
             }

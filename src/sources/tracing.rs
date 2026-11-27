@@ -64,16 +64,16 @@ impl TracingSource {
         let width = upstream.width();
         let height = upstream.height();
         let format = upstream.format();
-        let buf = StripBuf::new(width, 16u32.min(height), format);
+        let buf = StripBuf::new(width, 16u32.min(height), format.clone());
+        #[cfg(feature = "std")]
+        let bpp = format.layout.bytes_per_pixel();
 
         Self {
             upstream,
             buf,
             #[cfg(feature = "std")]
             dump_buf: if dump_path.is_some() {
-                Some(Vec::with_capacity(
-                    width as usize * height as usize * format.bytes_per_pixel(),
-                ))
+                Some(Vec::with_capacity(width as usize * height as usize * bpp))
             } else {
                 None
             },
@@ -142,16 +142,16 @@ impl Source for TracingSource {
 
         match upstream_strip {
             Some(strip) => {
-                let rows = strip.rows();
-                let stride = strip.stride();
+                let rows = strip.height();
+                let stride = strip.stride_bytes();
                 let data = strip.as_strided_bytes();
+                let bpp = self.format.layout.bytes_per_pixel();
 
                 // Record timing.
                 #[cfg(feature = "std")]
                 if let (Some(timing_arc), Some(start)) = (&self.timing, start) {
                     let elapsed = start.elapsed();
-                    let bytes =
-                        self.width as u64 * rows as u64 * self.format.bytes_per_pixel() as u64;
+                    let bytes = self.width as u64 * rows as u64 * bpp as u64;
                     let mut t = timing_arc.lock().unwrap();
                     t.total_duration += elapsed;
                     if self.strip_events {
@@ -175,8 +175,7 @@ impl Source for TracingSource {
                     && !acct.charged
                 {
                     acct.charged = true;
-                    acct.strip_bytes =
-                        self.width as u64 * rows as u64 * self.format.bytes_per_pixel() as u64;
+                    acct.strip_bytes = self.width as u64 * rows as u64 * bpp as u64;
                     let mut ledger = acct.ledger.lock().unwrap_or_else(|e| e.into_inner());
                     if acct.materialize_bytes > 0 {
                         ledger.allocate(
@@ -198,10 +197,10 @@ impl Source for TracingSource {
 
                 // Copy to our buffer for re-emission (row by row).
                 self.buf.reset();
-                self.buf.reconfigure(self.width, rows, self.format);
+                self.buf.reconfigure(self.width, rows, self.format.clone());
                 for r in 0..rows {
                     let row_start = r as usize * stride;
-                    let row_end = row_start + self.width as usize * self.format.bytes_per_pixel();
+                    let row_end = row_start + self.width as usize * bpp;
                     if row_end <= data.len() {
                         self.buf.push_row(&data[row_start..row_end]);
                     }
@@ -239,10 +238,10 @@ impl Source for TracingSource {
     }
 
     fn format(&self) -> PixelFormat {
-        self.format
+        self.format.clone()
     }
-    fn color_context(&self) -> Option<alloc::sync::Arc<zenpixels::ColorContext>> {
-        self.upstream.color_context()
+    fn color_origin(&self) -> Option<zenpixels::ColorOrigin> {
+        self.upstream.color_origin()
     }
 }
 
@@ -263,7 +262,7 @@ impl TracingSource {
             let _ = std::fs::create_dir_all(parent);
         }
 
-        let bpp = self.format.bytes_per_pixel();
+        let bpp = self.format.layout.bytes_per_pixel();
         let stride = self.width as usize * bpp;
         let actual_rows = data.len() / stride.max(1);
 

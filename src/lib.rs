@@ -118,21 +118,18 @@ pub use strip::{Strip, StripBuf};
 
 // Re-export key zenpixels-convert types.
 pub use zenpixels_convert::{
-    AlphaMode, ChannelLayout, ChannelType, ColorPrimaries, PixelDescriptor, RowConverter,
-    SignalRange, TransferFunction,
+    AlphaMode, AlphaPolicy, ChannelOrder, ColorOrigin, ColorSpace, ConvertPolicy, HlgMode,
+    Primaries, RowPlan, SampleLayout, SampleType, SignalRange, Transfer,
 };
 
 // Re-export cancellation types.
 pub use enough::{Stop, Unstoppable};
 
 // Re-export CMS types (std only — moxcms requires std).
-// ColorManagement is deprecated upstream in favor of PluggableCms; the
-// re-export stays until zenpipe's CMS surface migrates (public API).
 #[cfg(feature = "std")]
-#[allow(deprecated)]
-pub use zenpixels_convert::cms::{ColorManagement, RowTransform};
+pub use zenpixels_convert::MoxCms;
 #[cfg(feature = "std")]
-pub use zenpixels_convert::cms_moxcms::MoxCms;
+pub use zenpixels_convert::cms::{CmsBackend, CmsTransform};
 
 /// A source of pixel strips (pull-based).
 pub trait Source: Send {
@@ -144,12 +141,12 @@ pub trait Source: Send {
     fn height(&self) -> u32;
     /// Pixel format of output strips.
     fn format(&self) -> PixelFormat;
-    /// The color interpretation of this source's samples, when it is known
+    /// The color provenance of this source's samples, when it is known
     /// before any strip is produced. `None` means unknown: an encoder that must
     /// declare its header color needs it supplied explicitly. Operators that
     /// keep their upstream's interpretation delegate; anything that changes or
     /// cannot vouch for it keeps this default.
-    fn color_context(&self) -> Option<alloc::sync::Arc<zenpixels::ColorContext>> {
+    fn color_origin(&self) -> Option<zenpixels::ColorOrigin> {
         None
     }
 }
@@ -168,8 +165,8 @@ impl<S: Source + ?Sized> Source for alloc::boxed::Box<S> {
     fn format(&self) -> PixelFormat {
         (**self).format()
     }
-    fn color_context(&self) -> Option<alloc::sync::Arc<zenpixels::ColorContext>> {
-        (**self).color_context()
+    fn color_origin(&self) -> Option<zenpixels::ColorOrigin> {
+        (**self).color_origin()
     }
 }
 

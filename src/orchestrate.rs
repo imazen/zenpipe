@@ -251,7 +251,7 @@ pub fn stream(
             crate::graph::SourceInfo {
                 width: config.source_info.width,
                 height: config.source_info.height,
-                format: config.source_info.format,
+                format: config.source_info.format.clone(),
             },
         );
         let estimate = graph.estimate(&est_sources)?;
@@ -523,12 +523,13 @@ mod tests {
                 return Ok(None);
             }
             let rows = 16.min(self.h - self.y);
-            let stride = RGBA8_SRGB.aligned_stride(self.w);
+            let stride = crate::format::aligned_stride(&RGBA8_SRGB, self.w);
             let data = alloc::vec![128u8; stride * rows as usize];
             self.y += rows;
             let leaked: &'static [u8] = alloc::vec::Vec::leak(data);
+            static FMT: PixelFormat = RGBA8_SRGB;
             Ok(Some(
-                crate::strip::Strip::new(leaked, self.w, rows, stride, RGBA8_SRGB).pipe_err()?,
+                crate::strip::Strip::new(leaked, self.w, rows, stride, &FMT).pipe_err()?,
             ))
         }
         fn width(&self) -> u32 {
@@ -753,7 +754,7 @@ mod tests {
         let mut src = output.source;
         let mut total_rows = 0u32;
         while let Some(strip) = src.next().unwrap() {
-            total_rows += strip.rows();
+            total_rows += strip.height();
             assert_eq!(strip.width(), 200);
         }
         assert_eq!(total_rows, 150);

@@ -1,28 +1,23 @@
 //! Streaming ICC profile transform source.
 //!
 //! Applies an ICC-to-ICC color conversion row-by-row using any
-//! [`ColorManagement`] backend (default: moxcms via `std` feature).
+//! [`CmsBackend`] backend (default: moxcms via `std` feature).
 //!
 //! # Usage
 //!
 //! ```ignore
 //! use zenpipe::sources::IccTransformSource;
-//! use zenpixels_convert::cms_moxcms::MoxCms;
-//! use zenpixels_convert::cms::ColorManagement;
+//! use zenpixels_convert::MoxCms;
+//! use zenpixels_convert::cms::CmsBackend;
 //!
 //! let source = IccTransformSource::new(upstream, &src_icc, &dst_icc, &MoxCms)?;
 //! ```
-
-// ColorManagement is deprecated upstream in favor of PluggableCms; this
-// source keeps the old trait until zenpipe's CMS surface migrates — the
-// generic `C: ColorManagement` parameter is public API.
-#![allow(deprecated)]
 
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use zenpixels_convert::cms::{ColorManagement, RowTransform};
+use zenpixels_convert::cms::{CmsBackend, CmsTransform};
 
 use crate::Source;
 #[allow(unused_imports)]
@@ -35,11 +30,11 @@ use crate::strip::Strip;
 /// Streaming ICC profile transform.
 ///
 /// Applies an ICC-to-ICC color conversion row-by-row using a pre-built
-/// [`RowTransform`]. Pulls strips from upstream, transforms each row,
+/// [`CmsTransform`]. Pulls strips from upstream, transforms each row,
 /// and yields the result.
 ///
 /// The transform is created at construction time — no per-strip overhead
-/// beyond the row-level conversion. Works with any [`ColorManagement`]
+/// beyond the row-level conversion. Works with any [`CmsBackend`]
 /// backend (moxcms, lcms2, etc.).
 ///
 /// # Format constraints
@@ -49,7 +44,7 @@ use crate::strip::Strip;
 /// change color values, not pixel layout.
 pub struct IccTransformSource {
     upstream: Box<dyn Source>,
-    transform: Box<dyn RowTransform>,
+    transform: Arc<dyn CmsTransform>,
     /// ICC profile bytes for the output color space (for downstream consumers).
     dst_icc: Arc<[u8]>,
     /// Output buffer for transformed rows.
@@ -69,35 +64,58 @@ impl IccTransformSource {
     ///
     /// Returns `PipeError::Op` if the ICC profiles can't be parsed or the
     /// CMS can't create a transform between them.
-    pub fn new<C: ColorManagement>(
+    pub fn new<C: CmsBackend>(
         upstream: Box<dyn Source>,
         src_icc: &[u8],
         dst_icc: &[u8],
         cms: &C,
     ) -> crate::PipeResult<Self> {
         let format = upstream.format();
-        let pixel_format = format.pixel_format();
+        let layout = format.layout;
+        let alpha = format.color.alpha();
+        let color_channels = layout.order.channels() as u8
+            - u8::from(layout.order.has_alpha_slot() || layout.order.has_padding_slot());
+        let src_icc_arc: Arc<[u8]> = Arc::from(src_icc);
+        let dst_icc_arc: Arc<[u8]> = Arc::from(dst_icc);
+        let src_fmt = PixelFormat::new(
+            layout,
+            zenpixels::ColorSpace::Icc {
+                profile: src_icc_arc,
+                color_channels,
+                intent: zenpixels::RenderingIntent::Perceptual,
+                alpha,
+            },
+        );
+        let dst_fmt = PixelFormat::new(
+            layout,
+            zenpixels::ColorSpace::Icc {
+                profile: Arc::clone(&dst_icc_arc),
+                color_channels,
+                intent: zenpixels::RenderingIntent::Perceptual,
+                alpha,
+            },
+        );
 
         let transform = cms
-            .build_transform_for_format(src_icc, dst_icc, pixel_format, pixel_format)
+            .build_transform(&src_fmt, &dst_fmt)
             .map_err(|e| at!(PipeError::Op(alloc::format!("ICC transform failed: {e:?}"))))?;
 
         Ok(Self {
             upstream,
             transform,
-            dst_icc: Arc::from(dst_icc),
+            dst_icc: dst_icc_arc,
             buf: Vec::new(),
             format,
         })
     }
 
-    /// Create from a pre-built [`RowTransform`].
+    /// Create from a pre-built [`CmsTransform`].
     ///
     /// Use this when you've already created the transform (e.g., from a
     /// cached CMS instance) and want to avoid re-parsing ICC profiles.
     pub fn from_transform(
         upstream: Box<dyn Source>,
-        transform: Box<dyn RowTransform>,
+        transform: Arc<dyn CmsTransform>,
         dst_icc: Arc<[u8]>,
     ) -> Self {
         let format = upstream.format();
@@ -125,9 +143,9 @@ impl Source for IccTransformSource {
         };
 
         let width = strip.width();
-        let height = strip.rows();
-        let dst_stride = self.format.aligned_stride(width);
-        let src_stride = strip.stride();
+        let height = strip.height();
+        let dst_stride = crate::format::aligned_stride(&self.format, width);
+        let src_stride = strip.stride_bytes();
         let total_bytes = crate::limits::checked_stride_buffer(dst_stride, height)?;
 
         self.buf.resize(total_bytes, 0);
@@ -160,15 +178,21 @@ impl Source for IccTransformSource {
                         len = src_bytes.len()
                     )))
                 })?;
-            self.transform.transform_row(
-                &src_bytes[src_start..src_end],
-                &mut self.buf[dst_start..dst_start + row_bytes],
-                width,
-            );
+            self.transform
+                .transform_row(
+                    &src_bytes[src_start..src_end],
+                    &mut self.buf[dst_start..dst_start + row_bytes],
+                    width,
+                )
+                .map_err(|e| {
+                    at!(PipeError::Op(alloc::format!(
+                        "ICC row transform failed: {e:?}"
+                    )))
+                })?;
         }
 
         Ok(Some(
-            Strip::new(&self.buf, width, height, dst_stride, self.format).pipe_err()?,
+            Strip::new(&self.buf, width, height, dst_stride, &self.format).pipe_err()?,
         ))
     }
 
@@ -181,6 +205,6 @@ impl Source for IccTransformSource {
     }
 
     fn format(&self) -> PixelFormat {
-        self.format
+        self.format.clone()
     }
 }

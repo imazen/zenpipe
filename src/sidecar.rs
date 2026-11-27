@@ -215,13 +215,13 @@ mod tests {
                 return Ok(None);
             }
             let rows = 16.min(self.height - self.y);
-            let stride = self.format.aligned_stride(self.width);
+            let stride = crate::format::aligned_stride(&self.format, self.width);
             let data = alloc::vec![128u8; stride * rows as usize];
             self.y += rows;
             // Leak the data to get a 'static lifetime for testing.
             let leaked: &'static [u8] = alloc::vec::Vec::leak(data);
             Ok(Some(
-                Strip::new(leaked, self.width, rows, stride, self.format).pipe_err()?,
+                Strip::new(leaked, self.width, rows, stride, &self.format).pipe_err()?,
             ))
         }
 
@@ -234,7 +234,7 @@ mod tests {
         }
 
         fn format(&self) -> PixelFormat {
-            self.format
+            self.format.clone()
         }
     }
 
@@ -255,7 +255,7 @@ mod tests {
                 return Ok(None);
             }
             self.done = true;
-            let stride = self.format.aligned_stride(self.width);
+            let stride = crate::format::aligned_stride(&self.format, self.width);
             let mut padded = alloc::vec![0u8; stride * self.height as usize];
             for y in 0..self.height as usize {
                 let row = &self.data[y * self.width as usize..(y + 1) * self.width as usize];
@@ -263,7 +263,7 @@ mod tests {
             }
             let leaked: &'static [u8] = alloc::vec::Vec::leak(padded);
             Ok(Some(
-                Strip::new(leaked, self.width, self.height, stride, self.format).pipe_err()?,
+                Strip::new(leaked, self.width, self.height, stride, &self.format).pipe_err()?,
             ))
         }
 
@@ -276,14 +276,14 @@ mod tests {
         }
 
         fn format(&self) -> PixelFormat {
-            self.format
+            self.format.clone()
         }
     }
 
     /// zenpipe#41: gain-map sidecars must be resampled in **encoded space**
     /// (the stored values are log2-quantized gain, not color), matching how
     /// Skia's SkGainmapShader and libultrahdr sample gain maps. With the
-    /// `TransferFunction::Linear` label the transfer-aware layout pipeline
+    /// `Transfer::Linear` label the transfer-aware layout pipeline
     /// interpolates the raw values; an sRGB label would run them through the
     /// EOTF→resample→OETF round-trip, dragging boundary mixes of (10, 200)
     /// from the encoded-space ~105 up to the sRGB-space ~147 — a gap far
@@ -298,12 +298,8 @@ mod tests {
             }
         }
         // The label decode_source_with_gainmap applies since #41.
-        let gm_format = PixelFormat::new(
-            crate::ChannelType::U8,
-            crate::ChannelLayout::Gray,
-            None,
-            crate::TransferFunction::Linear,
-        );
+        let gm_format =
+            PixelFormat::new(crate::SampleLayout::GRAY8, crate::ColorSpace::GRAY_LINEAR);
         let source = GrayBytesSource {
             width: w,
             height: h,
@@ -327,17 +323,18 @@ mod tests {
         let mat = MaterializedSource::from_source(compiled).unwrap();
         assert_eq!((mat.width(), mat.height()), (4, 4));
         assert_eq!(
-            mat.format().transfer,
-            crate::TransferFunction::Linear,
+            crate::format::format_transfer(&mat.format()),
+            crate::Transfer::Linear,
             "gain-map sidecar must keep its Linear (encoded-domain) label through layout"
         );
 
         // Read per-pixel values regardless of what layout the pipeline
         // emitted (channel 0 is the gain value in both Gray and RGB).
-        let ch = mat.format().channels();
+        let mat_fmt = mat.format();
+        let ch = mat_fmt.layout.channels();
         let values: alloc::vec::Vec<u8> = mat
             .data()
-            .chunks_exact(mat.format().aligned_stride(mat.width()))
+            .chunks_exact(crate::format::aligned_stride(&mat_fmt, mat.width()))
             .take(mat.height() as usize)
             .flat_map(|row| {
                 row[..mat.width() as usize * ch]

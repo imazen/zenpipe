@@ -6,7 +6,7 @@
 //! Run on wasm:  `cargo build --example wasm_roundtrip --target wasm32-wasip1 --release --features std`
 //!               `wasmtime target/wasm32-wasip1/release/examples/wasm_roundtrip.wasm`
 
-use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, PixelBufferConvertTypedExt as _};
+use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat};
 
 fn main() {
     // Embed a small test JPEG
@@ -31,8 +31,15 @@ fn main() {
         meta.xmp.as_deref().map_or(0, |p| p.len()),
     );
 
-    let rgb8 = decoded.into_buffer().to_rgb8();
-    let img = rgb8.as_imgref();
+    let rgb_buf = zenpixels_convert::convert_to_buf(
+        &decoded.pixels(),
+        zenpixels::PixelFormat::RGB8_SRGB,
+        &zenpixels_convert::ConvertPolicy::permissive(),
+    )
+    .unwrap();
+    let (w, h) = (rgb_buf.width() as usize, rgb_buf.height() as usize);
+    let rgb8 = imgref::ImgVec::new(rgb_buf.into_vec().unwrap(), w, h);
+    let img = rgb8.as_ref();
 
     for (name, format) in [
         ("JPEG", ImageFormat::Jpeg),

@@ -7,7 +7,7 @@
 //!          `wasmtime --dir /path target/.../bench_wasm.wasm -- <image_paths...>`
 
 use std::time::Instant;
-use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, PixelBufferConvertTypedExt as _};
+use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat};
 
 const ITERS: u32 = 3;
 
@@ -45,8 +45,15 @@ fn bench_image(path: &str) {
     let mpx = (w as f64 * h as f64) / 1_000_000.0;
     println!("  {w}x{h} ({mpx:.1} MP) {:?}", decoded.format());
 
-    let rgb = decoded.into_buffer().to_rgb8();
-    let img = rgb.as_imgref();
+    let rgb_buf = zenpixels_convert::convert_to_buf(
+        &decoded.pixels(),
+        zenpixels::PixelFormat::RGB8_SRGB,
+        &zenpixels_convert::ConvertPolicy::permissive(),
+    )
+    .unwrap();
+    let rgb_vec: Vec<rgb::Rgb<u8>> = rgb_buf.into_vec().unwrap();
+    let rgb = imgref::ImgVec::new(rgb_vec, w as usize, h as usize);
+    let img = rgb.as_ref();
 
     // Encode to each format
     for (name, format) in [

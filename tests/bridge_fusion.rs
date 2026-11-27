@@ -25,7 +25,7 @@ use zenpipe::{Source, format};
 // ═══════════════════════════════════════════════════════════════════════
 
 fn solid_source(w: u32, h: u32) -> Box<dyn Source> {
-    let bpp = format::RGBA8_SRGB.bytes_per_pixel();
+    let bpp = format::RGBA8_SRGB.layout.bytes_per_pixel();
     let data = vec![128u8; w as usize * h as usize * bpp];
     Box::new(MaterializedSource::from_data(
         data,
@@ -579,7 +579,7 @@ fn pipeline_streams_all_strips() {
     let mut src = result.source;
     let mut total_rows = 0u32;
     while let Some(strip) = src.next().unwrap() {
-        total_rows += strip.rows();
+        total_rows += strip.height();
         assert_eq!(strip.width(), 100);
     }
     assert_eq!(total_rows, 100);
@@ -616,7 +616,7 @@ fn passthrough_streams() {
     let mut src = result.source;
     let mut total_rows = 0u32;
     while let Some(strip) = src.next().unwrap() {
-        total_rows += strip.rows();
+        total_rows += strip.height();
     }
     assert_eq!(total_rows, 100);
 }

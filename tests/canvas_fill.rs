@@ -38,10 +38,10 @@ fn coord_source(w: u32, h: u32) -> Box<dyn Source> {
 fn drain(source: &mut dyn Source) -> Vec<u8> {
     let mut out = Vec::new();
     while let Ok(Some(strip)) = source.next() {
-        let stride = strip.stride();
+        let stride = strip.stride_bytes();
         let row_bytes = strip.width() as usize * 4;
         let bytes = strip.as_strided_bytes();
-        for r in 0..strip.rows() as usize {
+        for r in 0..strip.height() as usize {
             out.extend_from_slice(&bytes[r * stride..r * stride + row_bytes]);
         }
     }

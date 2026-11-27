@@ -68,23 +68,44 @@ fn apply_icc_to_source(
     src_icc: &[u8],
     dst_icc: &[u8],
 ) -> Result<Box<dyn crate::Source>, ZenError> {
-    let src_format = source.format();
-    let pixel_format = src_format.pixel_format();
+    let format = source.format();
+    let layout = format.layout;
+    let alpha = format.color.alpha();
+    let color_channels = layout.order.channels() as u8
+        - u8::from(layout.order.has_alpha_slot() || layout.order.has_padding_slot());
+    let src_icc_arc: std::sync::Arc<[u8]> = std::sync::Arc::from(src_icc);
+    let dst_icc_arc: std::sync::Arc<[u8]> = std::sync::Arc::from(dst_icc);
+    let src_fmt = crate::PixelFormat::new(
+        layout,
+        zenpixels::ColorSpace::Icc {
+            profile: src_icc_arc,
+            color_channels,
+            intent: zenpixels::RenderingIntent::Perceptual,
+            alpha,
+        },
+    );
+    let dst_fmt = crate::PixelFormat::new(
+        layout,
+        zenpixels::ColorSpace::Icc {
+            profile: std::sync::Arc::clone(&dst_icc_arc),
+            color_channels,
+            intent: zenpixels::RenderingIntent::Perceptual,
+            alpha,
+        },
+    );
 
-    // ColorManagement is deprecated upstream (PluggableCms yields RowTransformMut);
-    // IccTransformSource's public `from_transform` takes `Box<dyn RowTransform>`, so
-    // the old builder stays until zenpipe's CMS surface migrates (see lib.rs).
-    #[allow(deprecated)]
     let transform = {
-        use crate::ColorManagement as _;
-        crate::MoxCms.build_transform_for_format(src_icc, dst_icc, pixel_format, pixel_format)
+        use crate::CmsBackend as _;
+        crate::MoxCms.build_transform(&src_fmt, &dst_fmt)
     };
 
     match transform {
         Ok(row_transform) => {
-            let dst_arc: std::sync::Arc<[u8]> = std::sync::Arc::from(dst_icc.to_vec());
-            let transformed =
-                crate::sources::IccTransformSource::from_transform(source, row_transform, dst_arc);
+            let transformed = crate::sources::IccTransformSource::from_transform(
+                source,
+                row_transform,
+                dst_icc_arc,
+            );
             Ok(Box::new(transformed))
         }
         Err(_) => Ok(source), // Transform not possible — pass through

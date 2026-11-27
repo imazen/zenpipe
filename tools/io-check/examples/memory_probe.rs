@@ -12,13 +12,13 @@ use std::num::NonZeroUsize;
 
 use zencodec::CodecSet;
 use zencodec::encode::{EncodeJob, EncoderConfig};
-use zencodec::operation::{DecodeRequest, OutputSchedule, PolicySet};
+use zencodec::operation::{DecodeOptions as CodecDecodeOptions, OutputSchedule, PolicySet};
 use zencodec::storage::StorageBudget;
 use zencodec_io::destination::Forward;
 use zencodec_io::row_encode::{self, Options};
 use zencodec_io::{DriveOptions, FileReadAt};
 use zenpipe::io::{DecodeOptions, DecodeSource, PipelineRows};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::PixelView;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
@@ -37,12 +37,12 @@ fn make(path: &str, width: u32, height: u32) -> Result<(), Error> {
             }
         })
         .collect();
-    let pixels = PixelSlice::new(
+    let pixels = PixelView::new(
         &samples,
         width,
         height,
         width as usize * 3,
-        PixelDescriptor::RGB8_SRGB,
+        &zenpixels::formats::RGB8_SRGB,
     )?;
     let file = zenpng::PngEncoderConfig::new()
         .job()
@@ -62,7 +62,7 @@ fn run(
     let codecs = CodecSet::new().with_decoder(zenpng::PngDecoderConfig::new());
     if schedule == "oneshot" {
         let bytes = std::fs::read(input)?;
-        let decoded = DecodeRequest::new().decode(&codecs, &bytes)?;
+        let decoded = CodecDecodeOptions::new().decode(&codecs, &bytes)?;
         let out = zenpng::PngEncoderConfig::new()
             .with_generic_effort(effort)
             .job()
@@ -75,7 +75,7 @@ fn run(
     let decode_budget = StorageBudget::new(1 << 30, 1024);
     let source = DecodeSource::new(
         &codecs,
-        &DecodeRequest::new(),
+        &CodecDecodeOptions::new(),
         FileReadAt::open(input)?,
         PolicySet::new(),
         DecodeOptions::new(decode_budget.clone()).with_drive(DriveOptions::new(0, 1 << 20)),

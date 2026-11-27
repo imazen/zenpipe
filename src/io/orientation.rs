@@ -9,12 +9,11 @@
 //! raster held first.
 
 use alloc::boxed::Box;
-use alloc::sync::Arc;
 
 use whereat::at;
 use zencodec::Orientation;
 use zencodec::storage::{OwnedStorage, StorageBudget};
-use zenpixels::{ColorContext, PixelDescriptor, PixelSlice};
+use zenpixels::{ColorOrigin, PixelView};
 
 use super::Refusal;
 use crate::error::{PipeError, PipeResult};
@@ -40,26 +39,21 @@ pub struct OrientationCost {
     /// Stored rows held before the first upright row exists: zero for
     /// `Identity` and `FlipH`, the whole stored height otherwise.
     pub held_rows: u32,
-    /// Bytes for the held rows at the stored descriptor; `None` on overflow.
+    /// Bytes for the held rows at the stored format; `None` on overflow.
     pub held_bytes: Option<u64>,
 }
 
 impl OrientationCost {
     /// The cost of rendering a `width` x `height` stored raster upright.
-    pub fn new(
-        orientation: Orientation,
-        width: u32,
-        height: u32,
-        descriptor: PixelDescriptor,
-    ) -> Self {
+    pub fn new(orientation: Orientation, width: u32, height: u32, format: PixelFormat) -> Self {
         let (out_width, out_height) = orientation.output_dimensions(width, height);
-        let held_rows = if orientation.is_row_local() {
+        let held_rows = if orientation.keeps_row_index() {
             0
         } else {
             height
         };
         let held_bytes = u64::from(width)
-            .checked_mul(descriptor.bytes_per_pixel() as u64)
+            .checked_mul(format.layout.bytes_per_pixel() as u64)
             .and_then(|row| row.checked_mul(u64::from(held_rows)));
         Self {
             orientation,
@@ -128,7 +122,7 @@ struct OrientedRaster {
     bpp: usize,
     format: PixelFormat,
     strip_rows: u32,
-    color: Option<Arc<ColorContext>>,
+    origin: Option<ColorOrigin>,
     y: u32,
 }
 
@@ -143,8 +137,8 @@ impl OrientedRaster {
         if strip_rows == 0 || width == 0 || height == 0 {
             return Err(at!(PipeError::Codec(Box::new(Refusal::InvalidOptions))));
         }
-        let cost = OrientationCost::new(orientation, width, height, format);
-        let bpp = format.bytes_per_pixel();
+        let cost = OrientationCost::new(orientation, width, height, format.clone());
+        let bpp = format.layout.bytes_per_pixel();
         let held = cost
             .held_bytes
             .and_then(|bytes| usize::try_from(bytes).ok())
@@ -154,7 +148,7 @@ impl OrientedRaster {
             .checked_mul(bpp)
             .and_then(|row| row.checked_mul(strip_rows as usize))
             .ok_or_else(|| at!(PipeError::Codec(Box::new(Refusal::StripGeometry))))?;
-        let color = upstream.color_context();
+        let origin = upstream.color_origin();
         let raster = storage
             .bytes(held)
             .map_err(|e| at!(PipeError::Codec(Box::new(e))))?;
@@ -171,7 +165,7 @@ impl OrientedRaster {
             bpp,
             format,
             strip_rows,
-            color,
+            origin,
             y: 0,
         })
     }
@@ -183,15 +177,15 @@ impl OrientedRaster {
         let row_bytes = self.stored.0 as usize * self.bpp;
         let mut y = 0usize;
         while let Some(strip) = upstream.next()? {
-            if strip.width() != self.stored.0 || strip.descriptor() != self.format {
+            if strip.width() != self.stored.0 || *strip.format() != self.format {
                 return Err(at!(PipeError::Codec(Box::new(Refusal::SourceChanged))));
             }
-            if let (Some(context), Some(declared)) = (strip.color_context(), &self.color)
-                && context != declared
+            if let (Some(actual), Some(declared)) = (strip.origin(), &self.origin)
+                && actual != declared
             {
                 return Err(at!(PipeError::Codec(Box::new(Refusal::ColorChanged))));
             }
-            for r in 0..strip.rows() {
+            for r in 0..strip.height() {
                 let start = y * row_bytes;
                 let dst = self
                     .raster
@@ -234,16 +228,16 @@ impl Source for OrientedRaster {
             }
         }
         self.y += rows;
-        let mut strip = PixelSlice::new(
+        let mut strip = PixelView::new(
             &self.strip.as_slice()[..rows as usize * row_bytes],
             width,
             rows,
             row_bytes,
-            self.format,
+            &self.format,
         )
         .map_err(|e| at!(PipeError::Codec(Box::new(e))))?;
-        if let Some(color) = &self.color {
-            strip = strip.with_color_context(color.clone());
+        if let Some(ref origin) = self.origin {
+            strip = strip.with_origin(origin);
         }
         Ok(Some(strip))
     }
@@ -257,11 +251,11 @@ impl Source for OrientedRaster {
     }
 
     fn format(&self) -> PixelFormat {
-        self.format
+        self.format.clone()
     }
 
     /// Reorienting keeps the stored samples' interpretation.
-    fn color_context(&self) -> Option<Arc<ColorContext>> {
-        self.color.clone()
+    fn color_origin(&self) -> Option<ColorOrigin> {
+        self.origin.clone()
     }
 }

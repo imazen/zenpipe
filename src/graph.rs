@@ -205,7 +205,11 @@ impl ResourceEstimate {
 
     /// Check this estimate against resource limits.
     pub fn check(&self, limits: &crate::Limits) -> crate::PipeResult<()> {
-        limits.check(self.output_width, self.output_height, self.output_format)?;
+        limits.check(
+            self.output_width,
+            self.output_height,
+            self.output_format.clone(),
+        )?;
         if let Some(max_mem) = limits.max_memory_bytes
             && self.peak_memory_bytes() > max_mem
         {
@@ -754,7 +758,7 @@ impl PipelineGraph {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
                 // Strip buffer for crop output
-                est.streaming_bytes += strip_mem(*w, upstream.format);
+                est.streaming_bytes += strip_mem(*w, &upstream.format);
                 Ok(SourceInfo {
                     width: *w,
                     height: *h,
@@ -773,10 +777,11 @@ impl PipelineGraph {
                 };
                 // Resize ring buffer: kernel_height rows of input width
                 let kernel_rows = 16u64; // conservative for most filters
-                est.streaming_bytes +=
-                    kernel_rows * upstream.width as u64 * upstream.format.bytes_per_pixel() as u64;
+                est.streaming_bytes += kernel_rows
+                    * upstream.width as u64
+                    * upstream.format.layout.bytes_per_pixel() as u64;
                 // Output strip buffer
-                est.streaming_bytes += strip_mem(*w, out_fmt);
+                est.streaming_bytes += strip_mem(*w, &out_fmt);
                 Ok(SourceInfo {
                     width: *w,
                     height: *h,
@@ -819,9 +824,10 @@ impl PipelineGraph {
                 let out_h = plan.canvas.height;
                 // Resize ring buffer + output strip
                 let kernel_rows = 16u64;
-                est.streaming_bytes +=
-                    kernel_rows * upstream.width as u64 * upstream.format.bytes_per_pixel() as u64;
-                est.streaming_bytes += strip_mem(out_w, format::RGBA8_SRGB);
+                est.streaming_bytes += kernel_rows
+                    * upstream.width as u64
+                    * upstream.format.layout.bytes_per_pixel() as u64;
+                est.streaming_bytes += strip_mem(out_w, &format::RGBA8_SRGB);
                 // Orient may need materialization
                 if orientation.is_some() {
                     let o = zenlayout::Orientation::from_exif(orientation.unwrap())
@@ -830,7 +836,7 @@ impl PipelineGraph {
                         est.materializes = true;
                         let mat = upstream.width as u64
                             * upstream.height as u64
-                            * upstream.format.bytes_per_pixel() as u64;
+                            * upstream.format.layout.bytes_per_pixel() as u64;
                         est.materialization_bytes = est.materialization_bytes.max(mat);
                     }
                 }
@@ -847,9 +853,10 @@ impl PipelineGraph {
                 let out_w = plan.canvas.width;
                 let out_h = plan.canvas.height;
                 let kernel_rows = 16u64;
-                est.streaming_bytes +=
-                    kernel_rows * upstream.width as u64 * upstream.format.bytes_per_pixel() as u64;
-                est.streaming_bytes += strip_mem(out_w, format::RGBA8_SRGB);
+                est.streaming_bytes += kernel_rows
+                    * upstream.width as u64
+                    * upstream.format.layout.bytes_per_pixel() as u64;
+                est.streaming_bytes += strip_mem(out_w, &format::RGBA8_SRGB);
                 // A size-preserving plan runs exactly (`exact_identity_layout`):
                 // an orientation other than a horizontal flip holds the
                 // trimmed frame and its turned copy.
@@ -868,7 +875,8 @@ impl PipelineGraph {
                             (e.output_dims.width, e.output_dims.height)
                         });
                     let (tw, th) = plan.trim.map_or(input, |t| (t.width, t.height));
-                    let frame = tw as u64 * th as u64 * format::RGBA8_SRGB.bytes_per_pixel() as u64;
+                    let frame =
+                        tw as u64 * th as u64 * format::RGBA8_SRGB.layout.bytes_per_pixel() as u64;
                     est.materializes = true;
                     est.materialization_bytes =
                         est.materialization_bytes.max(frame.saturating_mul(2));
@@ -883,7 +891,8 @@ impl PipelineGraph {
                         mw = mw.max(e.output_dims.width).max(e.input_dims.width);
                         mh = mh.max(e.output_dims.height).max(e.input_dims.height);
                     }
-                    let frame = mw as u64 * mh as u64 * format::RGBA8_SRGB.bytes_per_pixel() as u64;
+                    let frame =
+                        mw as u64 * mh as u64 * format::RGBA8_SRGB.layout.bytes_per_pixel() as u64;
                     est.materializes = true;
                     est.materialization_bytes =
                         est.materialization_bytes.max(frame.saturating_mul(2));
@@ -904,8 +913,8 @@ impl PipelineGraph {
                 let out_h = plan.canvas.height.max(bg.height);
                 let kernel_rows = 16u64;
                 est.streaming_bytes +=
-                    kernel_rows * fg.width as u64 * fg.format.bytes_per_pixel() as u64;
-                est.streaming_bytes += strip_mem(out_w, format::RGBAF32_LINEAR_PREMUL);
+                    kernel_rows * fg.width as u64 * fg.format.layout.bytes_per_pixel() as u64;
+                est.streaming_bytes += strip_mem(out_w, &format::RGBAF32_LINEAR_PREMUL);
                 Ok(SourceInfo {
                     width: out_w,
                     height: out_h,
@@ -919,9 +928,10 @@ impl PipelineGraph {
                 let out_w = config.total_output_width();
                 let out_h = config.total_output_height();
                 let kernel_rows = 16u64;
-                est.streaming_bytes +=
-                    kernel_rows * upstream.width as u64 * upstream.format.bytes_per_pixel() as u64;
-                est.streaming_bytes += strip_mem(out_w, format::RGBA8_SRGB);
+                est.streaming_bytes += kernel_rows
+                    * upstream.width as u64
+                    * upstream.format.layout.bytes_per_pixel() as u64;
+                est.streaming_bytes += strip_mem(out_w, &format::RGBA8_SRGB);
                 Ok(SourceInfo {
                     width: out_w,
                     height: out_h,
@@ -947,7 +957,7 @@ impl PipelineGraph {
                     est.materializes = true;
                     let mat = upstream.width as u64
                         * upstream.height as u64
-                        * format::RGBA8_SRGB.bytes_per_pixel() as u64;
+                        * format::RGBA8_SRGB.layout.bytes_per_pixel() as u64;
                     est.materialization_bytes = est.materialization_bytes.max(mat);
                 }
                 Ok(SourceInfo {
@@ -961,7 +971,7 @@ impl PipelineGraph {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
                 // Strip buffer for transform output (format may change)
-                est.streaming_bytes += strip_mem(upstream.width, upstream.format);
+                est.streaming_bytes += strip_mem(upstream.width, &upstream.format);
                 Ok(upstream)
             }
 
@@ -970,7 +980,7 @@ impl PipelineGraph {
                 let fg_id = self.find_input(node_id, EdgeKind::Input)?;
                 let bg = self.estimate_node(bg_id, source_info, est, depth + 1)?;
                 let _fg = self.estimate_node(fg_id, source_info, est, depth + 1)?;
-                est.streaming_bytes += strip_mem(bg.width, format::RGBAF32_LINEAR_PREMUL);
+                est.streaming_bytes += strip_mem(bg.width, &format::RGBAF32_LINEAR_PREMUL);
                 Ok(SourceInfo {
                     width: bg.width,
                     height: bg.height,
@@ -988,9 +998,9 @@ impl PipelineGraph {
                     let rows = 16u64 + 2 * overlap as u64;
                     est.streaming_bytes += rows
                         * upstream.width as u64
-                        * format::RGBAF32_LINEAR.bytes_per_pixel() as u64;
+                        * format::RGBAF32_LINEAR.layout.bytes_per_pixel() as u64;
                 }
-                est.streaming_bytes += strip_mem(upstream.width, format::RGBAF32_LINEAR);
+                est.streaming_bytes += strip_mem(upstream.width, &format::RGBAF32_LINEAR);
                 Ok(SourceInfo {
                     width: upstream.width,
                     height: upstream.height,
@@ -1002,7 +1012,7 @@ impl PipelineGraph {
             NodeOp::IccTransform { .. } => {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
-                est.streaming_bytes += strip_mem(upstream.width, upstream.format);
+                est.streaming_bytes += strip_mem(upstream.width, &upstream.format);
                 Ok(upstream)
             }
 
@@ -1012,14 +1022,14 @@ impl PipelineGraph {
                 let out_fmt = format::RGB8_SRGB;
                 // Short-circuit: no extra buffers needed when upstream
                 // already lacks alpha (matte compositing is skipped).
-                if !upstream.format.has_alpha() {
+                if !crate::format::format_has_alpha(&upstream.format) {
                     return Ok(SourceInfo {
                         width: upstream.width,
                         height: upstream.height,
                         format: out_fmt,
                     });
                 }
-                est.streaming_bytes += strip_mem(upstream.width, out_fmt);
+                est.streaming_bytes += strip_mem(upstream.width, &out_fmt);
                 Ok(SourceInfo {
                     width: upstream.width,
                     height: upstream.height,
@@ -1031,7 +1041,7 @@ impl PipelineGraph {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
                 let out_fmt = format::RGBA8_SRGB;
-                est.streaming_bytes += strip_mem(upstream.width, out_fmt);
+                est.streaming_bytes += strip_mem(upstream.width, &out_fmt);
                 Ok(SourceInfo {
                     width: upstream.width,
                     height: upstream.height,
@@ -1048,9 +1058,9 @@ impl PipelineGraph {
                 let input_id = self.find_input(node_id, EdgeKind::Input)?;
                 let upstream = self.estimate_node(input_id, source_info, est, depth + 1)?;
                 // Overlay image is held in memory
-                let ov_mem = *ov_w as u64 * *ov_h as u64 * ov_fmt.bytes_per_pixel() as u64;
+                let ov_mem = *ov_w as u64 * *ov_h as u64 * ov_fmt.layout.bytes_per_pixel() as u64;
                 est.streaming_bytes += ov_mem;
-                est.streaming_bytes += strip_mem(upstream.width, format::RGBAF32_LINEAR_PREMUL);
+                est.streaming_bytes += strip_mem(upstream.width, &format::RGBAF32_LINEAR_PREMUL);
                 Ok(SourceInfo {
                     width: upstream.width,
                     height: upstream.height,
@@ -1109,7 +1119,7 @@ impl PipelineGraph {
                 est.materializes = true;
                 let mat = upstream.width as u64
                     * upstream.height as u64
-                    * upstream.format.bytes_per_pixel() as u64;
+                    * upstream.format.layout.bytes_per_pixel() as u64;
                 est.materialization_bytes = est.materialization_bytes.max(mat);
                 Ok(upstream)
             }
@@ -1121,7 +1131,7 @@ impl PipelineGraph {
                 est.materializes = true;
                 let mat = upstream.width as u64
                     * upstream.height as u64
-                    * upstream.format.bytes_per_pixel() as u64;
+                    * upstream.format.layout.bytes_per_pixel() as u64;
                 est.materialization_bytes = est.materialization_bytes.max(mat);
                 Ok(upstream)
             }
@@ -1132,7 +1142,7 @@ impl PipelineGraph {
                 est.materializes = true;
                 let mat = upstream.width as u64
                     * upstream.height as u64
-                    * upstream.format.bytes_per_pixel() as u64;
+                    * upstream.format.layout.bytes_per_pixel() as u64;
                 est.materialization_bytes = est.materialization_bytes.max(mat);
                 Ok(upstream)
             }
@@ -1376,14 +1386,15 @@ impl PipelineGraph {
                 // sRGB, including linear f32 from a filter: narrowing that to linear
                 // u8 would crush the shadows.
                 let source_format = source.format();
-                let working = if source_format.transfer == crate::TransferFunction::Linear
-                    && source_format.channel_type() == zenpixels::ChannelType::U8
+                let working = if crate::format::format_transfer(&source_format)
+                    == crate::Transfer::Linear
+                    && source_format.layout.sample == crate::SampleType::U8
                 {
                     format::RGBA8_LINEAR
                 } else {
                     format::RGBA8_SRGB
                 };
-                source = ensure_fmt!(source, working, "Layout")?;
+                source = ensure_fmt!(source, working.clone(), "Layout")?;
 
                 // Split effects by where they run relative to the resize step.
                 let (before_resize, after_resize): (Vec<_>, Vec<_>) =
@@ -1487,7 +1498,7 @@ impl PipelineGraph {
                     fg_w,
                     fg_h,
                     &plan,
-                    zenresize::PixelDescriptor::RGBA8_SRGB,
+                    zenresize::PixelFormat::RGBA8_SRGB,
                     filter,
                     16,
                 );
@@ -1545,7 +1556,7 @@ impl PipelineGraph {
 
                 if use_f32 {
                     let config = builder
-                        .format(zenresize::PixelDescriptor::RGBAF32_LINEAR)
+                        .format(zenresize::PixelFormat::RGBAF32_LINEAR)
                         .build();
                     Ok((
                         Box::new(crate::sources::ResizeF32Source::new(upstream, &config, 16)?),
@@ -1659,7 +1670,7 @@ impl PipelineGraph {
                         in_w,
                         in_h,
                         &plan,
-                        zenresize::PixelDescriptor::RGBA8_SRGB,
+                        zenresize::PixelFormat::RGBA8_SRGB,
                         f,
                     );
                     if let Some(pct) = effective_sharpen {
@@ -1687,7 +1698,7 @@ impl PipelineGraph {
                         in_w,
                         in_h,
                         &plan,
-                        zenresize::PixelDescriptor::RGBA8_SRGB,
+                        zenresize::PixelFormat::RGBA8_SRGB,
                         f,
                         16,
                     );
@@ -1800,7 +1811,7 @@ impl PipelineGraph {
                             w,
                             h,
                         )
-                        .format(zenresize::PixelDescriptor::RGBAF32_LINEAR)
+                        .format(zenresize::PixelFormat::RGBAF32_LINEAR)
                         .build();
                         let source = Box::new(crate::sources::ResizeF32Source::new(
                             resize_upstream,
@@ -1837,7 +1848,7 @@ impl PipelineGraph {
                         upstream,
                         &src_icc,
                         &dst_icc,
-                        &zenpixels_convert::cms_moxcms::MoxCms,
+                        &zenpixels_convert::MoxCms,
                     )?),
                     meta,
                 ))
@@ -1849,7 +1860,7 @@ impl PipelineGraph {
                 let meta = capture_meta!(upstream);
                 // Short-circuit: if upstream has no alpha channel, matte
                 // compositing is a no-op — just ensure RGB8 output.
-                if !upstream.format().has_alpha() {
+                if !crate::format::format_has_alpha(&upstream.format()) {
                     let upstream = ensure_fmt!(upstream, format::RGB8_SRGB, "RemoveAlpha")?;
                     return Ok((upstream, meta));
                 }
@@ -2018,7 +2029,7 @@ impl PipelineGraph {
                 let mut mat = MaterializedSource::from_source(upstream)?;
                 let w = mat.width();
                 let h = mat.height();
-                let bpp = mat.format().bytes_per_pixel();
+                let bpp = mat.format().layout.bytes_per_pixel();
                 let data = mat.data_mut();
                 let x1 = (x1 as usize).min(w as usize);
                 let x2 = (x2 as usize).min(w as usize);
@@ -2176,9 +2187,9 @@ fn ensure_format(
     if current == target {
         return Ok(source);
     }
-    let op = RowConverterOp::new(current, target).ok_or_else(|| {
+    let op = RowConverterOp::new(current.clone(), target.clone()).ok_or_else(|| {
         PipeError::Op(alloc::format!(
-            "no conversion path from {current} to {target}"
+            "no conversion path from {current:?} to {target:?}"
         ))
     })?;
     Ok(Box::new(TransformSource::new(source).push(op)))
@@ -2209,8 +2220,8 @@ fn build_constraint(
 }
 
 /// Estimate memory for one strip buffer (16 rows at the given width and format).
-fn strip_mem(width: u32, fmt: PixelFormat) -> u64 {
-    16 * width as u64 * fmt.bytes_per_pixel() as u64
+fn strip_mem(width: u32, fmt: &PixelFormat) -> u64 {
+    16 * width as u64 * fmt.layout.bytes_per_pixel() as u64
 }
 
 // =============================================================================
@@ -2233,7 +2244,7 @@ fn detect_content_bounds(
         return (0, 0, w, h);
     }
 
-    let bpp = mat.format().bytes_per_pixel();
+    let bpp = mat.format().layout.bytes_per_pixel();
 
     // Reference color: top-left pixel
     let row0 = mat.row(0);

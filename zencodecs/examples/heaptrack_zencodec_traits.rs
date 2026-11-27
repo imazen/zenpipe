@@ -40,6 +40,7 @@ fn generate_rgba8(width: u32, height: u32) -> Vec<u8> {
 struct CollectingSink {
     rows_received: u32,
     buffer: Vec<u8>,
+    pending_format: Option<zenpixels::PixelFormat>,
 }
 
 impl CollectingSink {
@@ -47,6 +48,7 @@ impl CollectingSink {
         Self {
             rows_received: 0,
             buffer: Vec::new(),
+            pending_format: None,
         }
     }
 }
@@ -54,22 +56,21 @@ impl CollectingSink {
 impl zencodec::decode::DecodeRowSink for CollectingSink {
     fn provide_next_buffer(
         &mut self,
-        _y: u32,
-        height: u32,
-        width: u32,
-        descriptor: zenpixels::PixelDescriptor,
-    ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
-        let row_bytes = width as usize * descriptor.bytes_per_pixel();
-        let total = row_bytes * height as usize;
+        strip: zencodec::decode::RowStrip,
+        pixel_format: zenpixels::PixelFormat,
+    ) -> Result<zenpixels::PixelViewMut<'_>, zencodec::decode::SinkError> {
+        let row_bytes = strip.width as usize * pixel_format.layout.bytes_per_pixel();
+        let total = row_bytes * strip.height as usize;
         let start = self.buffer.len();
         self.buffer.resize(start + total, 0u8);
-        self.rows_received += height;
-        zenpixels::PixelSliceMut::new(
+        self.rows_received += strip.height;
+        let fmt = self.pending_format.insert(pixel_format);
+        zenpixels::PixelViewMut::new(
             &mut self.buffer[start..],
-            width,
-            height,
+            strip.width,
+            strip.height,
             row_bytes,
-            descriptor,
+            fmt,
         )
         .map_err(|e| Box::new(e) as zencodec::decode::SinkError)
     }
@@ -79,7 +80,7 @@ impl zencodec::decode::DecodeRowSink for CollectingSink {
 fn roundtrip_dyn(
     enc_config: &dyn zencodec::encode::DynEncoderConfig,
     dec_config: &dyn zencodec::decode::DynDecoderConfig,
-    pixels: &zenpixels::PixelBuffer,
+    pixels: &zenpixels::PixelBuf,
     limits: &zencodec::ResourceLimits,
     label: &str,
 ) {
@@ -93,7 +94,7 @@ fn roundtrip_dyn(
     let encoder = job
         .into_encoder()
         .unwrap_or_else(|e| panic!("{label} dyn_encoder: {e}"));
-    let pixel_slice = pixels.as_slice();
+    let pixel_slice = pixels.as_view();
     let encoded = encoder
         .encode(pixel_slice)
         .unwrap_or_else(|e| panic!("{label} dyn_encode: {e}"));
@@ -119,10 +120,10 @@ fn roundtrip_dyn(
     );
 
     let data_cow: Cow<'_, [u8]> = Cow::Borrowed(enc_bytes);
-    // Request u8 descriptors only — avoids bytemuck cast_vec alignment bug in JPEG f32 path
+    // Request u8 formats only — avoids bytemuck cast_vec alignment bug in JPEG f32 path
     let preferred_u8 = &[
-        zenpixels::PixelDescriptor::RGB8_SRGB,
-        zenpixels::PixelDescriptor::RGBA8_SRGB,
+        zenpixels::PixelFormat::RGB8_SRGB,
+        zenpixels::PixelFormat::RGBA8_SRGB,
     ];
     let dec = job
         .into_decoder(data_cow, preferred_u8)
@@ -132,10 +133,10 @@ fn roundtrip_dyn(
         .decode()
         .unwrap_or_else(|e| panic!("{label} dyn_decode: {e}"));
     eprintln!(
-        "  decoded: {}x{} descriptor={:?}",
+        "  decoded: {}x{} format={:?}",
         output.width(),
         output.height(),
-        output.descriptor()
+        output.pixel_format()
     );
 }
 
@@ -146,7 +147,7 @@ fn push_decode_jpeg(enc_bytes: &[u8], limits: &zencodec::ResourceLimits) {
         let dec = zenjpeg::JpegDecoderConfig::new();
         let job = dec.job().with_limits(*limits);
         let data_cow: Cow<'_, [u8]> = Cow::Borrowed(enc_bytes);
-        let preferred = zenjpeg::JpegDecoderConfig::supported_descriptors();
+        let preferred = zenjpeg::JpegDecoderConfig::supported_pixel_formats();
 
         let mut sink = CollectingSink::new();
         match job.push_decoder(data_cow, &mut sink, preferred) {
@@ -177,18 +178,14 @@ fn main() {
         .with_max_width(16384)
         .with_max_height(16384);
 
-    let rgb_buf = zenpixels::PixelBuffer::from_vec(
-        rgb_data,
-        width,
-        height,
-        zenpixels::PixelDescriptor::RGB8_SRGB,
-    )
-    .expect("rgb buffer");
-    let rgba_buf = zenpixels::PixelBuffer::from_vec(
+    let rgb_buf =
+        zenpixels::PixelBuf::from_bytes(rgb_data, width, height, zenpixels::PixelFormat::RGB8_SRGB)
+            .expect("rgb buffer");
+    let rgba_buf = zenpixels::PixelBuf::from_bytes(
         rgba_data,
         width,
         height,
-        zenpixels::PixelDescriptor::RGBA8_SRGB,
+        zenpixels::PixelFormat::RGBA8_SRGB,
     )
     .expect("rgba buffer");
 
@@ -206,7 +203,7 @@ fn main() {
         eprintln!("--- JPEG: concrete encode + push_decode ---");
         let job = enc.job().with_limits(limits);
         let encoder = job.encoder().expect("jpeg encoder");
-        let encoded = encoder.encode(rgb_buf.as_slice()).expect("jpeg encode");
+        let encoded = encoder.encode(rgb_buf.as_view()).expect("jpeg encode");
         push_decode_jpeg(encoded.data(), &limits);
     }
 

@@ -6,30 +6,30 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenpipe.txt 1380 lines (supported surface) | zenpipe.features.txt 221 added (features: job,job-ultrahdr,nodes-all,io-tokio,json-schema) | zenpipe.internal.txt 34 lines (34 hidden + 0 excluded-feature)
+# files: zenpipe.txt 1392 lines (supported surface) | zenpipe.features.txt 221 added (features: job,job-ultrahdr,nodes-all,io-tokio,json-schema) | zenpipe.internal.txt 33 lines (33 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                22
-#   pub types (struct/enum/trait/alias)       201
+#   pub types (struct/enum/trait/alias)       199
 #   pub consts/statics                         45
 #   free functions                             60
 #   inherent methods                          342
 #   struct fields                             470
 #   enum variants                              61
-#   re-exports                                 21
-#   trait roster entries (type × trait)       362
+#   re-exports                                 34
+#   trait roster entries (type × trait)       361
 #   auto-trait-complete types                 124
 #   auto-trait exceptions                      38
 #
 # per-module pub lines:
-#   (root)                          202
+#   (root)                          207
 #   animation                        24
 #   bridge                           55
 #   cache                            30
 #   codec                            13
 #   execute_layout                   15
-#   format                           12
+#   format                           18
 #   graph                           115
 #   limits                           79
 #   lossless                          6
@@ -45,24 +45,30 @@
 #   watermark                        35
 #   zennode_defs                    211
 
-## items (1193 lines)
+## items (1205 lines)
 
 pub mod zenpipe
 pub use AlphaMode
-pub use ChannelLayout
-pub use ChannelType
-pub use ColorManagement
-pub use ColorPrimaries
+pub use AlphaPolicy
+pub use ChannelOrder
+pub use CmsBackend
+pub use CmsTransform
+pub use ColorOrigin
+pub use ColorSpace
+pub use ConvertPolicy
+pub use HlgMode
 pub use ImageFormat
 pub use MoxCms
-pub use PixelDescriptor
+pub use PixelFormat
+pub use Primaries
 pub use QualityIntent
 pub use QualityProfile
-pub use RowConverter
-pub use RowTransform
+pub use RowPlan
+pub use SampleLayout
+pub use SampleType
 pub use SignalRange
 pub use Stop
-pub use TransferFunction
+pub use Transfer
 pub use Unstoppable
 pub mod animation
 pub struct animation::FrameInfo
@@ -74,7 +80,7 @@ pub fn animation::FrameSink::finish_animation(self) -> PipeResult<zencodec::outp
 pub fn animation::FrameSink::finish_animation_with_pulse(self, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<zencodec::output::EncodeOutput>
 pub fn animation::FrameSink::finish_frame(&mut self, u32) -> PipeResult<()>
 pub fn animation::FrameSink::finish_frame_with_pulse(&mut self, u32, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<()>
-pub fn animation::FrameSink::new(alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, format::PixelFormat) -> Self
+pub fn animation::FrameSink::new(alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, zenpixels::color::PixelFormat) -> Self
 pub fn animation::FrameSink::take_output(&mut self) -> core::option::Option<zencodec::output::EncodeOutput>
 pub struct animation::FrameSource
 pub fn animation::FrameSource::advance_frame(&mut self) -> PipeResult<bool>
@@ -84,11 +90,11 @@ pub fn animation::FrameSource::frame_info(&self) -> core::option::Option<animati
 pub fn animation::FrameSource::loop_count(&self) -> core::option::Option<u32>
 pub fn animation::FrameSource::new(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>) -> PipeResult<Self>
 pub fn animation::FrameSource::new_with_pulse(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<Self>
-pub fn animation::transcode(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>, alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, format::PixelFormat, impl core::ops::function::FnMut(alloc::boxed::Box<dyn Source>, u32) -> PipeResult<alloc::boxed::Box<dyn Source>>) -> PipeResult<zencodec::output::EncodeOutput>
-pub fn animation::transcode_with_pulse(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>, alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, format::PixelFormat, impl core::ops::function::FnMut(alloc::boxed::Box<dyn Source>, u32) -> PipeResult<alloc::boxed::Box<dyn Source>>, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<zencodec::output::EncodeOutput>
-pub fn animation::transcode_with_pulse_and_limits(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>, alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, format::PixelFormat, impl core::ops::function::FnMut(alloc::boxed::Box<dyn Source>, u32) -> PipeResult<alloc::boxed::Box<dyn Source>>, core::option::Option<&dyn how_far::pulse::Pulse>, core::option::Option<u32>) -> PipeResult<zencodec::output::EncodeOutput>
-pub fn animation::transcode_with_stop(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>, alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, format::PixelFormat, impl core::ops::function::FnMut(alloc::boxed::Box<dyn Source>, u32) -> PipeResult<alloc::boxed::Box<dyn Source>>, &dyn enough::Stop) -> PipeResult<zencodec::output::EncodeOutput>
-pub fn animation::transcode_with_stop_and_limits(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>, alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, format::PixelFormat, impl core::ops::function::FnMut(alloc::boxed::Box<dyn Source>, u32) -> PipeResult<alloc::boxed::Box<dyn Source>>, &dyn enough::Stop, core::option::Option<u32>) -> PipeResult<zencodec::output::EncodeOutput>
+pub fn animation::transcode(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>, alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, zenpixels::color::PixelFormat, impl core::ops::function::FnMut(alloc::boxed::Box<dyn Source>, u32) -> PipeResult<alloc::boxed::Box<dyn Source>>) -> PipeResult<zencodec::output::EncodeOutput>
+pub fn animation::transcode_with_pulse(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>, alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, zenpixels::color::PixelFormat, impl core::ops::function::FnMut(alloc::boxed::Box<dyn Source>, u32) -> PipeResult<alloc::boxed::Box<dyn Source>>, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<zencodec::output::EncodeOutput>
+pub fn animation::transcode_with_pulse_and_limits(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>, alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, zenpixels::color::PixelFormat, impl core::ops::function::FnMut(alloc::boxed::Box<dyn Source>, u32) -> PipeResult<alloc::boxed::Box<dyn Source>>, core::option::Option<&dyn how_far::pulse::Pulse>, core::option::Option<u32>) -> PipeResult<zencodec::output::EncodeOutput>
+pub fn animation::transcode_with_stop(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>, alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, zenpixels::color::PixelFormat, impl core::ops::function::FnMut(alloc::boxed::Box<dyn Source>, u32) -> PipeResult<alloc::boxed::Box<dyn Source>>, &dyn enough::Stop) -> PipeResult<zencodec::output::EncodeOutput>
+pub fn animation::transcode_with_stop_and_limits(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>, alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, zenpixels::color::PixelFormat, impl core::ops::function::FnMut(alloc::boxed::Box<dyn Source>, u32) -> PipeResult<alloc::boxed::Box<dyn Source>>, &dyn enough::Stop, core::option::Option<u32>) -> PipeResult<zencodec::output::EncodeOutput>
 pub mod bridge
 pub mod bridge::ordering
 pub bridge::ordering::OptimizationLevel::Lossless
@@ -140,13 +146,13 @@ pub fn bridge::record_snapshot(&mut trace::BridgeTrace, &str, &[alloc::boxed::Bo
 pub mod cache
 pub fn cache::CachedPixels::byte_size(&self) -> usize
 pub fn cache::CachedPixels::data(&self) -> &[u8]
-pub fn cache::CachedPixels::format(&self) -> format::PixelFormat
+pub fn cache::CachedPixels::format(&self) -> zenpixels::color::PixelFormat
 pub fn cache::CachedPixels::from_materialized(sources::MaterializedSource) -> Self
 pub fn cache::CachedPixels::height(&self) -> u32
 pub fn cache::CachedPixels::source(&self) -> cache::CacheSource
 pub fn cache::CachedPixels::stride(&self) -> usize
 pub fn cache::CachedPixels::width(&self) -> u32
-pub cache::PipelineCache::cached_format: format::PixelFormat
+pub cache::PipelineCache::cached_format: zenpixels::color::PixelFormat
 pub cache::PipelineCache::cached_height: u32
 pub cache::PipelineCache::cached_width: u32
 pub cache::PipelineCache::encode_config: EncodeConfig
@@ -159,11 +165,11 @@ pub fn PipelineCache::source(&self) -> cache::CacheSource
 pub mod codec
 pub struct codec::DecoderSource<'a>
 pub fn codec::DecoderSource<'a>::new(alloc::boxed::Box<(dyn zencodec::traits::dyn_decoding::DynStreamingDecoder + 'a)>) -> PipeResult<Self>
-pub fn codec::DecoderSource<'a>::with_format(alloc::boxed::Box<(dyn zencodec::traits::dyn_decoding::DynStreamingDecoder + 'a)>, format::PixelFormat) -> PipeResult<Self>
+pub fn codec::DecoderSource<'a>::with_format(alloc::boxed::Box<(dyn zencodec::traits::dyn_decoding::DynStreamingDecoder + 'a)>, zenpixels::color::PixelFormat) -> PipeResult<Self>
 pub struct codec::EncoderSink<'a>
 pub fn codec::EncoderSink<'a>::begin(&mut self, u32, u32) -> PipeResult<zencodec::output::OutputTiming>
 pub fn codec::EncoderSink<'a>::consume_output(&mut self, usize)
-pub fn codec::EncoderSink<'a>::new(alloc::boxed::Box<(dyn zencodec::traits::dyn_encoding::DynEncoder + core::marker::Send + 'a)>, format::PixelFormat) -> Self
+pub fn codec::EncoderSink<'a>::new(alloc::boxed::Box<(dyn zencodec::traits::dyn_encoding::DynEncoder + core::marker::Send + 'a)>, zenpixels::color::PixelFormat) -> Self
 pub fn codec::EncoderSink<'a>::output_timing(&self) -> core::option::Option<zencodec::output::OutputTiming>
 pub fn codec::EncoderSink<'a>::pending_output(&self) -> &[u8]
 pub fn codec::EncoderSink<'a>::preferred_strip_height(&self) -> u32
@@ -171,33 +177,40 @@ pub fn codec::EncoderSink<'a>::take_output(&mut self) -> core::option::Option<ze
 pub fn codec::EncoderSink<'a>::take_pending_output(&mut self, &mut alloc::vec::Vec<u8>)
 pub fn codec::EncoderSink<'a>::with_writer(self, impl core::ops::function::FnMut(&[u8]) -> PipeResult<()> + core::marker::Send + 'a) -> Self
 pub mod execute_layout
-pub fn execute_layout::canvas_color_to_pixel(&zenlayout::constraint::CanvasColor, zenpixels::descriptor::PixelDescriptor) -> alloc::vec::Vec<u8>
-pub fn execute_layout::config_from_plan(u32, u32, &zenlayout::plan::LayoutPlan, zenpixels::descriptor::PixelDescriptor, zenresize::filter::Filter) -> zenresize::pixel::ResizeConfig
-pub fn execute_layout::execute(&[u8], &zenlayout::plan::IdealLayout, zenpixels::descriptor::PixelDescriptor, zenresize::filter::Filter) -> alloc::vec::Vec<u8>
-pub fn execute_layout::execute_layout(&[u8], u32, u32, &zenlayout::plan::LayoutPlan, zenpixels::descriptor::PixelDescriptor, zenresize::filter::Filter) -> alloc::vec::Vec<u8>
-pub fn execute_layout::execute_layout_with_background<B: zenresize::composite::Background + core::clone::Clone>(&[u8], u32, u32, &zenlayout::plan::LayoutPlan, zenpixels::descriptor::PixelDescriptor, zenresize::filter::Filter, B) -> core::result::Result<alloc::vec::Vec<u8>, whereat::at::At<zenresize::composite::CompositeError>>
-pub fn execute_layout::execute_secondary(&[u8], &zenlayout::plan::IdealLayout, zenlayout::constraint::Size, zenlayout::constraint::Size, core::option::Option<zenlayout::constraint::Size>, zenpixels::descriptor::PixelDescriptor, zenresize::filter::Filter) -> alloc::vec::Vec<u8>
-pub fn execute_layout::execute_secondary_with_background<B: zenresize::composite::Background + core::clone::Clone>(&[u8], &zenlayout::plan::IdealLayout, zenlayout::constraint::Size, zenlayout::constraint::Size, core::option::Option<zenlayout::constraint::Size>, zenpixels::descriptor::PixelDescriptor, zenresize::filter::Filter, B) -> core::result::Result<alloc::vec::Vec<u8>, whereat::at::At<zenresize::composite::CompositeError>>
-pub fn execute_layout::execute_with_background<B: zenresize::composite::Background + core::clone::Clone>(&[u8], &zenlayout::plan::IdealLayout, zenpixels::descriptor::PixelDescriptor, zenresize::filter::Filter, B) -> core::result::Result<alloc::vec::Vec<u8>, whereat::at::At<zenresize::composite::CompositeError>>
-pub fn execute_layout::execute_with_offer(&[u8], &zenlayout::plan::IdealLayout, &zenlayout::plan::DecoderRequest, &zenlayout::plan::DecoderOffer, zenpixels::descriptor::PixelDescriptor, zenresize::filter::Filter) -> alloc::vec::Vec<u8>
+pub fn execute_layout::canvas_color_to_pixel(&zenlayout::constraint::CanvasColor, zenpixels::color::PixelFormat) -> alloc::vec::Vec<u8>
+pub fn execute_layout::config_from_plan(u32, u32, &zenlayout::plan::LayoutPlan, zenpixels::color::PixelFormat, zenresize::filter::Filter) -> zenresize::pixel::ResizeConfig
+pub fn execute_layout::execute(&[u8], &zenlayout::plan::IdealLayout, zenpixels::color::PixelFormat, zenresize::filter::Filter) -> alloc::vec::Vec<u8>
+pub fn execute_layout::execute_layout(&[u8], u32, u32, &zenlayout::plan::LayoutPlan, zenpixels::color::PixelFormat, zenresize::filter::Filter) -> alloc::vec::Vec<u8>
+pub fn execute_layout::execute_layout_with_background<B: zenresize::composite::Background + core::clone::Clone>(&[u8], u32, u32, &zenlayout::plan::LayoutPlan, zenpixels::color::PixelFormat, zenresize::filter::Filter, B) -> core::result::Result<alloc::vec::Vec<u8>, whereat::at::At<zenresize::composite::CompositeError>>
+pub fn execute_layout::execute_secondary(&[u8], &zenlayout::plan::IdealLayout, zenlayout::constraint::Size, zenlayout::constraint::Size, core::option::Option<zenlayout::constraint::Size>, zenpixels::color::PixelFormat, zenresize::filter::Filter) -> alloc::vec::Vec<u8>
+pub fn execute_layout::execute_secondary_with_background<B: zenresize::composite::Background + core::clone::Clone>(&[u8], &zenlayout::plan::IdealLayout, zenlayout::constraint::Size, zenlayout::constraint::Size, core::option::Option<zenlayout::constraint::Size>, zenpixels::color::PixelFormat, zenresize::filter::Filter, B) -> core::result::Result<alloc::vec::Vec<u8>, whereat::at::At<zenresize::composite::CompositeError>>
+pub fn execute_layout::execute_with_background<B: zenresize::composite::Background + core::clone::Clone>(&[u8], &zenlayout::plan::IdealLayout, zenpixels::color::PixelFormat, zenresize::filter::Filter, B) -> core::result::Result<alloc::vec::Vec<u8>, whereat::at::At<zenresize::composite::CompositeError>>
+pub fn execute_layout::execute_with_offer(&[u8], &zenlayout::plan::IdealLayout, &zenlayout::plan::DecoderRequest, &zenlayout::plan::DecoderOffer, zenpixels::color::PixelFormat, zenresize::filter::Filter) -> alloc::vec::Vec<u8>
 pub fn execute_layout::fill_canvas(u32, u32, &[u8]) -> alloc::vec::Vec<u8>
 pub fn execute_layout::orient_image(&[u8], u32, u32, zenlayout::orientation::Orientation, u8) -> (alloc::vec::Vec<u8>, u32, u32)
 pub fn execute_layout::place_on_canvas(&mut [u8], u32, u32, &[u8], u32, u32, i32, i32, usize)
 pub fn execute_layout::replicate_edges(&mut [u8], u32, u32, u32, u32, usize)
-pub fn execute_layout::streaming_from_plan(u32, u32, &zenlayout::plan::LayoutPlan, zenpixels::descriptor::PixelDescriptor, zenresize::filter::Filter) -> zenresize::streaming::StreamingResize
-pub fn execute_layout::streaming_from_plan_batched(u32, u32, &zenlayout::plan::LayoutPlan, zenpixels::descriptor::PixelDescriptor, zenresize::filter::Filter, u32) -> zenresize::streaming::StreamingResize
+pub fn execute_layout::streaming_from_plan(u32, u32, &zenlayout::plan::LayoutPlan, zenpixels::color::PixelFormat, zenresize::filter::Filter) -> zenresize::streaming::StreamingResize
+pub fn execute_layout::streaming_from_plan_batched(u32, u32, &zenlayout::plan::LayoutPlan, zenpixels::color::PixelFormat, zenresize::filter::Filter, u32) -> zenresize::streaming::StreamingResize
 pub mod format
 pub use format::AlphaMode
-pub use format::ChannelLayout
-pub use format::ChannelType
-pub use format::PixelDescriptor
-pub use format::TransferFunction
-pub const format::RGB8_SRGB: format::PixelFormat
-pub const format::RGBA8_LINEAR: format::PixelFormat
-pub const format::RGBA8_SRGB: format::PixelFormat
-pub const format::RGBAF32_LINEAR: format::PixelFormat
-pub const format::RGBAF32_LINEAR_PREMUL: format::PixelFormat
-pub const format::RGBAF32_SRGB: format::PixelFormat
+pub use format::ChannelOrder
+pub use format::ColorOrigin
+pub use format::ColorSpace
+pub use format::HlgMode
+pub use format::PixelFormat
+pub use format::Primaries
+pub use format::RowAlign
+pub use format::SampleLayout
+pub use format::SampleType
+pub use format::SignalRange
+pub use format::Transfer
+pub const format::RGB8_SRGB: zenpixels::color::PixelFormat
+pub const format::RGBA8_LINEAR: zenpixels::color::PixelFormat
+pub const format::RGBA8_SRGB: zenpixels::color::PixelFormat
+pub const format::RGBAF32_LINEAR: zenpixels::color::PixelFormat
+pub const format::RGBAF32_LINEAR_PREMUL: zenpixels::color::PixelFormat
+pub const format::RGBAF32_SRGB: zenpixels::color::PixelFormat
 pub mod graph
 pub enum graph::EdgeKind
 pub graph::EdgeKind::Canvas
@@ -270,7 +283,7 @@ pub graph::NodeOp::Orient(zenlayout::orientation::Orientation)
 pub graph::NodeOp::Output
 pub graph::NodeOp::Overlay
 pub graph::NodeOp::Overlay::blend_mode: core::option::Option<zenblend::BlendMode>
-pub graph::NodeOp::Overlay::format: format::PixelFormat
+pub graph::NodeOp::Overlay::format: zenpixels::color::PixelFormat
 pub graph::NodeOp::Overlay::height: u32
 pub graph::NodeOp::Overlay::image_data: alloc::vec::Vec<u8>
 pub graph::NodeOp::Overlay::opacity: f32
@@ -297,17 +310,17 @@ pub fn graph::PipelineGraph::new() -> Self
 pub fn graph::PipelineGraph::validate(&self) -> PipeResult<()>
 pub graph::ResourceEstimate::materialization_bytes: u64
 pub graph::ResourceEstimate::materializes: bool
-pub graph::ResourceEstimate::output_format: format::PixelFormat
+pub graph::ResourceEstimate::output_format: zenpixels::color::PixelFormat
 pub graph::ResourceEstimate::output_height: u32
 pub graph::ResourceEstimate::output_width: u32
 pub graph::ResourceEstimate::streaming_bytes: u64
 pub fn graph::ResourceEstimate::check(&self, &limits::Limits) -> PipeResult<()>
 pub fn graph::ResourceEstimate::peak_memory_bytes(&self) -> u64
-pub graph::SourceInfo::format: format::PixelFormat
+pub graph::SourceInfo::format: zenpixels::color::PixelFormat
 pub graph::SourceInfo::height: u32
 pub graph::SourceInfo::width: u32
 pub type graph::AnalyzeBuilder = alloc::boxed::Box<(dyn core::ops::function::FnOnce(sources::MaterializedSource, core::option::Option<trace::TraceAppender>) -> PipeResult<alloc::boxed::Box<dyn Source>> + core::marker::Send)>
-pub type graph::MaterializeTransform = alloc::boxed::Box<(dyn core::ops::function::FnOnce(&mut alloc::vec::Vec<u8>, &mut u32, &mut u32, &mut format::PixelFormat) + core::marker::Send)>
+pub type graph::MaterializeTransform = alloc::boxed::Box<(dyn core::ops::function::FnOnce(&mut alloc::vec::Vec<u8>, &mut u32, &mut u32, &mut zenpixels::color::PixelFormat) + core::marker::Send)>
 pub type graph::NodeId = usize
 pub type graph::TracedPipelineResult = PipeResult<(alloc::boxed::Box<dyn Source>, alloc::rcs::arc::Arc<std::sync::poison::mutex::Mutex<trace::PipelineTrace>>)>
 pub mod limits
@@ -336,7 +349,7 @@ pub limits::Limits::max_total_pixels: core::option::Option<u64>
 pub limits::Limits::max_width: core::option::Option<u32>
 pub const limits::Limits::NONE: Self
 pub const limits::Limits::SERVER: Self
-pub fn limits::Limits::check(&self, u32, u32, format::PixelFormat) -> PipeResult<()>
+pub fn limits::Limits::check(&self, u32, u32, zenpixels::color::PixelFormat) -> PipeResult<()>
 pub fn limits::Limits::check_dimensions(&self, u32, u32) -> PipeResult<()>
 pub fn limits::Limits::check_frames(&self, u32) -> PipeResult<()>
 pub fn limits::Limits::check_total_pixels(&self, u64) -> PipeResult<()>
@@ -365,17 +378,17 @@ pub mod ops
 pub struct ops::MatteFlattenOp
 pub fn ops::MatteFlattenOp::new(u8, u8, u8) -> Self
 pub struct ops::RowConverterOp
-pub fn ops::RowConverterOp::from_converter(zenpixels_convert::converter::RowConverter, format::PixelFormat, format::PixelFormat) -> Self
-pub fn ops::RowConverterOp::must(format::PixelFormat, format::PixelFormat) -> Self
-pub fn ops::RowConverterOp::new(format::PixelFormat, format::PixelFormat) -> core::option::Option<Self>
-pub fn ops::RowConverterOp::new_explicit(format::PixelFormat, format::PixelFormat, &zenpixels::policy::ConvertOptions) -> core::option::Option<Self>
+pub fn ops::RowConverterOp::from_plan(zenpixels_convert::plan::RowPlan) -> Self
+pub fn ops::RowConverterOp::must(zenpixels::color::PixelFormat, zenpixels::color::PixelFormat) -> Self
+pub fn ops::RowConverterOp::new(zenpixels::color::PixelFormat, zenpixels::color::PixelFormat) -> core::option::Option<Self>
+pub fn ops::RowConverterOp::new_explicit(zenpixels::color::PixelFormat, zenpixels::color::PixelFormat, &zenpixels_convert::policy::ConvertPolicy) -> core::option::Option<Self>
 pub struct ops::ScaleAlphaOp
 pub fn ops::ScaleAlphaOp::new(f32) -> Self
 pub trait ops::PixelOp: core::marker::Send
 pub fn ops::PixelOp::apply(&mut self, &[u8], &mut [u8], u32, u32)
-pub fn ops::PixelOp::as_row_converter(&self) -> core::option::Option<&zenpixels_convert::converter::RowConverter>
-pub fn ops::PixelOp::input_format(&self) -> format::PixelFormat
-pub fn ops::PixelOp::output_format(&self) -> format::PixelFormat
+pub fn ops::PixelOp::as_row_plan(&self) -> core::option::Option<&zenpixels_convert::plan::RowPlan>
+pub fn ops::PixelOp::input_format(&self) -> zenpixels::color::PixelFormat
+pub fn ops::PixelOp::output_format(&self) -> zenpixels::color::PixelFormat
 pub mod orchestrate
 pub orchestrate::ProcessConfig::converters: &'a [&'a dyn bridge::NodeConverter]
 pub orchestrate::ProcessConfig::hdr_mode: &'a str
@@ -389,11 +402,11 @@ pub orchestrate::ProcessedImage::metadata: core::option::Option<zencodec::metada
 pub orchestrate::ProcessedImage::primary: sources::MaterializedSource
 pub orchestrate::ProcessedImage::sidecar: core::option::Option<sidecar::ProcessedSidecar>
 pub orchestrate::ProcessedImage::trace: core::option::Option<trace::FullPipelineTrace>
-pub fn orchestrate::ProcessedImage::format(&self) -> format::PixelFormat
+pub fn orchestrate::ProcessedImage::format(&self) -> zenpixels::color::PixelFormat
 pub fn orchestrate::ProcessedImage::height(&self) -> u32
 pub fn orchestrate::ProcessedImage::width(&self) -> u32
 pub orchestrate::SourceImageInfo::exif_orientation: u8
-pub orchestrate::SourceImageInfo::format: format::PixelFormat
+pub orchestrate::SourceImageInfo::format: zenpixels::color::PixelFormat
 pub orchestrate::SourceImageInfo::has_alpha: bool
 pub orchestrate::SourceImageInfo::has_animation: bool
 pub orchestrate::SourceImageInfo::has_gain_map: bool
@@ -429,7 +442,7 @@ pub struct sidecar::ProcessedSidecar
 pub sidecar::ProcessedSidecar::kind: sidecar::SidecarKind
 pub sidecar::ProcessedSidecar::pixels: sources::MaterializedSource
 pub fn sidecar::ProcessedSidecar::data(&self) -> &[u8]
-pub fn sidecar::ProcessedSidecar::format(&self) -> format::PixelFormat
+pub fn sidecar::ProcessedSidecar::format(&self) -> zenpixels::color::PixelFormat
 pub fn sidecar::ProcessedSidecar::height(&self) -> u32
 pub fn sidecar::ProcessedSidecar::new(sources::MaterializedSource, sidecar::SidecarKind) -> Self
 pub fn sidecar::ProcessedSidecar::stride(&self) -> usize
@@ -455,8 +468,8 @@ pub sources::CanvasFill::Replicate
 pub sources::CanvasFill::Solid([u8; 4])
 pub fn sources::CanvasFill::from_name(&str, [u8; 4]) -> core::option::Option<Self>
 pub struct sources::CallbackSource
-pub fn sources::CallbackSource::from_data(&[u8], u32, u32, format::PixelFormat, u32) -> Self
-pub fn sources::CallbackSource::new(u32, u32, format::PixelFormat, u32, impl core::ops::function::FnMut(&mut [u8]) -> PipeResult<bool> + core::marker::Send + 'static) -> Self
+pub fn sources::CallbackSource::from_data(&[u8], u32, u32, zenpixels::color::PixelFormat, u32) -> Self
+pub fn sources::CallbackSource::new(u32, u32, zenpixels::color::PixelFormat, u32, impl core::ops::function::FnMut(&mut [u8]) -> PipeResult<bool> + core::marker::Send + 'static) -> Self
 pub struct sources::CompositeSource
 pub fn sources::CompositeSource::over(alloc::boxed::Box<dyn Source>, alloc::boxed::Box<dyn Source>) -> PipeResult<Self>
 pub fn sources::CompositeSource::over_at(alloc::boxed::Box<dyn Source>, alloc::boxed::Box<dyn Source>, u32, u32) -> PipeResult<Self>
@@ -478,19 +491,19 @@ pub struct sources::FlipHSource
 pub fn sources::FlipHSource::new(alloc::boxed::Box<dyn Source>) -> Self
 pub struct sources::IccTransformSource
 pub fn sources::IccTransformSource::dst_icc(&self) -> &alloc::rcs::arc::Arc<[u8]>
-pub fn sources::IccTransformSource::from_transform(alloc::boxed::Box<dyn Source>, alloc::boxed::Box<dyn zenpixels_convert::cms::RowTransform>, alloc::rcs::arc::Arc<[u8]>) -> Self
-pub fn sources::IccTransformSource::new<C: zenpixels_convert::cms::ColorManagement>(alloc::boxed::Box<dyn Source>, &[u8], &[u8], &C) -> PipeResult<Self>
+pub fn sources::IccTransformSource::from_transform(alloc::boxed::Box<dyn Source>, alloc::rcs::arc::Arc<dyn zenpixels_convert::cms::CmsTransform>, alloc::rcs::arc::Arc<[u8]>) -> Self
+pub fn sources::IccTransformSource::new<C: zenpixels_convert::cms::CmsBackend>(alloc::boxed::Box<dyn Source>, &[u8], &[u8], &C) -> PipeResult<Self>
 pub struct sources::MaskTransformSource
 pub fn sources::MaskTransformSource::new(alloc::boxed::Box<dyn Source>, alloc::boxed::Box<(dyn zenblend::mask::MaskSource + core::marker::Send)>) -> PipeResult<Self>
 pub struct sources::MaterializedSource
 pub fn sources::MaterializedSource::data(&self) -> &[u8]
 pub fn sources::MaterializedSource::data_mut(&mut self) -> &mut [u8]
-pub fn sources::MaterializedSource::from_data(alloc::vec::Vec<u8>, u32, u32, format::PixelFormat) -> Self
+pub fn sources::MaterializedSource::from_data(alloc::vec::Vec<u8>, u32, u32, zenpixels::color::PixelFormat) -> Self
 pub fn sources::MaterializedSource::from_source(alloc::boxed::Box<dyn Source>) -> PipeResult<Self>
 pub fn sources::MaterializedSource::from_source_checked(alloc::boxed::Box<dyn Source>, &limits::Limits) -> PipeResult<Self>
 pub fn sources::MaterializedSource::from_source_stoppable(alloc::boxed::Box<dyn Source>, &dyn enough::Stop) -> PipeResult<Self>
 pub fn sources::MaterializedSource::from_source_with_pulse(alloc::boxed::Box<dyn Source>, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<Self>
-pub fn sources::MaterializedSource::from_source_with_transform(alloc::boxed::Box<dyn Source>, impl core::ops::function::FnOnce(&mut alloc::vec::Vec<u8>, &mut u32, &mut u32, &mut format::PixelFormat)) -> PipeResult<Self>
+pub fn sources::MaterializedSource::from_source_with_transform(alloc::boxed::Box<dyn Source>, impl core::ops::function::FnOnce(&mut alloc::vec::Vec<u8>, &mut u32, &mut u32, &mut zenpixels::color::PixelFormat)) -> PipeResult<Self>
 pub fn sources::MaterializedSource::into_data(self) -> alloc::vec::Vec<u8>
 pub fn sources::MaterializedSource::row(&self, u32) -> &[u8]
 pub fn sources::MaterializedSource::stride(&self) -> usize
@@ -504,7 +517,7 @@ pub struct sources::TeeCursor
 pub struct sources::TeeSource
 pub fn sources::TeeSource::cursor(&self) -> sources::TeeCursor
 pub fn sources::TeeSource::cursor_with_strip_height(&self, u32) -> sources::TeeCursor
-pub fn sources::TeeSource::format(&self) -> format::PixelFormat
+pub fn sources::TeeSource::format(&self) -> zenpixels::color::PixelFormat
 pub fn sources::TeeSource::height(&self) -> u32
 pub fn sources::TeeSource::new(alloc::boxed::Box<dyn Source>) -> PipeResult<Self>
 pub fn sources::TeeSource::new_checked(alloc::boxed::Box<dyn Source>, &limits::Limits) -> PipeResult<Self>
@@ -586,18 +599,18 @@ pub fn tiles::TilePyramidConfig::new(u32, u32) -> Self
 pub fn tiles::TilePyramidConfig::with_geometry(self, tiles::PyramidGeometry) -> Self
 pub fn tiles::TilePyramidConfig::zoomify() -> Self
 pub struct tiles::TilePyramidSink<W: tiles::TileWriter>
-pub fn tiles::TilePyramidSink<tiles::PyramidWriter<L, S>>::with_pyramid_writer(u32, u32, format::PixelFormat, tiles::TilePyramidConfig, tiles::PyramidWriter<L, S>) -> PipeResult<Self>
+pub fn tiles::TilePyramidSink<tiles::PyramidWriter<L, S>>::with_pyramid_writer(u32, u32, zenpixels::color::PixelFormat, tiles::TilePyramidConfig, tiles::PyramidWriter<L, S>) -> PipeResult<Self>
 pub fn tiles::TilePyramidSink<W>::buffer_bytes_estimate(&self) -> u64
 pub fn tiles::TilePyramidSink<W>::canvas_size(&self) -> (u32, u32)
 pub fn tiles::TilePyramidSink<W>::into_writer(self) -> W
 pub fn tiles::TilePyramidSink<W>::level_count(&self) -> u32
 pub fn tiles::TilePyramidSink<W>::level_infos(&self) -> alloc::vec::Vec<tiles::LevelInfo>
-pub fn tiles::TilePyramidSink<W>::new(u32, u32, format::PixelFormat, tiles::TilePyramidConfig, W) -> PipeResult<Self>
+pub fn tiles::TilePyramidSink<W>::new(u32, u32, zenpixels::color::PixelFormat, tiles::TilePyramidConfig, W) -> PipeResult<Self>
 pub fn tiles::TilePyramidSink<W>::writer(&self) -> &W
 pub struct tiles::TileRef<'a>
 pub tiles::TileRef::col: u32
 pub tiles::TileRef::data: &'a [u8]
-pub tiles::TileRef::format: format::PixelFormat
+pub tiles::TileRef::format: zenpixels::color::PixelFormat
 pub tiles::TileRef::height: u32
 pub tiles::TileRef::level: u32
 pub tiles::TileRef::row: u32
@@ -618,7 +631,7 @@ pub trait tiles::TileStore: core::marker::Send
 pub fn tiles::TileStore::finish(&mut self) -> PipeResult<()>
 pub fn tiles::TileStore::put(&mut self, &str, &[u8]) -> PipeResult<()>
 pub trait tiles::TileWriter: core::marker::Send
-pub fn tiles::TileWriter::begin(&mut self, &[tiles::LevelInfo], tiles::TilePyramidConfig, format::PixelFormat) -> PipeResult<()>
+pub fn tiles::TileWriter::begin(&mut self, &[tiles::LevelInfo], tiles::TilePyramidConfig, zenpixels::color::PixelFormat) -> PipeResult<()>
 pub fn tiles::TileWriter::finish(&mut self) -> PipeResult<()>
 pub fn tiles::TileWriter::write_tile(&mut self, tiles::TileRef<'_>) -> PipeResult<()>
 pub fn tiles::TileWriter::write_tile_row(&mut self, &[tiles::TileRef<'_>]) -> PipeResult<()>
@@ -757,19 +770,19 @@ pub fn trace::TraceConfig::with_memory_timeline(self) -> Self
 pub fn trace::TraceConfig::with_pixel_dump(impl core::convert::Into<std::path::PathBuf>) -> Self
 pub fn trace::TraceConfig::with_strip_events(self) -> Self
 pub struct trace::TraceEntry
-pub trace::TraceEntry::conversion_cost: core::option::Option<zenpixels_convert::negotiate::ConversionCost>
+pub trace::TraceEntry::conversion_cost: core::option::Option<zenpixels_convert::negotiate::FormatCost>
 pub trace::TraceEntry::description: alloc::string::String
 pub trace::TraceEntry::implicit: bool
 pub trace::TraceEntry::implicit_reason: core::option::Option<alloc::string::String>
 pub trace::TraceEntry::index: usize
-pub trace::TraceEntry::input_format: format::PixelFormat
+pub trace::TraceEntry::input_format: zenpixels::color::PixelFormat
 pub trace::TraceEntry::input_height: u32
 pub trace::TraceEntry::input_width: u32
 pub trace::TraceEntry::materializes: bool
 pub trace::TraceEntry::name: alloc::string::String
 pub trace::TraceEntry::notes: alloc::vec::Vec<alloc::string::String>
 pub trace::TraceEntry::origin: core::option::Option<alloc::string::String>
-pub trace::TraceEntry::output_format: format::PixelFormat
+pub trace::TraceEntry::output_format: zenpixels::color::PixelFormat
 pub trace::TraceEntry::output_height: u32
 pub trace::TraceEntry::output_width: u32
 pub trace::TraceEntry::timing: core::option::Option<alloc::rcs::arc::Arc<std::sync::poison::mutex::Mutex<trace::NodeTiming>>>
@@ -780,18 +793,18 @@ pub fn trace::TraceEntry::format_changed(&self) -> bool
 pub struct trace::Tracer
 pub fn trace::Tracer::active(alloc::rcs::arc::Arc<std::sync::poison::mutex::Mutex<trace::PipelineTrace>>, bool) -> Self
 pub fn trace::Tracer::appender(&self) -> core::option::Option<trace::TraceAppender>
-pub fn trace::Tracer::ensure_format(&self, alloc::boxed::Box<dyn Source>, format::PixelFormat, &str) -> PipeResult<alloc::boxed::Box<dyn Source>>
+pub fn trace::Tracer::ensure_format(&self, alloc::boxed::Box<dyn Source>, zenpixels::color::PixelFormat, &str) -> PipeResult<alloc::boxed::Box<dyn Source>>
 pub fn trace::Tracer::inactive() -> Self
 pub fn trace::Tracer::is_active(&self) -> bool
-pub fn trace::Tracer::note_implicit(&self, &str, alloc::string::String, &str, format::PixelFormat, u32, u32, u32, u32, bool)
+pub fn trace::Tracer::note_implicit(&self, &str, alloc::string::String, &str, zenpixels::color::PixelFormat, u32, u32, u32, u32, bool)
 pub fn trace::Tracer::with_strip_events(self, bool) -> Self
 pub fn trace::Tracer::wrap_compiled_node(&self, alloc::boxed::Box<dyn Source>, usize, &'static str, impl core::ops::function::FnOnce() -> alloc::string::String, bool, core::option::Option<&trace::UpstreamMeta>) -> alloc::boxed::Box<dyn Source>
 pub struct trace::UpstreamMeta
-pub trace::UpstreamMeta::format: format::PixelFormat
+pub trace::UpstreamMeta::format: zenpixels::color::PixelFormat
 pub trace::UpstreamMeta::height: u32
 pub trace::UpstreamMeta::width: u32
 pub fn trace::UpstreamMeta::from_source(&dyn Source) -> Self
-pub fn trace::format_short(&format::PixelFormat) -> alloc::string::String
+pub fn trace::format_short(&zenpixels::color::PixelFormat) -> alloc::string::String
 pub fn trace::node_op_description(&graph::NodeOp) -> alloc::string::String
 pub fn trace::node_op_materializes(&graph::NodeOp) -> bool
 pub fn trace::node_op_name(&graph::NodeOp) -> &'static str
@@ -1052,8 +1065,8 @@ pub PipeError::Cancelled
 pub PipeError::Codec(alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>)
 pub PipeError::DimensionMismatch(alloc::string::String)
 pub PipeError::FormatMismatch
-pub PipeError::FormatMismatch::expected: format::PixelFormat
-pub PipeError::FormatMismatch::got: format::PixelFormat
+pub PipeError::FormatMismatch::expected: alloc::boxed::Box<zenpixels::color::PixelFormat>
+pub PipeError::FormatMismatch::got: alloc::boxed::Box<zenpixels::color::PixelFormat>
 pub PipeError::LimitExceeded(alloc::string::String)
 pub PipeError::Op(alloc::string::String)
 pub PipeError::Resize(alloc::string::String)
@@ -1074,7 +1087,7 @@ pub struct CacheSource [also: cache]
 pub struct CachedPixels [also: cache]
 pub fn cache::CachedPixels::byte_size(&self) -> usize
 pub fn cache::CachedPixels::data(&self) -> &[u8]
-pub fn cache::CachedPixels::format(&self) -> format::PixelFormat
+pub fn cache::CachedPixels::format(&self) -> zenpixels::color::PixelFormat
 pub fn cache::CachedPixels::from_materialized(sources::MaterializedSource) -> Self
 pub fn cache::CachedPixels::height(&self) -> u32
 pub fn cache::CachedPixels::source(&self) -> cache::CacheSource
@@ -1113,7 +1126,7 @@ pub Limits::max_total_pixels: core::option::Option<u64>
 pub Limits::max_width: core::option::Option<u32>
 pub const limits::Limits::NONE: Self
 pub const limits::Limits::SERVER: Self
-pub fn limits::Limits::check(&self, u32, u32, format::PixelFormat) -> PipeResult<()>
+pub fn limits::Limits::check(&self, u32, u32, zenpixels::color::PixelFormat) -> PipeResult<()>
 pub fn limits::Limits::check_dimensions(&self, u32, u32) -> PipeResult<()>
 pub fn limits::Limits::check_frames(&self, u32) -> PipeResult<()>
 pub fn limits::Limits::check_total_pixels(&self, u64) -> PipeResult<()>
@@ -1133,7 +1146,7 @@ pub MaterializedImage::decode_config: DecodeConfig
 pub MaterializedImage::encode_config: EncodeConfig
 pub MaterializedImage::pixels: sources::MaterializedSource
 pub struct PipelineCache [also: cache]
-pub PipelineCache::cached_format: format::PixelFormat
+pub PipelineCache::cached_format: zenpixels::color::PixelFormat
 pub PipelineCache::cached_height: u32
 pub PipelineCache::cached_width: u32
 pub PipelineCache::encode_config: EncodeConfig
@@ -1162,13 +1175,13 @@ pub ProcessedImage::metadata: core::option::Option<zencodec::metadata::Metadata>
 pub ProcessedImage::primary: sources::MaterializedSource
 pub ProcessedImage::sidecar: core::option::Option<sidecar::ProcessedSidecar>
 pub ProcessedImage::trace: core::option::Option<trace::FullPipelineTrace>
-pub fn orchestrate::ProcessedImage::format(&self) -> format::PixelFormat
+pub fn orchestrate::ProcessedImage::format(&self) -> zenpixels::color::PixelFormat
 pub fn orchestrate::ProcessedImage::height(&self) -> u32
 pub fn orchestrate::ProcessedImage::width(&self) -> u32
 pub struct ResourceEstimate [also: graph]
 pub ResourceEstimate::materialization_bytes: u64
 pub ResourceEstimate::materializes: bool
-pub ResourceEstimate::output_format: format::PixelFormat
+pub ResourceEstimate::output_format: zenpixels::color::PixelFormat
 pub ResourceEstimate::output_height: u32
 pub ResourceEstimate::output_width: u32
 pub ResourceEstimate::streaming_bytes: u64
@@ -1185,7 +1198,7 @@ pub fn Session::stream_stoppable(&mut self, alloc::boxed::Box<dyn Source>, &orch
 pub fn Session::stream_with_pulse(&mut self, alloc::boxed::Box<dyn Source>, &orchestrate::ProcessConfig<'_>, core::option::Option<sidecar::SidecarStream>, u64, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<orchestrate::StreamingOutput>
 pub struct SourceImageInfo [also: orchestrate]
 pub SourceImageInfo::exif_orientation: u8
-pub SourceImageInfo::format: format::PixelFormat
+pub SourceImageInfo::format: zenpixels::color::PixelFormat
 pub SourceImageInfo::has_alpha: bool
 pub SourceImageInfo::has_animation: bool
 pub SourceImageInfo::has_gain_map: bool
@@ -1194,7 +1207,7 @@ pub SourceImageInfo::is_hdr: bool
 pub SourceImageInfo::metadata: core::option::Option<zencodec::metadata::Metadata>
 pub SourceImageInfo::width: u32
 pub struct SourceInfo [also: graph]
-pub SourceInfo::format: format::PixelFormat
+pub SourceInfo::format: zenpixels::color::PixelFormat
 pub SourceInfo::height: u32
 pub SourceInfo::width: u32
 pub struct StreamingOutput [also: orchestrate]
@@ -1208,23 +1221,23 @@ pub fn StripBuf::as_strip(&self) -> Strip<'_>
 pub fn StripBuf::capacity_rows(&self) -> u32
 pub fn StripBuf::filled_data(&self) -> &[u8]
 pub fn StripBuf::filled_data_mut(&mut self) -> &mut [u8]
-pub fn StripBuf::new(u32, u32, format::PixelFormat) -> Self
+pub fn StripBuf::new(u32, u32, zenpixels::color::PixelFormat) -> Self
 pub fn StripBuf::push_row(&mut self, &[u8]) -> bool
-pub fn StripBuf::reconfigure(&mut self, u32, u32, format::PixelFormat)
+pub fn StripBuf::reconfigure(&mut self, u32, u32, zenpixels::color::PixelFormat)
 pub fn StripBuf::reset(&mut self)
 pub fn StripBuf::row(&self, u32) -> &[u8]
 pub fn StripBuf::row_mut(&mut self, u32) -> &mut [u8]
 pub fn StripBuf::rows_filled(&self) -> u32
-pub fn StripBuf::set_color_context(&mut self, core::option::Option<alloc::rcs::arc::Arc<zenpixels::color::ColorContext>>)
+pub fn StripBuf::set_color_origin(&mut self, core::option::Option<zenpixels::color::ColorOrigin>)
 pub fn StripBuf::stride(&self) -> usize
-pub fn StripBuf::try_new(u32, u32, format::PixelFormat) -> PipeResult<Self>
-pub fn StripBuf::try_reconfigure(&mut self, u32, u32, format::PixelFormat) -> PipeResult<()>
+pub fn StripBuf::try_new(u32, u32, zenpixels::color::PixelFormat) -> PipeResult<Self>
+pub fn StripBuf::try_reconfigure(&mut self, u32, u32, zenpixels::color::PixelFormat) -> PipeResult<()>
 pub trait Sink: core::marker::Send
 pub fn Sink::consume(&mut self, &Strip<'_>) -> PipeResult<()>
 pub fn Sink::finish(&mut self) -> PipeResult<()>
 pub trait Source: core::marker::Send
-pub fn Source::color_context(&self) -> core::option::Option<alloc::rcs::arc::Arc<zenpixels::color::ColorContext>>
-pub fn Source::format(&self) -> format::PixelFormat
+pub fn Source::color_origin(&self) -> core::option::Option<zenpixels::color::ColorOrigin>
+pub fn Source::format(&self) -> zenpixels::color::PixelFormat
 pub fn Source::height(&self) -> u32
 pub fn Source::next(&mut self) -> PipeResult<core::option::Option<Strip<'_>>>
 pub fn Source::width(&self) -> u32
@@ -1235,11 +1248,10 @@ pub fn execute_with_stop(&mut dyn Source, &mut dyn Sink, &dyn enough::Stop) -> P
 pub fn full_registry() -> zennode::registry::NodeRegistry
 pub fn geometry_split(&[alloc::boxed::Box<dyn zennode::traits::NodeInstance>]) -> usize [also: cache]
 pub fn optimize_node_order(bridge::ordering::OptimizationLevel, &mut [alloc::boxed::Box<dyn zennode::traits::NodeInstance>]) [also: bridge, bridge::ordering]
-pub fn prefix_hash(&[alloc::boxed::Box<dyn zennode::traits::NodeInstance>], u32, u32, format::PixelFormat, u8) -> u64 [also: cache]
+pub fn prefix_hash(&[alloc::boxed::Box<dyn zennode::traits::NodeInstance>], u32, u32, zenpixels::color::PixelFormat, u8) -> u64 [also: cache]
 pub fn subtree_hash(&dyn zennode::traits::NodeInstance, &[u64]) -> u64 [also: cache]
 pub type PipeResult<T> = core::result::Result<T, whereat::at::At<PipeError>>
-pub type PixelFormat = zenpixels::descriptor::PixelDescriptor [also: format]
-pub type Strip<'a> = zenpixels::buffer::PixelSlice<'a>
+pub type Strip<'a> = zenpixels::buffer::PixelView<'a>
 
 ## trait impls (148 types)
 
@@ -1300,7 +1312,7 @@ tiles::PyramidGeometry: Clone, Copy, Debug, Eq, PartialEq
 tiles::PyramidWriter<L, S>: tiles::TileWriter
 tiles::TilePyramidConfig: Clone, Copy, Debug, Default, Eq, PartialEq
 tiles::TilePyramidSink<W>: Sink
-tiles::TileRef<'a>: Clone, Copy, Debug
+tiles::TileRef<'a>: Clone, Debug
 tiles::ZipStore<W>: tiles::TileStore
 tiles::ZoomifyLayout: Clone, Debug, tiles::TileLayout
 trace::BridgeNodeInfo: Clone, Debug
@@ -1409,7 +1421,7 @@ codec::EncoderSink<'a>: !RefUnwindSafe !Sync !UnwindSafe
 graph::NodeOp: !RefUnwindSafe !Sync !UnwindSafe
 graph::PipelineGraph: !RefUnwindSafe !Sync !UnwindSafe
 limits::AllocationTracker: !Freeze
-ops::RowConverterOp: !Freeze !RefUnwindSafe !UnwindSafe
+ops::RowConverterOp: !RefUnwindSafe !UnwindSafe
 orchestrate::ProcessConfig<'a>: !RefUnwindSafe !UnwindSafe
 orchestrate::ProcessedImage: !RefUnwindSafe !UnwindSafe
 orchestrate::StreamingOutput: !RefUnwindSafe !Sync !UnwindSafe

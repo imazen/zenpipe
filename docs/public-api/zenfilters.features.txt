@@ -280,11 +280,11 @@ pub srgb_filters::SrgbColorFilter::GrayscaleFlat
 pub srgb_filters::SrgbColorFilter::GrayscaleNtsc
 pub srgb_filters::SrgbColorFilter::Invert
 pub srgb_filters::SrgbColorFilter::Sepia
-pub fn srgb_filters::blur(&mut zenpixels::buffer::PixelBuffer, f32)
-pub fn srgb_filters::color_adjust(&mut zenpixels::buffer::PixelSliceMut<'_>, f32, f32, f32)
-pub fn srgb_filters::color_filter(&mut zenpixels::buffer::PixelSliceMut<'_>, &srgb_filters::SrgbColorFilter)
-pub fn srgb_filters::color_matrix(&mut zenpixels::buffer::PixelSliceMut<'_>, &[f32; 25])
-pub fn srgb_filters::sharpen(&mut zenpixels::buffer::PixelBuffer, f32)
+pub fn srgb_filters::blur(&mut zenpixels::buffer::PixelBuf, f32)
+pub fn srgb_filters::color_adjust(&mut zenpixels::buffer::PixelViewMut<'_>, f32, f32, f32)
+pub fn srgb_filters::color_filter(&mut zenpixels::buffer::PixelViewMut<'_>, &srgb_filters::SrgbColorFilter)
+pub fn srgb_filters::color_matrix(&mut zenpixels::buffer::PixelViewMut<'_>, &[f32; 25])
+pub fn srgb_filters::sharpen(&mut zenpixels::buffer::PixelBuf, f32)
 pub mod zennode_defs
 pub struct zennode_defs::AdaptiveSharpen
 pub zennode_defs::AdaptiveSharpen::amount: f32

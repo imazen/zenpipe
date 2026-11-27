@@ -2,17 +2,13 @@
 use super::*;
 use zencodec::encode::{EncodePolicy, Fidelity};
 
-pub(super) fn png_fixture(descriptor: PixelDescriptor, profile: bool) -> (Vec<u8>, Vec<u8>) {
-    png_fixture_sized(descriptor, profile, 7, 5)
+pub(super) fn png_fixture(format: &PixelFormat, profile: bool) -> (Vec<u8>, Vec<u8>) {
+    png_fixture_sized(format, profile, 7, 5)
 }
-fn png_fixture_sized(
-    descriptor: PixelDescriptor,
-    profile: bool,
-    w: u32,
-    h: u32,
-) -> (Vec<u8>, Vec<u8>) {
-    let row = w as usize * descriptor.bytes_per_pixel();
-    let padding = descriptor.bytes_per_pixel() * 3;
+fn png_fixture_sized(format: &PixelFormat, profile: bool, w: u32, h: u32) -> (Vec<u8>, Vec<u8>) {
+    let bpp = format.layout.bytes_per_pixel();
+    let row = w as usize * bpp;
+    let padding = bpp * 3;
     let mut raw = vec![0xe7; (row + padding) * h as usize];
     for y in 0..h as usize {
         for x in 0..row {
@@ -27,19 +23,31 @@ fn png_fixture_sized(
         .with_compression(zenpng::Compression::Effort(0))
         .with_downcast(zenpng::DowncastFlags::none())
         .with_preserve_transparent_rgb(true);
-    let metadata = if profile {
-        Metadata::none().with_icc(zenpixels_convert::icc_profiles::DISPLAY_P3_V4)
+    let (metadata, pixel_format) = if profile {
+        let icc = zenpixels_convert::icc_profiles::DISPLAY_P3_V4;
+        (
+            Metadata::none().with_icc(icc),
+            PixelFormat::new(
+                format.layout,
+                ColorSpace::Icc {
+                    profile: Arc::from(icc),
+                    color_channels: 3,
+                    alpha: format.color.alpha(),
+                    intent: RenderingIntent::RelativeColorimetric,
+                },
+            ),
+        )
     } else {
-        Metadata::none()
+        (Metadata::none(), format.clone())
     };
     let bytes = config
         .job()
-        .with_metadata_policy(metadata, MetadataPolicy::PreserveExact)
+        .with_unfiltered_metadata(metadata.filtered(&MetadataPolicy::PreserveExact))
         .try_with_policy(EncodePolicy::none().with_color(zencodec::ColorEmitPolicy::Verbatim))
         .unwrap()
         .encoder()
         .unwrap()
-        .encode(PixelSlice::new(&raw, w, h, row + padding, descriptor).unwrap())
+        .encode(PixelView::new(&raw, w, h, row + padding, &pixel_format).unwrap())
         .unwrap()
         .data()
         .to_vec();
@@ -49,9 +57,9 @@ fn png_fixture_sized(
 #[test]
 fn native_png_batches_fit_independently_admitted_transcode_strips() {
     let codecs = codecs();
-    for descriptor in [PixelDescriptor::RGB8_SRGB, PixelDescriptor::RGBA16_SRGB] {
+    for descriptor in [PixelFormat::RGB8_SRGB, PixelFormat::RGBA16_SRGB] {
         for height in [65, 257] {
-            let (input, expected) = png_fixture_sized(descriptor, false, 97, height);
+            let (input, expected) = png_fixture_sized(&descriptor, false, 97, height);
             for strip in [1, 3, 64] {
                 let budget = StorageBudget::new(2 * 1024 * 1024, 16);
                 let output = TranscodeRequest::new(ImageFormat::Png)
@@ -88,20 +96,24 @@ fn oracle(bytes: &[u8]) -> Vec<u8> {
 #[test]
 fn png_source_retains_alpha_depth_samples_and_icc_through_lossless_transcode() {
     let codecs = codecs();
+    let graya16_srgb = PixelFormat::new(
+        SampleLayout::new(
+            zenpixels::SampleType::U16,
+            zenpixels::ChannelOrder::GrayAlpha,
+        ),
+        ColorSpace::GRAY_SRGB.with_alpha(AlphaMode::Straight),
+    );
     for descriptor in [
-        PixelDescriptor::RGB8_SRGB,
-        PixelDescriptor::RGBA8_SRGB,
-        PixelDescriptor::RGB16_SRGB,
-        PixelDescriptor::RGBA16_SRGB,
-        PixelDescriptor::GRAY16_SRGB,
-        PixelDescriptor::GRAYA16_SRGB,
+        PixelFormat::RGB8_SRGB,
+        PixelFormat::RGBA8_SRGB,
+        PixelFormat::RGB16_SRGB,
+        PixelFormat::RGBA16_SRGB,
+        PixelFormat::GRAY16_SRGB,
+        graya16_srgb,
     ] {
         // RGB profiles apply only to color layouts, not to grayscale samples.
-        let profile = matches!(
-            descriptor,
-            PixelDescriptor::RGB8_SRGB | PixelDescriptor::RGBA8_SRGB
-        );
-        let (input, expected) = png_fixture(descriptor, profile);
+        let profile = descriptor == PixelFormat::RGB8_SRGB || descriptor == PixelFormat::RGBA8_SRGB;
+        let (input, expected) = png_fixture(&descriptor, profile);
         assert_eq!(oracle(&input), expected);
         let budget = StorageBudget::new(512 * 1024, 16);
         let req = TranscodeRequest::new(ImageFormat::Png)
@@ -129,20 +141,22 @@ fn png_source_retains_alpha_depth_samples_and_icc_through_lossless_transcode() {
 }
 #[test]
 fn png_profile_conversion_matches_separate_cms_and_drops_reported_descriptions() {
-    let (input, _) = png_fixture(PixelDescriptor::RGB8_SRGB, true);
+    let (input, _) = png_fixture(&zenpixels::formats::RGB8_SRGB, true);
     let codecs = codecs();
-    let source = zencodec::operation::DecodeRequest::new()
+    let source = zencodec::operation::DecodeOptions::new()
         .decode(&codecs, &input)
         .unwrap();
-    let mut cms = MoxCms
-        .build_source_transform(
-            ColorProfileSource::Icc(zenpixels_convert::icc_profiles::DISPLAY_P3_V4),
-            ColorProfileSource::Cicp(Cicp::SRGB),
-            PixelFormat::Rgb8,
-            PixelFormat::Rgb8,
-            &ConvertOptions::retain_channels(),
-        )
-        .unwrap()
+    let src_fmt = PixelFormat::new(
+        SampleLayout::RGB8,
+        ColorSpace::Icc {
+            profile: Arc::from(zenpixels_convert::icc_profiles::DISPLAY_P3_V4),
+            color_channels: 3,
+            alpha: AlphaMode::None,
+            intent: RenderingIntent::RelativeColorimetric,
+        },
+    );
+    let cms = MoxCms
+        .build_transform(&src_fmt, &zenpixels::formats::RGB8_SRGB)
         .unwrap();
     let mut expected = vec![0; 7 * 5 * 3];
     for y in 0..5 {
@@ -150,7 +164,8 @@ fn png_profile_conversion_matches_separate_cms_and_drops_reported_descriptions()
             source.pixels().row(y),
             &mut expected[y as usize * 21..(y as usize + 1) * 21],
             7,
-        );
+        )
+        .unwrap();
     }
     let budget = StorageBudget::new(512 * 1024, 16);
     let output = request(budget.clone()).transcode(&codecs, &input).unwrap();

@@ -10,9 +10,7 @@ use std::path::Path;
 
 use imgref::ImgVec;
 use zencodecs::pixel::{Bgra, Gray, Rgb, Rgba};
-use zencodecs::{
-    DecodeRequest, EncodeOutput, EncodeRequest, ImageFormat, PixelBufferConvertTypedExt as _,
-};
+use zencodecs::{DecodeRequest, EncodeOutput, EncodeRequest, ImageFormat, to_rgba8};
 use zensim_regress::checksums::ChecksumManager;
 use zensim_regress::generators;
 
@@ -172,10 +170,14 @@ fn check_roundtrip(
         .decode_full_frame()
         .unwrap_or_else(|e| panic!("{codec_name}/{format_name} decode failed: {e}"));
 
-    let rgba_buf = decoded.into_buffer().to_rgba8();
+    let rgba_buf = to_rgba8(&decoded.pixels()).unwrap();
     let w = rgba_buf.width();
     let h = rgba_buf.height();
-    let rgba_bytes = rgba_buf.copy_to_contiguous_bytes();
+    let rgba_bytes = rgba_buf
+        .as_view()
+        .to_contiguous_bytes()
+        .unwrap()
+        .into_owned();
 
     let result = mgr
         .check_pixels(

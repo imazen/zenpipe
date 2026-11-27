@@ -208,7 +208,7 @@ impl NodeConverter for RegionConverter {
                       fmt: &mut crate::PixelFormat| {
                     let src_w = *w;
                     let src_h = *h;
-                    let bpp = fmt.bytes_per_pixel();
+                    let bpp = fmt.layout.bytes_per_pixel();
                     let src_stride = src_w as usize * bpp;
 
                     // Build the output canvas
@@ -282,7 +282,7 @@ impl NodeConverter for WhiteBalanceConverter {
                       fmt: &mut crate::PixelFormat| {
                     let width = *w as usize;
                     let height = *h as usize;
-                    let bpp = fmt.bytes_per_pixel();
+                    let bpp = fmt.layout.bytes_per_pixel();
 
                     if bpp < 3 {
                         return; // grayscale not supported, skip
@@ -429,7 +429,7 @@ impl NodeConverter for ColorMatrixSrgbConverter {
                       fmt: &mut crate::PixelFormat| {
                     let width = *w as usize;
                     let height = *h as usize;
-                    let bpp = fmt.bytes_per_pixel();
+                    let bpp = fmt.layout.bytes_per_pixel();
 
                     if bpp < 4 {
                         return; // need RGBA

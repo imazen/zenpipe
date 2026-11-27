@@ -1,15 +1,15 @@
 use zenbench::criterion_compat::*;
 use zenbench::{criterion_group, criterion_main};
-use zenpixels::buffer::PixelBuffer;
-use zenpixels::{ChannelLayout, ChannelType, PixelDescriptor, TransferFunction};
-use zenpixels_convert::RowConverter;
+use zenpixels::PixelFormat;
+use zenpixels::buffer::PixelBuf;
+use zenpixels_convert::{ConvertPolicy, RowPlan};
 
 use zenfilters::srgb_filters::{self, SrgbColorFilter};
 use zenfilters::{FilterContext, Pipeline, PipelineBufferExt, PipelineConfig};
 
 // ─── Test data ──────────────────────────────────────────────────────
 
-fn make_rgba8_buffer(width: u32, height: u32) -> PixelBuffer {
+fn make_rgba8_buffer(width: u32, height: u32) -> PixelBuf {
     let n = (width as usize) * (height as usize);
     let mut data = Vec::with_capacity(n * 4);
     for i in 0..n {
@@ -19,10 +19,10 @@ fn make_rgba8_buffer(width: u32, height: u32) -> PixelBuffer {
         data.push((t * 100.0 + 80.0) as u8);
         data.push(255u8);
     }
-    PixelBuffer::from_vec(data, width, height, PixelDescriptor::RGBA8_SRGB).unwrap()
+    PixelBuf::from_bytes(data, width, height, PixelFormat::RGBA8_SRGB).unwrap()
 }
 
-fn make_rgb16_buffer(width: u32, height: u32) -> PixelBuffer {
+fn make_rgb16_buffer(width: u32, height: u32) -> PixelBuf {
     let n = (width as usize) * (height as usize);
     let mut data: Vec<u8> = Vec::with_capacity(n * 6);
     for i in 0..n {
@@ -31,13 +31,8 @@ fn make_rgb16_buffer(width: u32, height: u32) -> PixelBuffer {
         data.extend_from_slice(&(((1.0 - t) * 40000.0 + 8000.0) as u16).to_le_bytes());
         data.extend_from_slice(&((t * 30000.0 + 10000.0) as u16).to_le_bytes());
     }
-    let desc = PixelDescriptor::new(
-        ChannelType::U16,
-        ChannelLayout::Rgb,
-        None,
-        TransferFunction::Srgb,
-    );
-    PixelBuffer::from_vec(data, width, height, desc).unwrap()
+    let desc = PixelFormat::RGB16_SRGB;
+    PixelBuf::from_bytes(data, width, height, desc).unwrap()
 }
 
 // ─── sRGB per-pixel filter benchmarks ───────────────────────────────
@@ -53,7 +48,7 @@ fn bench_srgb_color_adjust(c: &mut Criterion) {
             &(w, h),
             |b, _| {
                 b.iter(|| {
-                    srgb_filters::color_adjust(&mut buf.as_slice_mut(), 0.1, 0.2, 0.15);
+                    srgb_filters::color_adjust(&mut buf.as_view_mut(), 0.1, 0.2, 0.15);
                 });
             },
         );
@@ -65,7 +60,7 @@ fn bench_srgb_color_adjust(c: &mut Criterion) {
             &(w, h),
             |b, _| {
                 b.iter(|| {
-                    srgb_filters::color_adjust(&mut buf16.as_slice_mut(), 0.1, 0.2, 0.15);
+                    srgb_filters::color_adjust(&mut buf16.as_view_mut(), 0.1, 0.2, 0.15);
                 });
             },
         );
@@ -84,7 +79,7 @@ fn bench_srgb_color_filter(c: &mut Criterion) {
             |b, _| {
                 b.iter(|| {
                     srgb_filters::color_filter(
-                        &mut buf.as_slice_mut(),
+                        &mut buf.as_view_mut(),
                         &SrgbColorFilter::GrayscaleBt709,
                     );
                 });
@@ -97,7 +92,7 @@ fn bench_srgb_color_filter(c: &mut Criterion) {
             &(w, h),
             |b, _| {
                 b.iter(|| {
-                    srgb_filters::color_filter(&mut buf2.as_slice_mut(), &SrgbColorFilter::Invert);
+                    srgb_filters::color_filter(&mut buf2.as_view_mut(), &SrgbColorFilter::Invert);
                 });
             },
         );
@@ -108,7 +103,7 @@ fn bench_srgb_color_filter(c: &mut Criterion) {
             &(w, h),
             |b, _| {
                 b.iter(|| {
-                    srgb_filters::color_filter(&mut buf3.as_slice_mut(), &SrgbColorFilter::Sepia);
+                    srgb_filters::color_filter(&mut buf3.as_view_mut(), &SrgbColorFilter::Sepia);
                 });
             },
         );
@@ -135,7 +130,7 @@ fn bench_srgb_color_matrix(c: &mut Criterion) {
             &(w, h),
             |b, _| {
                 b.iter(|| {
-                    srgb_filters::color_matrix(&mut buf.as_slice_mut(), &sepia);
+                    srgb_filters::color_matrix(&mut buf.as_view_mut(), &sepia);
                 });
             },
         );
@@ -292,27 +287,25 @@ fn bench_row_converter_overhead(c: &mut Criterion) {
     let mut group = c.benchmark_group("row_converter_overhead");
 
     for &w in &[256, 512, 1024, 2048] {
-        // Measure RowConverter construction
-        let desc_src = PixelDescriptor::new(
-            ChannelType::U16,
-            ChannelLayout::Rgb,
-            None,
-            TransferFunction::Srgb,
-        );
-        let desc_dst = PixelDescriptor::RGBA8_SRGB;
+        // Measure RowPlan construction
+        let desc_src = PixelFormat::RGB16_SRGB;
+        let desc_dst = PixelFormat::RGBA8_SRGB;
 
         group.bench_with_input(
             BenchmarkId::new("constructor", format!("w{w}")),
             &w,
             |b, _| {
                 b.iter(|| {
-                    let _ = RowConverter::new(desc_src, desc_dst).unwrap();
+                    let _ =
+                        RowPlan::build(&desc_src, &desc_dst, &ConvertPolicy::permissive(), None)
+                            .unwrap();
                 });
             },
         );
 
         // Measure conversion of a single row
-        let mut converter = RowConverter::new(desc_src, desc_dst).unwrap();
+        let converter =
+            RowPlan::build(&desc_src, &desc_dst, &ConvertPolicy::permissive(), None).unwrap();
         let src_row = vec![128u8; w * 6]; // RGB16
         let mut dst_row = vec![0u8; w * 4]; // RGBA8
 
@@ -321,7 +314,7 @@ fn bench_row_converter_overhead(c: &mut Criterion) {
             &w,
             |b, _| {
                 b.iter(|| {
-                    converter.convert_row(&src_row, &mut dst_row, w as u32);
+                    let _ = converter.convert_row(&src_row, &mut dst_row, w as u32);
                 });
             },
         );
@@ -332,15 +325,16 @@ fn bench_row_converter_overhead(c: &mut Criterion) {
 // ─── Scatter/gather isolation ────────────────────────────────────────
 
 fn bench_scatter_gather(c: &mut Criterion) {
-    use zenpixels::ColorPrimaries;
-    use zenpixels_convert::oklab;
+    use zenpixels::Primaries;
+    use zenpixels_convert::oklab::OklabSpace;
 
     let mut group = c.benchmark_group("scatter_gather");
 
     for &(w, h) in &[(256, 256), (512, 512), (1024, 1024), (2048, 2048)] {
         let n = (w as usize) * (h as usize);
-        let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
-        let m1_inv = oklab::lms_to_rgb_matrix(ColorPrimaries::Bt709).unwrap();
+        let space = OklabSpace::for_primaries(Primaries::Bt709).unwrap();
+        let m1 = space.rgb_to_lms();
+        let m1_inv = space.lms_to_rgb();
 
         // Create linear f32 RGB test data
         let mut src = vec![0.0f32; n * 3];
@@ -358,7 +352,7 @@ fn bench_scatter_gather(c: &mut Criterion) {
             |b, &(w, h)| {
                 let mut planes = zenfilters::OklabPlanes::new(w, h);
                 b.iter(|| {
-                    zenfilters::scatter_to_oklab(&src, &mut planes, 3, &m1, 1.0);
+                    zenfilters::scatter_to_oklab(&src, &mut planes, 3, m1, 1.0);
                 });
             },
         );
@@ -369,10 +363,10 @@ fn bench_scatter_gather(c: &mut Criterion) {
             &(w, h),
             |b, &(w, h)| {
                 let mut planes = zenfilters::OklabPlanes::new(w, h);
-                zenfilters::scatter_to_oklab(&src, &mut planes, 3, &m1, 1.0);
+                zenfilters::scatter_to_oklab(&src, &mut planes, 3, m1, 1.0);
                 let mut dst = vec![0.0f32; n * 3];
                 b.iter(|| {
-                    zenfilters::gather_from_oklab(&planes, &mut dst, 3, &m1_inv, 1.0);
+                    zenfilters::gather_from_oklab(&planes, &mut dst, 3, m1_inv, 1.0);
                 });
             },
         );
@@ -385,8 +379,8 @@ fn bench_scatter_gather(c: &mut Criterion) {
                 let mut planes = zenfilters::OklabPlanes::new(w, h);
                 let mut dst = vec![0.0f32; n * 3];
                 b.iter(|| {
-                    zenfilters::scatter_to_oklab(&src, &mut planes, 3, &m1, 1.0);
-                    zenfilters::gather_from_oklab(&planes, &mut dst, 3, &m1_inv, 1.0);
+                    zenfilters::scatter_to_oklab(&src, &mut planes, 3, m1, 1.0);
+                    zenfilters::gather_from_oklab(&planes, &mut dst, 3, m1_inv, 1.0);
                 });
             },
         );
@@ -406,7 +400,7 @@ fn bench_scatter_gather(c: &mut Criterion) {
             |b, &(w, h)| {
                 let mut planes = zenfilters::OklabPlanes::new(w, h);
                 b.iter(|| {
-                    zenfilters::scatter_srgb_u8_to_oklab(&src_u8, &mut planes, 3, &m1);
+                    zenfilters::scatter_srgb_u8_to_oklab(&src_u8, &mut planes, 3, m1);
                 });
             },
         );
@@ -417,10 +411,10 @@ fn bench_scatter_gather(c: &mut Criterion) {
             &(w, h),
             |b, &(w, h)| {
                 let mut planes = zenfilters::OklabPlanes::new(w, h);
-                zenfilters::scatter_srgb_u8_to_oklab(&src_u8, &mut planes, 3, &m1);
+                zenfilters::scatter_srgb_u8_to_oklab(&src_u8, &mut planes, 3, m1);
                 let mut dst_u8 = vec![0u8; n * 3];
                 b.iter(|| {
-                    zenfilters::gather_oklab_to_srgb_u8(&planes, &mut dst_u8, 3, &m1_inv);
+                    zenfilters::gather_oklab_to_srgb_u8(&planes, &mut dst_u8, 3, m1_inv);
                 });
             },
         );
@@ -433,8 +427,8 @@ fn bench_scatter_gather(c: &mut Criterion) {
                 let mut planes = zenfilters::OklabPlanes::new(w, h);
                 let mut dst_u8 = vec![0u8; n * 3];
                 b.iter(|| {
-                    zenfilters::scatter_srgb_u8_to_oklab(&src_u8, &mut planes, 3, &m1);
-                    zenfilters::gather_oklab_to_srgb_u8(&planes, &mut dst_u8, 3, &m1_inv);
+                    zenfilters::scatter_srgb_u8_to_oklab(&src_u8, &mut planes, 3, m1);
+                    zenfilters::gather_oklab_to_srgb_u8(&planes, &mut dst_u8, 3, m1_inv);
                 });
             },
         );

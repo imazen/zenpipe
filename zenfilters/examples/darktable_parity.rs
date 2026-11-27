@@ -24,11 +24,12 @@ use zenfilters::{
     FilterContext, OklabPlanes, Pipeline, gather_oklab_to_srgb_u8, scatter_srgb_u8_to_oklab,
     scatter_to_oklab,
 };
-use zenpixels::ColorPrimaries;
+use zenpixels::Primaries;
 use zenpixels_convert::gamut::GamutMatrix;
 use zenpixels_convert::oklab;
+use zenpixels_convert::{ConvertPolicy, convert_to_buf};
 use zenraw::darktable::{self, DtConfig};
-use zenresize::{Filter, PixelDescriptor, ResizeConfig, Resizer};
+use zenresize::{Filter, PixelFormat, ResizeConfig, Resizer};
 use zensim::{RgbSlice, Zensim, ZensimProfile};
 
 const DNG_DIR: &str = "/mnt/v/input/fivek/dng";
@@ -415,9 +416,13 @@ fn darktable_render(dng_path: &Path, workflow: &str) -> Option<(Vec<u8>, u32, u3
     let decoded = DecodeRequest::new(&png_bytes).decode().ok()?;
     let w = decoded.width();
     let h = decoded.height();
-    use zenpixels_convert::PixelBufferConvertTypedExt;
-    let rgb8_buf = decoded.into_buffer().to_rgb8();
-    let bytes = rgb8_buf.copy_to_contiguous_bytes();
+    let rgb8_buf = convert_to_buf(
+        &decoded.into_buffer().as_view(),
+        zenpixels::PixelFormat::RGB8_SRGB,
+        &ConvertPolicy::permissive(),
+    )
+    .ok()?;
+    let bytes = rgb8_buf.as_view().to_contiguous_bytes().ok()?.into_owned();
     Some((bytes, w, h))
 }
 
@@ -442,7 +447,7 @@ fn downscale_rgb8(data: &[u8], w: u32, h: u32, max_dim: u32) -> (Vec<u8>, u32, u
     let nh = ((h as f64 * scale) as u32).max(1);
     let config = ResizeConfig::builder(w, h, nw, nh)
         .filter(Filter::Lanczos)
-        .format(PixelDescriptor::RGB8_SRGB)
+        .format(PixelFormat::RGB8_SRGB)
         .build();
     let mut resizer = Resizer::new(&config);
     (resizer.resize(data), nw, nh)
@@ -653,8 +658,9 @@ fn main() {
     let step = triples.len() / num_samples;
     let samples: Vec<_> = (0..num_samples).map(|i| &triples[i * step]).collect();
 
-    let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
-    let m1_inv = oklab::lms_to_rgb_matrix(ColorPrimaries::Bt709).unwrap();
+    let space = oklab::OklabSpace::for_primaries(Primaries::Bt709).unwrap();
+    let m1 = space.rgb_to_lms();
+    let m1_inv = space.lms_to_rgb();
     let zs = Zensim::new(ZensimProfile::latest());
     let mut ctx = FilterContext::new();
     let dt_config = DtConfig::new();
@@ -681,13 +687,16 @@ fn main() {
             }
         };
         let (ew, eh) = (expert_decoded.width(), expert_decoded.height());
-        let expert_raw = {
-            use zenpixels_convert::PixelBufferConvertTypedExt;
-            expert_decoded
-                .into_buffer()
-                .to_rgb8()
-                .copy_to_contiguous_bytes()
-        };
+        let expert_raw = convert_to_buf(
+            &expert_decoded.into_buffer().as_view(),
+            zenpixels::PixelFormat::RGB8_SRGB,
+            &ConvertPolicy::permissive(),
+        )
+        .unwrap()
+        .as_view()
+        .to_contiguous_bytes()
+        .unwrap()
+        .into_owned();
 
         // Load original JPEG
         let orig_bytes = match fs::read(orig_path) {
@@ -705,13 +714,16 @@ fn main() {
             }
         };
         let (ow, oh) = (orig_decoded.width(), orig_decoded.height());
-        let orig_raw = {
-            use zenpixels_convert::PixelBufferConvertTypedExt;
-            orig_decoded
-                .into_buffer()
-                .to_rgb8()
-                .copy_to_contiguous_bytes()
-        };
+        let orig_raw = convert_to_buf(
+            &orig_decoded.into_buffer().as_view(),
+            zenpixels::PixelFormat::RGB8_SRGB,
+            &ConvertPolicy::permissive(),
+        )
+        .unwrap()
+        .as_view()
+        .to_contiguous_bytes()
+        .unwrap()
+        .into_owned();
 
         // --- Baseline: original vs expert (no processing) ---
         let (orig_r, expert_r, w, h) = resize_pair(&orig_raw, ow, oh, &expert_raw, ew, eh);
@@ -1086,7 +1098,7 @@ fn process_dng_parity(
     let pixels = output.pixels;
     let dw = pixels.width();
     let dh = pixels.height();
-    let raw_bytes = pixels.copy_to_contiguous_bytes();
+    let raw_bytes = pixels.as_view().to_contiguous_bytes().ok()?;
     let linear_f32: &[f32] = bytemuck::cast_slice(&raw_bytes);
 
     // 3. Extract illuminant xy from EXIF

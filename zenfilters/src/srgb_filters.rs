@@ -23,9 +23,12 @@
 use alloc::vec;
 use alloc::vec::Vec;
 use rgb::Rgba;
-use zenpixels::buffer::{PixelBuffer, PixelSliceMut};
-use zenpixels::{PixelDescriptor, TransferFunction};
-use zenpixels_convert::RowConverter;
+use zenpixels::buffer::{PixelBuf, PixelViewMut};
+use zenpixels::{
+    AlphaMode, ChannelOrder, ColorSpace, PixelFormat, SampleLayout, SampleType, SignalRange,
+    Transfer,
+};
+use zenpixels_convert::{ConvertPolicy, RowPlan};
 
 /// sRGB gamma-space color adjustments (streaming, row-by-row).
 ///
@@ -34,12 +37,7 @@ use zenpixels_convert::RowConverter;
 /// the adjustments, and converting back.
 ///
 /// This produces the same results as imageflow4's `ColorAdjust` step.
-pub fn color_adjust(
-    slice: &mut PixelSliceMut<'_>,
-    brightness: f32,
-    contrast: f32,
-    saturation: f32,
-) {
+pub fn color_adjust(slice: &mut PixelViewMut<'_>, brightness: f32, contrast: f32, saturation: f32) {
     if brightness == 0.0 && contrast == 0.0 && saturation == 0.0 {
         return;
     }
@@ -76,7 +74,7 @@ pub fn color_adjust(
 ///
 /// Row-major: `[R',G',B',A',1] = M × [R,G,B,A,1]` where R,G,B,A are
 /// normalized sRGB values in `[0, 1]`. This is imageflow4's `ColorMatrix`.
-pub fn color_matrix(slice: &mut PixelSliceMut<'_>, matrix: &[f32; 25]) {
+pub fn color_matrix(slice: &mut PixelViewMut<'_>, matrix: &[f32; 25]) {
     let m = *matrix;
     with_rows_rgba(slice, |row| {
         for p in row.iter_mut() {
@@ -119,7 +117,7 @@ pub enum SrgbColorFilter {
 /// Apply a predefined color filter in sRGB space (streaming, row-by-row).
 ///
 /// Replicates imageflow4's `ColorFilter` step exactly.
-pub fn color_filter(slice: &mut PixelSliceMut<'_>, filter: &SrgbColorFilter) {
+pub fn color_filter(slice: &mut PixelViewMut<'_>, filter: &SrgbColorFilter) {
     match filter {
         SrgbColorFilter::GrayscaleBt709 => with_rows_rgba(slice, |row| {
             for p in row.iter_mut() {
@@ -181,7 +179,7 @@ pub fn color_filter(slice: &mut PixelSliceMut<'_>, filter: &SrgbColorFilter) {
 ///
 /// This is a neighborhood operation — it needs the full image. Takes
 /// a `PixelBuffer` and modifies in-place.
-pub fn sharpen(pixels: &mut PixelBuffer, amount: f32) {
+pub fn sharpen(pixels: &mut PixelBuf, amount: f32) {
     let amount = amount / 100.0;
     let width = pixels.width();
     let height = pixels.height();
@@ -209,14 +207,14 @@ pub fn sharpen(pixels: &mut PixelBuffer, amount: f32) {
         };
     }
 
-    *pixels = PixelBuffer::from_pixels_erased(out, width, height).unwrap();
+    *pixels = PixelBuf::from_typed(out, width, height, PixelFormat::RGBA8_SRGB).unwrap();
 }
 
 /// Gaussian-approximation blur in sRGB space (3× box blur).
 ///
 /// Replicates imageflow4's `Blur` step exactly. Neighborhood operation
-/// that modifies a `PixelBuffer` in-place.
-pub fn blur(pixels: &mut PixelBuffer, sigma: f32) {
+/// that modifies a `PixelBuf` in-place.
+pub fn blur(pixels: &mut PixelBuf, sigma: f32) {
     let radius = (sigma * 2.0).ceil() as usize;
     if radius == 0 {
         return;
@@ -233,32 +231,35 @@ pub fn blur(pixels: &mut PixelBuffer, sigma: f32) {
         packed = box_blur_rgba(&packed, w, h, pass_radius);
     }
 
-    *pixels = PixelBuffer::from_pixels_erased(packed, width, height).unwrap();
+    *pixels = PixelBuf::from_typed(packed, width, height, PixelFormat::RGBA8_SRGB).unwrap();
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────
 
-/// Collect all pixels from a PixelBuffer as packed RGBA8, converting if needed.
-fn collect_rgba(pixels: &PixelBuffer) -> Vec<Rgba<u8>> {
-    let desc = pixels.descriptor();
+/// Collect all pixels from a PixelBuf as packed RGBA8, converting if needed.
+fn collect_rgba(pixels: &PixelBuf) -> Vec<Rgba<u8>> {
+    let desc = pixels.format().clone();
     let width = pixels.width();
     let height = pixels.height();
     let w = width as usize;
     let h = height as usize;
-    let slice = pixels.as_slice();
+    let slice = pixels.as_view();
 
-    let rgba_desc = PixelDescriptor::RGBA8_SRGB;
+    let rgba_desc = PixelFormat::RGBA8_SRGB;
     let need_convert = desc != rgba_desc;
-    let mut converter = need_convert
-        .then(|| RowConverter::new(desc, rgba_desc).expect("conversion to RGBA8 should succeed"));
+    let converter = need_convert.then(|| {
+        RowPlan::build(&desc, &rgba_desc, &ConvertPolicy::permissive(), None)
+            .expect("conversion to RGBA8 should succeed")
+    });
 
     let mut packed = Vec::with_capacity(w * h);
     let mut row_buf = vec![0u8; w * 4];
 
     for y in 0..h as u32 {
         let src_row = slice.row(y);
-        let rgba_row = if let Some(conv) = &mut converter {
-            conv.convert_row(src_row, &mut row_buf, width);
+        let rgba_row = if let Some(conv) = &converter {
+            conv.convert_row(src_row, &mut row_buf, width)
+                .expect("row conversion to RGBA8 should succeed");
             &row_buf[..w * 4]
         } else {
             &src_row[..w * 4]
@@ -269,26 +270,38 @@ fn collect_rgba(pixels: &PixelBuffer) -> Vec<Rgba<u8>> {
     packed
 }
 
-/// Process rows of a PixelSliceMut as RGBA8 pixels, converting if needed.
+/// Process rows of a PixelViewMut as RGBA8 pixels, converting if needed.
 ///
 /// If the slice is already RGBA8 sRGB, operates in-place without conversion.
 /// Otherwise, converts each row to RGBA8, applies the function, and converts back.
-fn with_rows_rgba(slice: &mut PixelSliceMut<'_>, mut f: impl FnMut(&mut [Rgba<u8>])) {
-    let desc = slice.descriptor();
+fn with_rows_rgba(slice: &mut PixelViewMut<'_>, mut f: impl FnMut(&mut [Rgba<u8>])) {
+    let desc = slice.format().clone();
     let width = slice.width();
-    let height = slice.rows();
+    let height = slice.height();
     let w = width as usize;
 
-    let rgba_desc = PixelDescriptor::new(
-        zenpixels::ChannelType::U8,
-        zenpixels::ChannelLayout::Rgba,
-        Some(zenpixels::AlphaMode::Straight),
-        desc.transfer(),
+    let transfer = match &desc.color {
+        ColorSpace::Rgb { transfer, .. } | ColorSpace::Gray { transfer, .. } => *transfer,
+        _ => Transfer::Unknown,
+    };
+    let primaries = match &desc.color {
+        ColorSpace::Rgb { primaries, .. } => *primaries,
+        _ => zenpixels::Primaries::Bt709,
+    };
+    let rgba_desc = PixelFormat::new(
+        SampleLayout::new(SampleType::U8, ChannelOrder::Rgba),
+        ColorSpace::Rgb {
+            primaries,
+            transfer,
+            alpha: AlphaMode::Straight,
+            range: SignalRange::Full,
+            white: desc.color.white(),
+        },
     );
 
-    let is_rgba8 = desc.channel_type() == zenpixels::ChannelType::U8
-        && desc.layout() == zenpixels::ChannelLayout::Rgba
-        && desc.transfer() != TransferFunction::Unknown;
+    let is_rgba8 = desc.layout.sample == SampleType::U8
+        && desc.layout.order == ChannelOrder::Rgba
+        && transfer != Transfer::Unknown;
 
     if is_rgba8 {
         // Fast path: operate directly on the row bytes
@@ -299,25 +312,30 @@ fn with_rows_rgba(slice: &mut PixelSliceMut<'_>, mut f: impl FnMut(&mut [Rgba<u8
         }
     } else {
         // Convert each row to RGBA8, process, convert back
-        let mut to_rgba =
-            RowConverter::new(desc, rgba_desc).expect("conversion to RGBA8 should succeed");
-        let mut from_rgba =
-            RowConverter::new(rgba_desc, desc).expect("conversion from RGBA8 should succeed");
+        let policy = ConvertPolicy::permissive();
+        let to_rgba = RowPlan::build(&desc, &rgba_desc, &policy, None)
+            .expect("conversion to RGBA8 should succeed");
+        let from_rgba = RowPlan::build(&rgba_desc, &desc, &policy, None)
+            .expect("conversion from RGBA8 should succeed");
 
         let mut rgba_buf = vec![0u8; w * 4];
-        let mut back_buf = vec![0u8; w * desc.bytes_per_pixel()];
+        let mut back_buf = vec![0u8; w * desc.layout.bytes_per_pixel()];
 
         for y in 0..height {
             // Convert to RGBA8
             let row_bytes = slice.row_mut(y);
-            to_rgba.convert_row(row_bytes, &mut rgba_buf, width);
+            to_rgba
+                .convert_row(row_bytes, &mut rgba_buf, width)
+                .expect("row conversion to RGBA8 should succeed");
 
             // Apply function
             let pixels: &mut [Rgba<u8>] = bytemuck::cast_slice_mut(&mut rgba_buf[..w * 4]);
             f(pixels);
 
             // Convert back
-            from_rgba.convert_row(&rgba_buf, &mut back_buf, width);
+            from_rgba
+                .convert_row(&rgba_buf, &mut back_buf, width)
+                .expect("row conversion from RGBA8 should succeed");
             let row_bytes = slice.row_mut(y);
             row_bytes[..back_buf.len()].copy_from_slice(&back_buf);
         }
@@ -402,7 +420,7 @@ fn box_blur_rgba(input: &[Rgba<u8>], w: usize, h: usize, radius: usize) -> Vec<R
 mod tests {
     use super::*;
 
-    fn make_test_buffer(width: u32, height: u32) -> PixelBuffer {
+    fn make_test_buffer(width: u32, height: u32) -> PixelBuf {
         let n = (width as usize) * (height as usize);
         let mut data = Vec::with_capacity(n * 4);
         for i in 0..n {
@@ -412,10 +430,10 @@ mod tests {
             data.push((t * 100.0 + 80.0) as u8);
             data.push(255u8);
         }
-        PixelBuffer::from_vec(data, width, height, PixelDescriptor::RGBA8_SRGB).unwrap()
+        PixelBuf::from_bytes(data, width, height, PixelFormat::RGBA8_SRGB).unwrap()
     }
 
-    fn make_step_edge_buffer(width: u32, height: u32) -> PixelBuffer {
+    fn make_step_edge_buffer(width: u32, height: u32) -> PixelBuf {
         let n = (width as usize) * (height as usize);
         let mut data = Vec::with_capacity(n * 4);
         for i in 0..n {
@@ -426,11 +444,11 @@ mod tests {
             data.push(v);
             data.push(255u8);
         }
-        PixelBuffer::from_vec(data, width, height, PixelDescriptor::RGBA8_SRGB).unwrap()
+        PixelBuf::from_bytes(data, width, height, PixelFormat::RGBA8_SRGB).unwrap()
     }
 
-    fn avg_brightness(buf: &PixelBuffer) -> f32 {
-        let bytes = buf.copy_to_contiguous_bytes();
+    fn avg_brightness(buf: &PixelBuf) -> f32 {
+        let bytes = buf.as_view().to_contiguous_bytes().unwrap();
         let n = bytes.len() / 4;
         let mut sum = 0u64;
         for i in 0..n {
@@ -446,9 +464,9 @@ mod tests {
     #[test]
     fn color_adjust_zero_is_identity() {
         let mut buf = make_test_buffer(16, 16);
-        let orig = buf.copy_to_contiguous_bytes();
-        color_adjust(&mut buf.as_slice_mut(), 0.0, 0.0, 0.0);
-        let after = buf.copy_to_contiguous_bytes();
+        let orig = buf.as_view().to_contiguous_bytes().unwrap().into_owned();
+        color_adjust(&mut buf.as_view_mut(), 0.0, 0.0, 0.0);
+        let after = buf.as_view().to_contiguous_bytes().unwrap().into_owned();
         assert_eq!(orig, after);
     }
 
@@ -456,7 +474,7 @@ mod tests {
     fn color_adjust_brightness_increases() {
         let mut buf = make_test_buffer(16, 16);
         let before = avg_brightness(&buf);
-        color_adjust(&mut buf.as_slice_mut(), 0.2, 0.0, 0.0);
+        color_adjust(&mut buf.as_view_mut(), 0.2, 0.0, 0.0);
         let after = avg_brightness(&buf);
         assert!(
             after > before,
@@ -467,8 +485,8 @@ mod tests {
     #[test]
     fn color_adjust_contrast_increases_range() {
         let mut buf = make_test_buffer(32, 32);
-        color_adjust(&mut buf.as_slice_mut(), 0.0, 0.5, 0.0);
-        let bytes = buf.copy_to_contiguous_bytes();
+        color_adjust(&mut buf.as_view_mut(), 0.0, 0.5, 0.0);
+        let bytes = buf.as_view().to_contiguous_bytes().unwrap();
         let n = bytes.len() / 4;
         let mut has_bright = false;
         let mut has_dark = false;
@@ -488,7 +506,7 @@ mod tests {
     #[test]
     fn color_matrix_identity() {
         let mut buf = make_test_buffer(8, 8);
-        let orig = buf.copy_to_contiguous_bytes();
+        let orig = buf.as_view().to_contiguous_bytes().unwrap().into_owned();
         #[rustfmt::skip]
         let identity: [f32; 25] = [
             1.0, 0.0, 0.0, 0.0, 0.0,
@@ -497,8 +515,8 @@ mod tests {
             0.0, 0.0, 0.0, 1.0, 0.0,
             0.0, 0.0, 0.0, 0.0, 1.0,
         ];
-        color_matrix(&mut buf.as_slice_mut(), &identity);
-        let after = buf.copy_to_contiguous_bytes();
+        color_matrix(&mut buf.as_view_mut(), &identity);
+        let after = buf.as_view().to_contiguous_bytes().unwrap().into_owned();
         assert_eq!(orig, after);
     }
 
@@ -513,8 +531,8 @@ mod tests {
             0.0,   0.0,   0.0,   1.0, 0.0,
             0.0,   0.0,   0.0,   0.0, 1.0,
         ];
-        color_matrix(&mut buf.as_slice_mut(), &sepia);
-        let bytes = buf.copy_to_contiguous_bytes();
+        color_matrix(&mut buf.as_view_mut(), &sepia);
+        let bytes = buf.as_view().to_contiguous_bytes().unwrap();
         assert!(bytes[0] >= bytes[1], "sepia: R should >= G");
         assert!(bytes[1] >= bytes[2], "sepia: G should >= B");
     }
@@ -524,8 +542,8 @@ mod tests {
     #[test]
     fn grayscale_bt709_produces_neutral() {
         let mut buf = make_test_buffer(8, 8);
-        color_filter(&mut buf.as_slice_mut(), &SrgbColorFilter::GrayscaleBt709);
-        let bytes = buf.copy_to_contiguous_bytes();
+        color_filter(&mut buf.as_view_mut(), &SrgbColorFilter::GrayscaleBt709);
+        let bytes = buf.as_view().to_contiguous_bytes().unwrap();
         for i in 0..bytes.len() / 4 {
             assert_eq!(bytes[i * 4], bytes[i * 4 + 1], "R == G for grayscale");
             assert_eq!(bytes[i * 4 + 1], bytes[i * 4 + 2], "G == B for grayscale");
@@ -535,8 +553,8 @@ mod tests {
     #[test]
     fn grayscale_ntsc_produces_neutral() {
         let mut buf = make_test_buffer(8, 8);
-        color_filter(&mut buf.as_slice_mut(), &SrgbColorFilter::GrayscaleNtsc);
-        let bytes = buf.copy_to_contiguous_bytes();
+        color_filter(&mut buf.as_view_mut(), &SrgbColorFilter::GrayscaleNtsc);
+        let bytes = buf.as_view().to_contiguous_bytes().unwrap();
         for i in 0..bytes.len() / 4 {
             assert_eq!(bytes[i * 4], bytes[i * 4 + 1]);
             assert_eq!(bytes[i * 4 + 1], bytes[i * 4 + 2]);
@@ -546,8 +564,8 @@ mod tests {
     #[test]
     fn grayscale_flat_produces_neutral() {
         let mut buf = make_test_buffer(8, 8);
-        color_filter(&mut buf.as_slice_mut(), &SrgbColorFilter::GrayscaleFlat);
-        let bytes = buf.copy_to_contiguous_bytes();
+        color_filter(&mut buf.as_view_mut(), &SrgbColorFilter::GrayscaleFlat);
+        let bytes = buf.as_view().to_contiguous_bytes().unwrap();
         for i in 0..bytes.len() / 4 {
             assert_eq!(bytes[i * 4], bytes[i * 4 + 1]);
             assert_eq!(bytes[i * 4 + 1], bytes[i * 4 + 2]);
@@ -557,18 +575,18 @@ mod tests {
     #[test]
     fn invert_double_is_identity() {
         let mut buf = make_test_buffer(8, 8);
-        let orig = buf.copy_to_contiguous_bytes();
-        color_filter(&mut buf.as_slice_mut(), &SrgbColorFilter::Invert);
-        color_filter(&mut buf.as_slice_mut(), &SrgbColorFilter::Invert);
-        let after = buf.copy_to_contiguous_bytes();
+        let orig = buf.as_view().to_contiguous_bytes().unwrap().into_owned();
+        color_filter(&mut buf.as_view_mut(), &SrgbColorFilter::Invert);
+        color_filter(&mut buf.as_view_mut(), &SrgbColorFilter::Invert);
+        let after = buf.as_view().to_contiguous_bytes().unwrap().into_owned();
         assert_eq!(orig, after);
     }
 
     #[test]
     fn alpha_zero_is_transparent() {
         let mut buf = make_test_buffer(8, 8);
-        color_filter(&mut buf.as_slice_mut(), &SrgbColorFilter::Alpha(0.0));
-        let bytes = buf.copy_to_contiguous_bytes();
+        color_filter(&mut buf.as_view_mut(), &SrgbColorFilter::Alpha(0.0));
+        let bytes = buf.as_view().to_contiguous_bytes().unwrap();
         for i in 0..bytes.len() / 4 {
             assert_eq!(bytes[i * 4 + 3], 0, "alpha should be 0");
         }
@@ -577,17 +595,17 @@ mod tests {
     #[test]
     fn alpha_one_preserves() {
         let mut buf = make_test_buffer(8, 8);
-        let orig = buf.copy_to_contiguous_bytes();
-        color_filter(&mut buf.as_slice_mut(), &SrgbColorFilter::Alpha(1.0));
-        let after = buf.copy_to_contiguous_bytes();
+        let orig = buf.as_view().to_contiguous_bytes().unwrap().into_owned();
+        color_filter(&mut buf.as_view_mut(), &SrgbColorFilter::Alpha(1.0));
+        let after = buf.as_view().to_contiguous_bytes().unwrap().into_owned();
         assert_eq!(orig, after);
     }
 
     #[test]
     fn sepia_has_warm_tint() {
         let mut buf = make_test_buffer(8, 8);
-        color_filter(&mut buf.as_slice_mut(), &SrgbColorFilter::Sepia);
-        let bytes = buf.copy_to_contiguous_bytes();
+        color_filter(&mut buf.as_view_mut(), &SrgbColorFilter::Sepia);
+        let bytes = buf.as_view().to_contiguous_bytes().unwrap();
         let mut warm = false;
         for i in 0..bytes.len() / 4 {
             if bytes[i * 4] >= bytes[i * 4 + 1] && bytes[i * 4 + 1] >= bytes[i * 4 + 2] {
@@ -604,7 +622,7 @@ mod tests {
     fn sharpen_increases_edge_contrast() {
         let mut buf = make_step_edge_buffer(32, 32);
         sharpen(&mut buf, 50.0);
-        let bytes = buf.copy_to_contiguous_bytes();
+        let bytes = buf.as_view().to_contiguous_bytes().unwrap();
         let w = 32usize;
         let mid_row = 16 * w;
         let left = bytes[(mid_row + 14) * 4];
@@ -620,16 +638,16 @@ mod tests {
     #[test]
     fn blur_zero_sigma_is_noop() {
         let mut buf = make_test_buffer(8, 8);
-        let orig = buf.copy_to_contiguous_bytes();
+        let orig = buf.as_view().to_contiguous_bytes().unwrap().into_owned();
         blur(&mut buf, 0.0);
-        let after = buf.copy_to_contiguous_bytes();
+        let after = buf.as_view().to_contiguous_bytes().unwrap().into_owned();
         assert_eq!(orig, after);
     }
 
     #[test]
     fn blur_reduces_edge_contrast() {
         let mut buf = make_step_edge_buffer(32, 32);
-        let orig_bytes = buf.copy_to_contiguous_bytes();
+        let orig_bytes = buf.as_view().to_contiguous_bytes().unwrap().into_owned();
         let w = 32usize;
         let mid_row = 16 * w;
         let orig_left = orig_bytes[(mid_row + 14) * 4];
@@ -637,7 +655,7 @@ mod tests {
         let orig_diff = orig_right as i32 - orig_left as i32;
 
         blur(&mut buf, 3.0);
-        let bytes = buf.copy_to_contiguous_bytes();
+        let bytes = buf.as_view().to_contiguous_bytes().unwrap();
         let left = bytes[(mid_row + 14) * 4];
         let right = bytes[(mid_row + 17) * 4];
         let blurred_diff = right as i32 - left as i32;
@@ -652,9 +670,9 @@ mod tests {
     fn blur_constant_stays_constant() {
         let n = 16 * 16;
         let data: Vec<u8> = (0..n).flat_map(|_| [128u8, 128, 128, 255]).collect();
-        let mut buf = PixelBuffer::from_vec(data, 16, 16, PixelDescriptor::RGBA8_SRGB).unwrap();
+        let mut buf = PixelBuf::from_bytes(data, 16, 16, PixelFormat::RGBA8_SRGB).unwrap();
         blur(&mut buf, 2.0);
-        let bytes = buf.copy_to_contiguous_bytes();
+        let bytes = buf.as_view().to_contiguous_bytes().unwrap();
         for i in 0..n {
             assert!(
                 (bytes[i * 4] as i32 - 128).abs() <= 1,

@@ -16,7 +16,7 @@
 //! not an encode; it goes through the codec's own lossless API.)
 
 use zencodec::{Metadata, Orientation};
-use zenpixels::{PixelBuffer, PixelSlice};
+use zenpixels::{PixelBuf, PixelFormat, PixelView};
 
 /// The orientation an encode must apply to its pixels, and the metadata to
 /// encode them with afterwards.
@@ -97,9 +97,14 @@ fn xmp_orientation_to_1(xmp: &[u8]) -> Option<alloc::vec::Vec<u8>> {
 }
 
 /// Apply `orientation` to `pixels`, or `None` when there is nothing to do.
-pub(crate) fn orient(pixels: &PixelSlice<'_>, orientation: Orientation) -> Option<PixelBuffer> {
-    (orientation != Orientation::Identity)
-        .then(|| zenpixels_convert::orient::apply_orientation(pixels.clone(), orientation))
+pub(crate) fn orient(
+    pixels: &PixelView<'_>,
+    orientation: Orientation,
+) -> Result<Option<PixelBuf>, whereat::At<zenpixels_convert::ConvertError>> {
+    if orientation == Orientation::Identity {
+        return Ok(None);
+    }
+    zenpixels_convert::orient::apply_orientation(pixels, orientation).map(Some)
 }
 
 /// An animation encoder that applies `orientation` to every frame, so the
@@ -113,15 +118,15 @@ pub(crate) struct OrientedAnimationEncoder {
 impl OrientedAnimationEncoder {
     fn frame(
         &self,
-        pixels: PixelSlice<'_>,
+        pixels: &PixelView<'_>,
         pulse: Option<&dyn zencodec::Pulse>,
-    ) -> Result<Option<PixelBuffer>, BoxedError> {
+    ) -> Result<Option<PixelBuf>, BoxedError> {
         if let Some(pulse) = pulse {
             pulse.check().map_err(|reason| {
                 zencodec::CodecError::new(None, zencodec::ErrorCategory::Stopped(reason))
             })?;
         }
-        let frame = orient(&pixels, self.orientation);
+        let frame = orient(pixels, self.orientation)?;
         if let Some(pulse) = pulse {
             pulse.check().map_err(|reason| {
                 zencodec::CodecError::new(None, zencodec::ErrorCategory::Stopped(reason))
@@ -150,11 +155,11 @@ impl zencodec::encode::DynAnimationFrameEncoder for OrientedAnimationEncoder {
         &mut self,
         width: u32,
         height: u32,
-        descriptor: zenpixels::PixelDescriptor,
+        pixel_format: PixelFormat,
         frame_count: Option<u32>,
     ) -> Result<zencodec::encode::AnimationOutputTiming, BoxedError> {
         let (w, h) = self.orientation.output_dimensions(width, height);
-        self.inner.begin(w, h, descriptor, frame_count)
+        self.inner.begin(w, h, pixel_format, frame_count)
     }
 
     fn pending_output(&self) -> &[u8] {
@@ -171,36 +176,36 @@ impl zencodec::encode::DynAnimationFrameEncoder for OrientedAnimationEncoder {
 
     fn push_frame(
         &mut self,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
         duration_ms: u32,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), BoxedError> {
-        match self.frame(pixels.clone(), pulse)? {
-            Some(b) => self.inner.push_frame(b.as_slice(), duration_ms, pulse),
+        match self.frame(&pixels, pulse)? {
+            Some(b) => self.inner.push_frame(b.as_view(), duration_ms, pulse),
             None => self.inner.push_frame(pixels, duration_ms, pulse),
         }
     }
 
     fn push_frame_timed(
         &mut self,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
         duration: zencodec::animation::FrameDuration,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<zencodec::animation::FrameDuration, BoxedError> {
-        match self.frame(pixels.clone(), pulse)? {
-            Some(b) => self.inner.push_frame_timed(b.as_slice(), duration, pulse),
+        match self.frame(&pixels, pulse)? {
+            Some(b) => self.inner.push_frame_timed(b.as_view(), duration, pulse),
             None => self.inner.push_frame_timed(pixels, duration, pulse),
         }
     }
 
     fn push_frame_exact(
         &mut self,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
         duration: zencodec::animation::FrameDuration,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), BoxedError> {
-        match self.frame(pixels.clone(), pulse)? {
-            Some(b) => self.inner.push_frame_exact(b.as_slice(), duration, pulse),
+        match self.frame(&pixels, pulse)? {
+            Some(b) => self.inner.push_frame_exact(b.as_view(), duration, pulse),
             None => self.inner.push_frame_exact(pixels, duration, pulse),
         }
     }
@@ -268,7 +273,7 @@ mod pulse_tests {
         }
         fn push_frame(
             &mut self,
-            pixels: PixelSlice<'_>,
+            pixels: PixelView<'_>,
             _: u32,
             pulse: Option<&dyn zencodec::Pulse>,
         ) -> Result<(), BoxedError> {
@@ -276,7 +281,7 @@ mod pulse_tests {
                 pulse.map(|p| p as *const dyn zencodec::Pulse as *const () as usize),
                 self.expected
             );
-            assert_eq!((pixels.width(), pixels.rows()), (2, 1));
+            assert_eq!((pixels.width(), pixels.height()), (2, 1));
             Ok(())
         }
         fn finish(
@@ -312,8 +317,8 @@ mod pulse_tests {
     #[test]
     fn upright_frames_forward_original_optional_pulse() {
         let samples = [1u8, 2, 3, 4, 5, 6];
-        let pixels =
-            PixelSlice::new(&samples, 1, 2, 3, zenpixels::PixelDescriptor::RGB8_SRGB).unwrap();
+        let fmt = PixelFormat::RGB8_SRGB;
+        let pixels = PixelView::new(&samples, 1, 2, 3, &fmt).unwrap();
         let noop = &zencodec::NoPulse;
         for pulse in [None, Some(noop as &dyn zencodec::Pulse)] {
             let mut encoder = OrientedAnimationEncoder {
@@ -335,8 +340,8 @@ mod pulse_tests {
     #[test]
     fn upright_frame_deadline_refuses_before_native_push() {
         let samples = [1u8, 2, 3, 4, 5, 6];
-        let pixels =
-            PixelSlice::new(&samples, 1, 2, 3, zenpixels::PixelDescriptor::RGB8_SRGB).unwrap();
+        let fmt = PixelFormat::RGB8_SRGB;
+        let pixels = PixelView::new(&samples, 1, 2, 3, &fmt).unwrap();
         for orientation in [Orientation::Identity, Orientation::Rotate90] {
             // Any downstream push would fail its expected-None assertion.
             let mut encoder = OrientedAnimationEncoder {

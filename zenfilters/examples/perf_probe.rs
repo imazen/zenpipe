@@ -7,8 +7,8 @@ use std::sync::Arc;
 use zenbench::{Suite, Throughput};
 use zenfilters::filters::*;
 use zenfilters::{FilterContext, FusedAdjustParams, OklabPlanes, Pipeline, PipelineConfig};
-use zenpixels::ColorPrimaries;
-use zenpixels_convert::oklab;
+use zenpixels::Primaries;
+use zenpixels_convert::oklab::OklabSpace;
 
 fn make_linear_rgb(w: usize, h: usize) -> Vec<f32> {
     let n = w * h;
@@ -29,8 +29,9 @@ fn make_linear_rgb(w: usize, h: usize) -> Vec<f32> {
 fn bench_scatter_gather(suite: &mut Suite, w: u32, h: u32, label: &str) {
     let n = (w as usize) * (h as usize);
     let src = Arc::new(make_linear_rgb(w as usize, h as usize));
-    let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
-    let m1_inv = oklab::lms_to_rgb_matrix(ColorPrimaries::Bt709).unwrap();
+    let space = OklabSpace::for_primaries(Primaries::Bt709).unwrap();
+    let m1 = space.rgb_to_lms();
+    let m1_inv = space.lms_to_rgb();
 
     suite.compare(&format!("scatter_gather_{label}"), |group| {
         group.throughput(Throughput::Elements(n as u64));
@@ -93,8 +94,9 @@ fn bench_blur(suite: &mut Suite, w: u32, h: u32, label: &str) {
 fn bench_fused_adjust(suite: &mut Suite, w: u32, h: u32, label: &str) {
     let n = (w as usize) * (h as usize);
     let src = Arc::new(make_linear_rgb(w as usize, h as usize));
-    let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
-    let m1_inv = oklab::lms_to_rgb_matrix(ColorPrimaries::Bt709).unwrap();
+    let space = OklabSpace::for_primaries(Primaries::Bt709).unwrap();
+    let m1 = space.rgb_to_lms();
+    let m1_inv = space.lms_to_rgb();
 
     let mut adj = FusedAdjust::new();
     adj.exposure = 0.3;

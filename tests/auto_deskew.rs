@@ -32,7 +32,7 @@ fn drain_luma(src: &mut dyn Source) -> (Vec<u8>, u32, u32) {
     let (w, h) = (src.width(), src.height());
     let mut luma = Vec::with_capacity((w * h) as usize);
     while let Some(strip) = src.next().unwrap() {
-        for r in 0..strip.rows() {
+        for r in 0..strip.height() {
             for px in strip.row(r)[..w as usize * 4].as_chunks::<4>().0.iter() {
                 let a = u32::from(px[3]);
                 let l =

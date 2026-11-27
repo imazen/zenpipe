@@ -37,7 +37,7 @@
 //! ```
 //! use zenfilters::{Pipeline, PipelineConfig, FilterContext, OklabPlanes};
 //! use zenfilters::filters::*;
-//! use zenpixels::ColorPrimaries;
+//! use zenpixels::Primaries;
 //!
 //! let mut pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
 //!

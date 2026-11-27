@@ -76,9 +76,9 @@ impl EdgeReplicateSource {
             ))));
         }
         let format = upstream.format();
-        let bpp = format.bytes_per_pixel();
+        let bpp = format.layout.bytes_per_pixel();
         let row_bytes = checked_buffer_size(canvas_w, 1, bpp)?;
-        let buf = StripBuf::try_new(canvas_w, 16.min(canvas_h), format)?;
+        let buf = StripBuf::try_new(canvas_w, 16.min(canvas_h), format.clone())?;
         Ok(Self {
             upstream,
             content_w,
@@ -123,8 +123,8 @@ impl EdgeReplicateSource {
 
         let mut pending = PendingStrip {
             data: strip.as_strided_bytes().to_vec(),
-            stride: strip.stride(),
-            total_rows: strip.rows(),
+            stride: strip.stride_bytes(),
+            total_rows: strip.height(),
             next_row: 0,
         };
 
@@ -165,7 +165,7 @@ impl Source for EdgeReplicateSource {
 
         let rows_wanted = 16.min(self.canvas_h - self.y);
         self.buf
-            .reconfigure(self.canvas_w, rows_wanted, self.format);
+            .reconfigure(self.canvas_w, rows_wanted, self.format.clone());
         self.buf.reset();
 
         for _ in 0..rows_wanted {
@@ -204,9 +204,9 @@ impl Source for EdgeReplicateSource {
         self.canvas_h
     }
     fn format(&self) -> PixelFormat {
-        self.format
+        self.format.clone()
     }
-    fn color_context(&self) -> Option<alloc::sync::Arc<zenpixels::ColorContext>> {
-        self.upstream.color_context()
+    fn color_origin(&self) -> Option<zenpixels::ColorOrigin> {
+        self.upstream.color_origin()
     }
 }

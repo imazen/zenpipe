@@ -2,7 +2,7 @@
 #![cfg(feature = "bitmaps-bmp")]
 
 use zencodecs::{EncodeRequest, ImageFormat, Limits};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelFormat, PixelView, PixelViewMut};
 
 fn encoder(limits: &Limits) -> Box<dyn zencodec::encode::DynEncoder> {
     EncodeRequest::new(ImageFormat::Bmp)
@@ -15,38 +15,40 @@ fn encoder(limits: &Limits) -> Box<dyn zencodec::encode::DynEncoder> {
 #[test]
 fn buffered_fallback_refuses_one_shot_after_begin() {
     let mut enc = encoder(&Limits::none());
-    enc.begin(2, 2, PixelDescriptor::RGB8_SRGB).unwrap();
+    enc.begin(2, 2, PixelFormat::RGB8_SRGB).unwrap();
     let px = [0; 12];
-    let px = PixelSlice::new(&px, 2, 2, 6, PixelDescriptor::RGB8_SRGB).unwrap();
+    let px = PixelView::new(&px, 2, 2, 6, &zenpixels::formats::RGB8_SRGB).unwrap();
     assert!(enc.encode(px).is_err());
 }
 
 #[test]
 fn buffered_fallback_refuses_rgba_one_shot_after_begin() {
     let mut enc = encoder(&Limits::none());
-    enc.begin(2, 2, PixelDescriptor::RGBA8_SRGB).unwrap();
-    assert!(enc.encode_srgba8(&mut [0; 16], false, 2, 2, 2).is_err());
+    enc.begin(2, 2, PixelFormat::RGBA8_SRGB).unwrap();
+    let mut buf = [0; 16];
+    let view = PixelViewMut::new(&mut buf, 2, 2, 8, &zenpixels::formats::RGBA8_SRGB).unwrap();
+    assert!(enc.encode_in_place(view).is_err());
 }
 
 #[test]
 fn buffered_fallback_checks_memory_before_reserving_the_frame() {
     let mut enc = encoder(&Limits::none().with_max_memory(1));
-    assert!(enc.begin(2, 2, PixelDescriptor::RGB8_SRGB).is_err());
+    assert!(enc.begin(2, 2, PixelFormat::RGB8_SRGB).is_err());
 }
 
 #[test]
 fn buffered_fallback_checks_dimensions_at_begin() {
     let mut enc = encoder(&Limits::none().with_max_width(1));
-    assert!(enc.begin(2, 2, PixelDescriptor::RGB8_SRGB).is_err());
+    assert!(enc.begin(2, 2, PixelFormat::RGB8_SRGB).is_err());
 }
 
 #[test]
 fn failed_push_cannot_be_retried_as_a_successful_file() {
     let mut enc = encoder(&Limits::none());
-    enc.begin(2, 2, PixelDescriptor::RGB8_SRGB).unwrap();
-    let wrong = PixelSlice::new(&[0; 3], 1, 1, 3, PixelDescriptor::RGB8_SRGB).unwrap();
+    enc.begin(2, 2, PixelFormat::RGB8_SRGB).unwrap();
+    let wrong = PixelView::new(&[0; 3], 1, 1, 3, &zenpixels::formats::RGB8_SRGB).unwrap();
     assert!(enc.push_rows(wrong).is_err());
-    let correct = PixelSlice::new(&[0; 12], 2, 2, 6, PixelDescriptor::RGB8_SRGB).unwrap();
+    let correct = PixelView::new(&[0; 12], 2, 2, 6, &zenpixels::formats::RGB8_SRGB).unwrap();
     assert!(enc.push_rows(correct).is_err());
     assert!(enc.finish().is_err());
 }
@@ -65,15 +67,15 @@ fn rotated_fallback_applies_limits_to_the_output_canvas() {
         1, 2, 3, 4, 5, 6, 0xCD, 0xCD, 0xCD, 7, 8, 9, 10, 11, 12, 0xCD, 0xCD, 0xCD, 13, 14, 15, 16,
         17, 18,
     ];
-    let pixels = PixelSlice::new(&data, 2, 3, 9, PixelDescriptor::RGB8_SRGB).unwrap();
+    let pixels = PixelView::new(&data, 2, 3, 9, &zenpixels::formats::RGB8_SRGB).unwrap();
     let whole = make().encode(pixels, false).unwrap();
     let mut encoder = make().build_streaming_encoder(2, 3).unwrap().encoder;
     assert_eq!(
-        encoder.begin(2, 3, PixelDescriptor::RGB8_SRGB).unwrap(),
+        encoder.begin(2, 3, PixelFormat::RGB8_SRGB).unwrap(),
         zencodec::encode::OutputTiming::AT_FINISH
     );
     for y in 0..3 {
-        let row = PixelSlice::new(&data[y * 9..], 2, 1, 9, PixelDescriptor::RGB8_SRGB).unwrap();
+        let row = PixelView::new(&data[y * 9..], 2, 1, 9, &zenpixels::formats::RGB8_SRGB).unwrap();
         encoder.push_rows(row).unwrap();
     }
     assert_eq!(encoder.finish().unwrap().data(), whole.data());
@@ -85,5 +87,5 @@ fn rotated_fallback_applies_limits_to_the_output_canvas() {
         .build_streaming_encoder(2, 3)
         .unwrap()
         .encoder;
-    assert!(encoder.begin(2, 3, PixelDescriptor::RGB8_SRGB).is_err());
+    assert!(encoder.begin(2, 3, PixelFormat::RGB8_SRGB).is_err());
 }

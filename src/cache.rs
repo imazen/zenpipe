@@ -70,7 +70,7 @@ impl CachedPixels {
 
     /// Pixel format of the cached image.
     pub fn format(&self) -> PixelFormat {
-        self.format
+        self.format.clone()
     }
 
     /// Bytes per row (may include alignment padding).
@@ -97,7 +97,7 @@ impl CachedPixels {
             data: Arc::clone(&self.data),
             width: self.width,
             height: self.height,
-            format: self.format,
+            format: self.format.clone(),
             stride: self.stride,
             strip_height: 16.min(self.height),
             y: 0,
@@ -139,7 +139,7 @@ impl Source for CacheSource {
                 self.width,
                 rows,
                 self.stride,
-                self.format,
+                &self.format,
             )
             .pipe_err()?,
         ))
@@ -154,7 +154,7 @@ impl Source for CacheSource {
     }
 
     fn format(&self) -> PixelFormat {
-        self.format
+        self.format.clone()
     }
 }
 
@@ -235,7 +235,7 @@ mod zennode_impls {
         // Source identity.
         source_width.hash(&mut h);
         source_height.hash(&mut h);
-        hash_pixel_format(&mut h, source_format);
+        hash_pixel_format(&mut h, &source_format);
         exif_orientation.hash(&mut h);
 
         // Node configs.
@@ -283,7 +283,7 @@ mod zennode_impls {
         source.source_hash.hash(&mut h);
         source.width.hash(&mut h);
         source.height.hash(&mut h);
-        hash_pixel_format(&mut h, source.format);
+        hash_pixel_format(&mut h, &source.format);
         source.exif_orientation.hash(&mut h);
         source.has_alpha.hash(&mut h);
         source.has_gain_map.hash(&mut h);
@@ -352,10 +352,10 @@ mod zennode_impls {
         nodes.len()
     }
 
-    fn hash_pixel_format(h: &mut impl core::hash::Hasher, fmt: PixelFormat) {
+    fn hash_pixel_format(h: &mut impl core::hash::Hasher, fmt: &PixelFormat) {
         use core::hash::Hash;
-        fmt.bytes_per_pixel().hash(h);
-        let s = alloc::format!("{fmt}");
+        fmt.layout.bytes_per_pixel().hash(h);
+        let s = alloc::format!("{fmt:?}");
         s.hash(h);
     }
 
@@ -434,14 +434,14 @@ mod tests {
         let width = 64u32;
         let height = 100u32;
         let format = crate::format::RGBA8_SRGB;
-        let stride = format.aligned_stride(width);
+        let stride = crate::format::aligned_stride(&format, width);
         let data = vec![128u8; stride * height as usize];
 
         let cached = CachedPixels {
             data: Arc::new(data),
             width,
             height,
-            format,
+            format: format.clone(),
             stride,
         };
 
@@ -452,7 +452,7 @@ mod tests {
 
         let mut total_rows = 0u32;
         while let Some(strip) = source.next().unwrap() {
-            total_rows += strip.rows();
+            total_rows += strip.height();
             assert_eq!(strip.width(), width);
         }
         assert_eq!(total_rows, height);
@@ -463,7 +463,7 @@ mod tests {
         let width = 32u32;
         let height = 48u32;
         let format = crate::format::RGBA8_SRGB;
-        let stride = format.aligned_stride(width);
+        let stride = crate::format::aligned_stride(&format, width);
         let data = vec![42u8; stride * height as usize];
 
         let cached = CachedPixels {
@@ -479,12 +479,12 @@ mod tests {
 
         let mut rows_a = 0u32;
         while let Some(strip) = src_a.next().unwrap() {
-            rows_a += strip.rows();
+            rows_a += strip.height();
         }
 
         let mut rows_b = 0u32;
         while let Some(strip) = src_b.next().unwrap() {
-            rows_b += strip.rows();
+            rows_b += strip.height();
         }
 
         assert_eq!(rows_a, height);
@@ -496,7 +496,7 @@ mod tests {
         let width = 4u32;
         let height = 2u32;
         let format = crate::format::RGBA8_SRGB;
-        let stride = format.aligned_stride(width);
+        let stride = crate::format::aligned_stride(&format, width);
         let mut data = vec![0u8; stride * height as usize];
         data[..stride].fill(0xAA);
         data[stride..2 * stride].fill(0xBB);
@@ -511,7 +511,7 @@ mod tests {
 
         let mut source = cached.source();
         let strip = source.next().unwrap().unwrap();
-        assert_eq!(strip.rows(), 2);
+        assert_eq!(strip.height(), 2);
         assert!(strip.row(0).iter().all(|&b| b == 0xAA));
         assert!(strip.row(1).iter().all(|&b| b == 0xBB));
     }
@@ -519,7 +519,7 @@ mod tests {
     #[test]
     fn cached_pixels_clone_shares_data() {
         let format = crate::format::RGBA8_SRGB;
-        let stride = format.aligned_stride(8);
+        let stride = crate::format::aligned_stride(&format, 8);
         let data = vec![1u8; stride * 4];
         let original = CachedPixels {
             data: Arc::new(data),
@@ -538,11 +538,15 @@ mod tests {
         let width = 16u32;
         let height = 8u32;
         let format = crate::format::RGBA8_SRGB;
-        let stride = format.aligned_stride(width);
+        let stride = crate::format::aligned_stride(&format, width);
         let data: Vec<u8> = (0..stride * height as usize).map(|i| i as u8).collect();
 
-        let mat =
-            crate::sources::MaterializedSource::from_data(data.clone(), width, height, format);
+        let mat = crate::sources::MaterializedSource::from_data(
+            data.clone(),
+            width,
+            height,
+            format.clone(),
+        );
         let cached = CachedPixels::from_materialized(mat);
 
         assert_eq!(cached.width(), width);
@@ -555,7 +559,7 @@ mod tests {
     #[test]
     fn byte_size_matches_buffer() {
         let format = crate::format::RGBA8_SRGB;
-        let stride = format.aligned_stride(32);
+        let stride = crate::format::aligned_stride(&format, 32);
         let data = vec![0u8; stride * 16];
         let expected = data.len();
         let cached = CachedPixels {

@@ -3,34 +3,36 @@
 #![cfg(all(feature = "jpeg", feature = "png"))]
 
 use std::sync::{Arc, Mutex};
-use zencodec::decode::DecodeRowSink;
+use zencodec::decode::{DecodeRowSink, RowStrip};
 use zencodecs::{AllowedFormats, EncodeRequest, ImageFormat, TranscodeSink};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{ColorOrigin, PeakSource, PixelFormat, PixelView};
+use zenpixels_convert::{ConvertPolicy, OutputSignaling, adapt_for_encode};
 
 const W: u32 = 67;
 const H: u32 = 93;
 
-fn pixels(alpha: bool) -> (Vec<u8>, PixelDescriptor) {
-    let descriptor = if alpha {
-        PixelDescriptor::RGBA8_SRGB
+fn pixels(alpha: bool) -> (Vec<u8>, PixelFormat) {
+    let format = if alpha {
+        PixelFormat::RGBA8_SRGB
     } else {
-        PixelDescriptor::RGB8_SRGB
+        PixelFormat::RGB8_SRGB
     };
+    let bpp = format.layout.bytes_per_pixel();
     // Padding distinguishes row iteration from accidentally copying contiguous bytes.
-    let stride = (W as usize + 3) * descriptor.bytes_per_pixel();
+    let stride = (W as usize + 3) * bpp;
     let mut data = vec![0xCD; stride * H as usize];
     let mut state = 0xD0CA_F00Du32;
     for y in 0..H as usize {
         for x in 0..W as usize {
-            for c in 0..descriptor.bytes_per_pixel() {
+            for c in 0..bpp {
                 state ^= state << 13;
                 state ^= state >> 17;
                 state ^= state << 5;
-                data[y * stride + x * descriptor.bytes_per_pixel() + c] = (state >> 24) as u8;
+                data[y * stride + x * bpp + c] = (state >> 24) as u8;
             }
         }
     }
-    (data, descriptor)
+    (data, format)
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -43,7 +45,7 @@ enum Drain {
 
 fn streamed(
     format: ImageFormat,
-    pixels: PixelSlice<'_>,
+    pixels: PixelView<'_>,
     mode: Drain,
 ) -> (Vec<u8>, zencodec::encode::OutputTiming) {
     let encoder = EncodeRequest::new(format)
@@ -59,7 +61,7 @@ fn streamed(
             Ok(())
         });
     }
-    sink.begin(W, H, pixels.descriptor()).unwrap();
+    sink.begin(W, H, pixels.format().clone()).unwrap();
     let timing = sink.output_timing().unwrap();
     let mut output = Vec::new();
     let mut y = 0;
@@ -67,7 +69,7 @@ fn streamed(
     while y < H {
         let rows = [1, 7, 3, 16][index % 4].min(H - y);
         let mut next = sink
-            .provide_next_buffer(y, rows, W, pixels.descriptor())
+            .provide_next_buffer(RowStrip::new(y, W, rows), pixels.format().clone())
             .unwrap();
         for r in 0..rows {
             next.row_mut(r).copy_from_slice(pixels.row(y + r));
@@ -120,8 +122,8 @@ fn every_dispatched_codec_keeps_bytes_across_sink_drains() {
                 continue;
             }
             let (data, desc) = pixels(alpha);
-            let stride = (W as usize + 3) * desc.bytes_per_pixel();
-            let pixels = PixelSlice::new(&data, W, H, stride, desc).unwrap();
+            let stride = (W as usize + 3) * desc.layout.bytes_per_pixel();
+            let pixels = PixelView::new(&data, W, H, stride, &desc).unwrap();
             let one = EncodeRequest::new(format)
                 .with_quality(85.0)
                 .encode(pixels.clone(), alpha)
@@ -189,8 +191,8 @@ fn independent_decoders_read_every_streamed_format() {
                 continue;
             }
             let (data, desc) = pixels(alpha);
-            let stride = (W as usize + 3) * desc.bytes_per_pixel();
-            let pixels = PixelSlice::new(&data, W, H, stride, desc).unwrap();
+            let stride = (W as usize + 3) * desc.layout.bytes_per_pixel();
+            let pixels = PixelView::new(&data, W, H, stride, &desc).unwrap();
             let (encoded, _) = streamed(format, pixels, Drain::Writer);
             let (coder, bytes) = match format {
                 ImageFormat::Jxl => (
@@ -228,8 +230,8 @@ fn output_limit_includes_bytes_already_sent_for_every_codec() {
     use zencodec::encode::{BoxedError, EncodeOutput};
     for format in AllowedFormats::all().encodable_formats() {
         let (data, descriptor) = pixels(false);
-        let stride = (W as usize + 3) * descriptor.bytes_per_pixel();
-        let pixels = PixelSlice::new(&data, W, H, stride, descriptor).unwrap();
+        let stride = (W as usize + 3) * descriptor.layout.bytes_per_pixel();
+        let pixels = PixelView::new(&data, W, H, stride, &descriptor).unwrap();
         let base = zencodecs::Limits::none();
         let want = EncodeRequest::new(format)
             .with_quality(85.0)
@@ -250,10 +252,11 @@ fn output_limit_includes_bytes_already_sent_for_every_codec() {
                 Ok(())
             });
             let result = (|| -> Result<EncodeOutput, BoxedError> {
-                sink.begin(W, H, descriptor)?;
+                sink.begin(W, H, descriptor.clone())?;
                 for y in (0..H).step_by(7) {
                     let rows = 7.min(H - y);
-                    let mut next = sink.provide_next_buffer(y, rows, W, descriptor)?;
+                    let mut next =
+                        sink.provide_next_buffer(RowStrip::new(y, W, rows), descriptor.clone())?;
                     for r in 0..rows {
                         next.row_mut(r).copy_from_slice(pixels.row(y + r));
                     }
@@ -290,8 +293,8 @@ fn tiny_output_budgets_allow_early_refusal_without_excess_writes() {
     use zencodec::encode::{BoxedError, EncodeOutput};
     for format in AllowedFormats::all().encodable_formats() {
         let (data, descriptor) = pixels(false);
-        let stride = (W as usize + 3) * descriptor.bytes_per_pixel();
-        let pixels = PixelSlice::new(&data, W, H, stride, descriptor).unwrap();
+        let stride = (W as usize + 3) * descriptor.layout.bytes_per_pixel();
+        let pixels = PixelView::new(&data, W, H, stride, &descriptor).unwrap();
         let full = EncodeRequest::new(format)
             .with_quality(85.0)
             .encode(pixels.clone(), false)
@@ -310,10 +313,11 @@ fn tiny_output_budgets_allow_early_refusal_without_excess_writes() {
                     out.lock().unwrap().extend_from_slice(b);
                     Ok(())
                 });
-                sink.begin(W, H, descriptor)?;
+                sink.begin(W, H, descriptor.clone())?;
                 for y in (0..H).step_by(7) {
                     let rows = 7.min(H - y);
-                    let mut next = sink.provide_next_buffer(y, rows, W, descriptor)?;
+                    let mut next =
+                        sink.provide_next_buffer(RowStrip::new(y, W, rows), descriptor.clone())?;
                     for r in 0..rows {
                         next.row_mut(r).copy_from_slice(pixels.row(y + r));
                     }
@@ -344,71 +348,65 @@ fn empty_canvas_declaration_matches_the_native_one_shot_path() {
                 .unwrap()
         };
         let supported = make().supported;
-        let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
-            &[0, 0, 0],
-            PixelDescriptor::RGB8_SRGB,
-            1,
-            1,
-            3,
+        let sample = PixelView::new(&[0, 0, 0], 1, 1, 3, &zenpixels::formats::RGB8_SRGB).unwrap();
+        let (_, adapted) = adapt_for_encode(
+            sample,
+            &ColorOrigin::assumed(),
             supported,
+            &ConvertPolicy::permissive(),
+            PeakSource::Declared,
+            OutputSignaling::Strip,
         )
         .unwrap();
-        let descriptor = adapted.as_slice().descriptor();
+        let descriptor = adapted.pixels.as_view().format().clone();
         for (width, height) in [(0, H), (W, 0)] {
-            let empty = PixelSlice::new(
+            // zenpixels 0.5 forbids zero-dimension views at construction time,
+            // so one-shot callers cannot pass an empty canvas; verify both
+            // that PixelView::new rejects it and that streaming `begin` rejects
+            // empty canvas declarations cleanly with typed InvalidInput without
+            // leaving the encoder unusable.
+            let empty_err = PixelView::new(
                 &[],
                 width,
                 height,
-                width as usize * descriptor.bytes_per_pixel(),
-                descriptor,
+                width as usize * descriptor.layout.bytes_per_pixel(),
+                &descriptor,
             )
-            .unwrap();
-            let one = catch_unwind(AssertUnwindSafe(|| make().encoder.encode(empty.clone())));
+            .expect_err("zenpixels 0.5 must reject zero-dimension PixelView");
+            assert_eq!(
+                *empty_err.error(),
+                zenpixels::BufferError::InvalidDimensions,
+                "{format:?} {width}x{height}: unexpected PixelView error"
+            );
             let mut enc = make().encoder;
-            let begin = catch_unwind(AssertUnwindSafe(|| enc.begin(width, height, descriptor)));
-            match (one, begin) {
-                (Ok(one), Ok(begin)) => {
-                    assert_eq!(
-                        one.is_ok(),
-                        begin.is_ok(),
-                        "{format:?} {width}x{height}: begin/encode acceptance differs"
+            let begin = catch_unwind(AssertUnwindSafe(|| {
+                enc.begin(width, height, descriptor.clone())
+            }));
+            match begin {
+                Ok(Err(begin_err)) => {
+                    let begin_err = begin_err
+                        .downcast_ref::<zencodecs::CodecError>()
+                        .expect("begin refusal retains its typed validation error");
+                    assert!(
+                        matches!(begin_err, zencodecs::CodecError::InvalidInput(_)),
+                        "{format:?} {width}x{height}: expected InvalidInput, got {begin_err:?}"
                     );
-                    if let (Err(one), Err(begin)) = (&one, &begin) {
-                        let one = one
-                            .downcast_ref::<zencodecs::CodecError>()
-                            .expect("one-shot refusal retains its typed validation error");
-                        let begin = begin
-                            .downcast_ref::<zencodecs::CodecError>()
-                            .expect("begin refusal retains its typed validation error");
-                        match (one, begin) {
-                            (
-                                zencodecs::CodecError::InvalidInput(a),
-                                zencodecs::CodecError::InvalidInput(b),
-                            ) => assert_eq!(
-                                a, b,
-                                "{format:?} {width}x{height}: refusal details differ"
-                            ),
-                            _ => panic!("{format:?}: different typed refusals: {one:?}, {begin:?}"),
-                        }
-                    }
-                    if let (Ok(one), Ok(timing)) = (&one, &begin) {
-                        assert_eq!(*timing, zencodec::encode::OutputTiming::AT_FINISH);
-                        assert!(enc.pending_output().is_empty());
-                        if height > 0 {
-                            enc.push_rows(empty.clone()).unwrap();
-                        }
-                        let streamed = enc.finish().unwrap();
-                        assert_eq!(streamed.data(), one.data(), "{format:?} empty bytes");
-                        continue;
-                    }
-                    if begin.is_err() {
+                    assert!(
+                        enc.begin(W, H, descriptor.clone()).is_ok(),
+                        "failed begin changed {format:?}"
+                    );
+                }
+                Ok(Ok(timing)) => {
+                    assert_eq!(timing, zencodec::encode::OutputTiming::AT_FINISH);
+                    assert!(enc.pending_output().is_empty());
+                    if height == 0 {
                         assert!(
-                            enc.begin(W, H, descriptor).is_ok(),
-                            "failed begin changed {format:?}"
+                            enc.finish().is_ok(),
+                            "{format:?} {width}x{height}: accepted empty begin but failed finish"
                         );
                     }
                 }
-                _ => failures.push(format!("{format:?} {width}x{height}: encoder panicked")),
+                Err(_) => failures.push(format!("{format:?} {width}x{height}: encoder panicked")),
             }
         }
     }
@@ -425,18 +423,24 @@ fn every_dispatched_encoder_enforces_row_protocol() {
                 .unwrap()
         };
         let (data, descriptor) = pixels(false);
-        let stride = (W as usize + 3) * descriptor.bytes_per_pixel();
+        let stride = (W as usize + 3) * descriptor.layout.bytes_per_pixel();
         let supported = make().supported;
-        let adapted = zenpixels_convert::adapt::adapt_for_encode_cow(
-            &data, descriptor, W, H, stride, supported,
+        let view = PixelView::new(&data, W, H, stride, &descriptor).unwrap();
+        let (_, adapted) = adapt_for_encode(
+            view,
+            &ColorOrigin::assumed(),
+            supported,
+            &ConvertPolicy::permissive(),
+            PeakSource::Declared,
+            OutputSignaling::Strip,
         )
         .unwrap();
-        let pixels = adapted.as_slice();
+        let pixels = adapted.pixels.as_view();
         let mut enc = make().encoder;
-        enc.begin(W, H, pixels.descriptor()).unwrap();
+        enc.begin(W, H, pixels.format().clone()).unwrap();
         let pending = enc.pending_output().to_vec();
         assert!(
-            enc.begin(W, H, pixels.descriptor()).is_err(),
+            enc.begin(W, H, pixels.format().clone()).is_err(),
             "{format:?} accepted a second begin"
         );
         assert_eq!(
@@ -449,16 +453,16 @@ fn every_dispatched_encoder_enforces_row_protocol() {
             "{format:?} accepted encode after begin"
         );
 
-        let other_descriptor = if pixels.descriptor() == PixelDescriptor::RGB8_SRGB {
-            PixelDescriptor::RGBA8_SRGB
+        let other_descriptor = if *pixels.format() == PixelFormat::RGB8_SRGB {
+            PixelFormat::RGBA8_SRGB
         } else {
-            PixelDescriptor::RGB8_SRGB
+            PixelFormat::RGB8_SRGB
         };
-        for (width, descriptor) in [(W - 1, pixels.descriptor()), (W, other_descriptor)] {
-            let data = vec![0; width as usize * descriptor.bytes_per_pixel()];
-            let wrong = PixelSlice::new(&data, width, 1, data.len(), descriptor).unwrap();
+        for (width, descriptor) in [(W - 1, pixels.format().clone()), (W, other_descriptor)] {
+            let data = vec![0; width as usize * descriptor.layout.bytes_per_pixel()];
+            let wrong = PixelView::new(&data, width, 1, data.len(), &descriptor).unwrap();
             let mut enc = make().encoder;
-            enc.begin(W, H, pixels.descriptor()).unwrap();
+            enc.begin(W, H, pixels.format().clone()).unwrap();
             assert!(
                 enc.push_rows(wrong).is_err(),
                 "{format:?} accepted a different row layout"
@@ -474,20 +478,14 @@ fn every_dispatched_encoder_enforces_row_protocol() {
         }
 
         let mut enc = make().encoder;
-        enc.begin(W, H, pixels.descriptor()).unwrap();
+        enc.begin(W, H, pixels.format().clone()).unwrap();
         assert!(enc.finish().is_err(), "{format:?} accepted missing rows");
 
         let mut enc = make().encoder;
-        enc.begin(W, H, pixels.descriptor()).unwrap();
+        enc.begin(W, H, pixels.format().clone()).unwrap();
         enc.push_rows(pixels.clone()).unwrap();
-        let extra = PixelSlice::new(
-            pixels.row(0),
-            W,
-            1,
-            pixels.row(0).len(),
-            pixels.descriptor(),
-        )
-        .unwrap();
+        let extra =
+            PixelView::new(pixels.row(0), W, 1, pixels.row(0).len(), pixels.format()).unwrap();
         assert!(
             enc.push_rows(extra).is_err(),
             "{format:?} accepted extra rows"

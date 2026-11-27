@@ -8,7 +8,7 @@ use zencodec::encode::{EncodeJob, EncoderConfig};
 use zencodec::operation::{OutputSchedule, PolicyRequirement, PolicySet};
 use zencodecs::{CodecIntent, FormatChoice};
 use zenpipe::job::ImageJob;
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::PixelView;
 
 const W: u32 = 97;
 const H: u32 = 65;
@@ -20,8 +20,14 @@ fn png_input() -> Vec<u8> {
             samples.extend_from_slice(&[(x * 2) as u8, (y * 3) as u8, ((x * 7) ^ (y * 5)) as u8]);
         }
     }
-    let pixels =
-        PixelSlice::new(&samples, W, H, (W * 3) as usize, PixelDescriptor::RGB8_SRGB).unwrap();
+    let pixels = PixelView::new(
+        &samples,
+        W,
+        H,
+        (W * 3) as usize,
+        &zenpixels::formats::RGB8_SRGB,
+    )
+    .unwrap();
     zenpng::PngEncoderConfig::new()
         .job()
         .encode(pixels)
@@ -122,14 +128,21 @@ fn oriented_png_input(o: zencodec::Orientation) -> (Vec<u8>, Vec<u8>) {
     exif.set_orientation(o);
     #[allow(deprecated)] // compatibility writer; authoring a fixture
     let exif = exif.to_bytes();
-    let pixels =
-        PixelSlice::new(&samples, W, H, (W * 3) as usize, PixelDescriptor::RGB8_SRGB).unwrap();
+    let pixels = PixelView::new(
+        &samples,
+        W,
+        H,
+        (W * 3) as usize,
+        &zenpixels::formats::RGB8_SRGB,
+    )
+    .unwrap();
     let png = zenpng::PngEncoderConfig::new()
         .job()
-        .with_metadata_policy(
+        .try_with_metadata_policy(
             zencodec::Metadata::none().with_exif(exif),
             zencodec::MetadataPolicy::PreserveExact,
         )
+        .unwrap()
         .encode(pixels)
         .unwrap()
         .into_vec();
@@ -448,7 +461,7 @@ fn identity_png16_matches_independent_decoder_on_both_output_routes() {
             expected.extend_from_slice(&sample.to_be_bytes());
         }
     }
-    let pixels = PixelSlice::new(&storage, 3, 2, 32, PixelDescriptor::RGBA16_SRGB).unwrap();
+    let pixels = PixelView::new(&storage, 3, 2, 32, &zenpixels::formats::RGBA16_SRGB).unwrap();
     let input = zenpng::PngEncoderConfig::new()
         .job()
         .encode(pixels)

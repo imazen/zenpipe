@@ -53,7 +53,7 @@ impl Source for SyntheticSource {
                 self.width,
                 rows,
                 stride,
-                format::RGBAF32_LINEAR,
+                &zenpixels::formats::RGBAF32_LINEAR,
             )
             .expect("valid strip dimensions"),
         ))
@@ -72,7 +72,7 @@ impl Source for SyntheticSource {
 fn drain(source: &mut dyn Source) -> zenpipe::PipeResult<u32> {
     let mut total = 0u32;
     while let Some(strip) = source.next()? {
-        total += strip.rows();
+        total += strip.height();
     }
     Ok(total)
 }

@@ -8,9 +8,9 @@ use super::MulAddCompat;
 
 use crate::blur::GaussianKernel;
 use crate::context::FilterContext;
-use linear_srgb::tokens::x8::{linear_to_srgb_u8_v3, srgb_u8_to_linear_v3};
+use linear_srgb::target_features::x8::{linear_to_srgb_u8_v3, srgb_u8_to_linear_v3};
 use zenpixels_convert::gamut::GamutMatrix;
-use zenpixels_convert::oklab::{self, LMS_CBRT_FROM_OKLAB, OKLAB_FROM_LMS_CBRT};
+use zenpixels_convert::oklab::{LMS_CBRT_FROM_OKLAB, OKLAB_FROM_LMS_CBRT};
 
 #[arcane]
 pub(super) fn scale_plane_impl_v3(token: X64V3Token, plane: &mut [f32], factor: f32) {
@@ -462,26 +462,28 @@ fn scatter_oklab_simd(
     let ch = channels as usize;
 
     // M1 coefficients (RGB → LMS, gamut-dependent)
-    let m1_00 = f32x8::splat_t(token, m1[0][0]);
-    let m1_01 = f32x8::splat_t(token, m1[0][1]);
-    let m1_02 = f32x8::splat_t(token, m1[0][2]);
-    let m1_10 = f32x8::splat_t(token, m1[1][0]);
-    let m1_11 = f32x8::splat_t(token, m1[1][1]);
-    let m1_12 = f32x8::splat_t(token, m1[1][2]);
-    let m1_20 = f32x8::splat_t(token, m1[2][0]);
-    let m1_21 = f32x8::splat_t(token, m1[2][1]);
-    let m1_22 = f32x8::splat_t(token, m1[2][2]);
+    let m1_r = m1.rows();
+    let m1_00 = f32x8::splat_t(token, m1_r[0][0]);
+    let m1_01 = f32x8::splat_t(token, m1_r[0][1]);
+    let m1_02 = f32x8::splat_t(token, m1_r[0][2]);
+    let m1_10 = f32x8::splat_t(token, m1_r[1][0]);
+    let m1_11 = f32x8::splat_t(token, m1_r[1][1]);
+    let m1_12 = f32x8::splat_t(token, m1_r[1][2]);
+    let m1_20 = f32x8::splat_t(token, m1_r[2][0]);
+    let m1_21 = f32x8::splat_t(token, m1_r[2][1]);
+    let m1_22 = f32x8::splat_t(token, m1_r[2][2]);
 
     // M2 coefficients (LMS^(1/3) → Oklab, universal)
-    let m2_00 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[0][0]);
-    let m2_01 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[0][1]);
-    let m2_02 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[0][2]);
-    let m2_10 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[1][0]);
-    let m2_11 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[1][1]);
-    let m2_12 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[1][2]);
-    let m2_20 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[2][0]);
-    let m2_21 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[2][1]);
-    let m2_22 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[2][2]);
+    let m2 = OKLAB_FROM_LMS_CBRT.rows();
+    let m2_00 = f32x8::splat_t(token, m2[0][0]);
+    let m2_01 = f32x8::splat_t(token, m2[0][1]);
+    let m2_02 = f32x8::splat_t(token, m2[0][2]);
+    let m2_10 = f32x8::splat_t(token, m2[1][0]);
+    let m2_11 = f32x8::splat_t(token, m2[1][1]);
+    let m2_12 = f32x8::splat_t(token, m2[1][2]);
+    let m2_20 = f32x8::splat_t(token, m2[2][0]);
+    let m2_21 = f32x8::splat_t(token, m2[2][1]);
+    let m2_22 = f32x8::splat_t(token, m2[2][2]);
 
     let inv_white_v = f32x8::splat_t(token, inv_white);
 
@@ -534,7 +536,7 @@ fn scatter_oklab_simd(
         let r = src[base] * inv_white;
         let g = src[base + 1] * inv_white;
         let bv = src[base + 2] * inv_white;
-        let [ol, oa, ob] = oklab::rgb_to_oklab(r, g, bv, m1);
+        let [ol, oa, ob] = super::scalar::rgb_to_oklab(r, g, bv, m1);
         l_out[idx] = ol;
         a_out[idx] = oa;
         b_out[idx] = ob;
@@ -572,26 +574,28 @@ fn gather_oklab_simd(
     let ch = channels as usize;
 
     // Inverse M2 coefficients (Oklab → LMS^(1/3), universal)
-    let im2_00 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[0][0]);
-    let im2_01 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[0][1]);
-    let im2_02 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[0][2]);
-    let im2_10 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[1][0]);
-    let im2_11 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[1][1]);
-    let im2_12 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[1][2]);
-    let im2_20 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[2][0]);
-    let im2_21 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[2][1]);
-    let im2_22 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[2][2]);
+    let im2 = LMS_CBRT_FROM_OKLAB.rows();
+    let im2_00 = f32x8::splat_t(token, im2[0][0]);
+    let im2_01 = f32x8::splat_t(token, im2[0][1]);
+    let im2_02 = f32x8::splat_t(token, im2[0][2]);
+    let im2_10 = f32x8::splat_t(token, im2[1][0]);
+    let im2_11 = f32x8::splat_t(token, im2[1][1]);
+    let im2_12 = f32x8::splat_t(token, im2[1][2]);
+    let im2_20 = f32x8::splat_t(token, im2[2][0]);
+    let im2_21 = f32x8::splat_t(token, im2[2][1]);
+    let im2_22 = f32x8::splat_t(token, im2[2][2]);
 
     // Inverse M1 coefficients (LMS → RGB, gamut-dependent)
-    let im1_00 = f32x8::splat_t(token, m1_inv[0][0]);
-    let im1_01 = f32x8::splat_t(token, m1_inv[0][1]);
-    let im1_02 = f32x8::splat_t(token, m1_inv[0][2]);
-    let im1_10 = f32x8::splat_t(token, m1_inv[1][0]);
-    let im1_11 = f32x8::splat_t(token, m1_inv[1][1]);
-    let im1_12 = f32x8::splat_t(token, m1_inv[1][2]);
-    let im1_20 = f32x8::splat_t(token, m1_inv[2][0]);
-    let im1_21 = f32x8::splat_t(token, m1_inv[2][1]);
-    let im1_22 = f32x8::splat_t(token, m1_inv[2][2]);
+    let im1 = m1_inv.rows();
+    let im1_00 = f32x8::splat_t(token, im1[0][0]);
+    let im1_01 = f32x8::splat_t(token, im1[0][1]);
+    let im1_02 = f32x8::splat_t(token, im1[0][2]);
+    let im1_10 = f32x8::splat_t(token, im1[1][0]);
+    let im1_11 = f32x8::splat_t(token, im1[1][1]);
+    let im1_12 = f32x8::splat_t(token, im1[1][2]);
+    let im1_20 = f32x8::splat_t(token, im1[2][0]);
+    let im1_21 = f32x8::splat_t(token, im1[2][1]);
+    let im1_22 = f32x8::splat_t(token, im1[2][2]);
 
     let white_v = f32x8::splat_t(token, reference_white);
     let zero_v = f32x8::zero_t(token);
@@ -642,7 +646,7 @@ fn gather_oklab_simd(
 
     // Scalar tail
     for idx in i..n {
-        let [r, g, bv] = oklab::oklab_to_rgb(l_in[idx], a_in[idx], b_in[idx], m1_inv);
+        let [r, g, bv] = super::scalar::oklab_to_rgb(l_in[idx], a_in[idx], b_in[idx], m1_inv);
         let base = idx * ch;
         dst[base] = (r * reference_white).max(0.0);
         dst[base + 1] = (g * reference_white).max(0.0);
@@ -683,26 +687,28 @@ fn scatter_srgb_u8_to_oklab_rite(
     let ch = channels as usize;
 
     // M1 coefficients (RGB → LMS, gamut-dependent)
-    let m1_00 = f32x8::splat_t(token, m1[0][0]);
-    let m1_01 = f32x8::splat_t(token, m1[0][1]);
-    let m1_02 = f32x8::splat_t(token, m1[0][2]);
-    let m1_10 = f32x8::splat_t(token, m1[1][0]);
-    let m1_11 = f32x8::splat_t(token, m1[1][1]);
-    let m1_12 = f32x8::splat_t(token, m1[1][2]);
-    let m1_20 = f32x8::splat_t(token, m1[2][0]);
-    let m1_21 = f32x8::splat_t(token, m1[2][1]);
-    let m1_22 = f32x8::splat_t(token, m1[2][2]);
+    let m1_r = m1.rows();
+    let m1_00 = f32x8::splat_t(token, m1_r[0][0]);
+    let m1_01 = f32x8::splat_t(token, m1_r[0][1]);
+    let m1_02 = f32x8::splat_t(token, m1_r[0][2]);
+    let m1_10 = f32x8::splat_t(token, m1_r[1][0]);
+    let m1_11 = f32x8::splat_t(token, m1_r[1][1]);
+    let m1_12 = f32x8::splat_t(token, m1_r[1][2]);
+    let m1_20 = f32x8::splat_t(token, m1_r[2][0]);
+    let m1_21 = f32x8::splat_t(token, m1_r[2][1]);
+    let m1_22 = f32x8::splat_t(token, m1_r[2][2]);
 
     // M2 coefficients (LMS^(1/3) → Oklab, universal)
-    let m2_00 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[0][0]);
-    let m2_01 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[0][1]);
-    let m2_02 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[0][2]);
-    let m2_10 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[1][0]);
-    let m2_11 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[1][1]);
-    let m2_12 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[1][2]);
-    let m2_20 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[2][0]);
-    let m2_21 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[2][1]);
-    let m2_22 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[2][2]);
+    let m2 = OKLAB_FROM_LMS_CBRT.rows();
+    let m2_00 = f32x8::splat_t(token, m2[0][0]);
+    let m2_01 = f32x8::splat_t(token, m2[0][1]);
+    let m2_02 = f32x8::splat_t(token, m2[0][2]);
+    let m2_10 = f32x8::splat_t(token, m2[1][0]);
+    let m2_11 = f32x8::splat_t(token, m2[1][1]);
+    let m2_12 = f32x8::splat_t(token, m2[1][2]);
+    let m2_20 = f32x8::splat_t(token, m2[2][0]);
+    let m2_21 = f32x8::splat_t(token, m2[2][1]);
+    let m2_22 = f32x8::splat_t(token, m2[2][2]);
 
     let mut i = 0;
     while i + 8 <= n {
@@ -718,9 +724,9 @@ fn scatter_srgb_u8_to_oklab_rite(
         }
 
         // LUT: sRGB u8 → linear f32 (no math, just 8 lookups per channel)
-        let r = f32x8::from_array_t(token, srgb_u8_to_linear_v3(token, r_u8));
-        let g = f32x8::from_array_t(token, srgb_u8_to_linear_v3(token, g_u8));
-        let b = f32x8::from_array_t(token, srgb_u8_to_linear_v3(token, b_u8));
+        let r = f32x8::from_array_t(token, srgb_u8_to_linear_v3(r_u8));
+        let g = f32x8::from_array_t(token, srgb_u8_to_linear_v3(g_u8));
+        let b = f32x8::from_array_t(token, srgb_u8_to_linear_v3(b_u8));
 
         // M1: linear RGB → LMS (FMA chains)
         let lms_l = m1_00.mul_add_compat(r, m1_01.mul_add_compat(g, m1_02 * b));
@@ -754,7 +760,7 @@ fn scatter_srgb_u8_to_oklab_rite(
         let r = linear_srgb::default::srgb_u8_to_linear(src[base]);
         let g = linear_srgb::default::srgb_u8_to_linear(src[base + 1]);
         let bv = linear_srgb::default::srgb_u8_to_linear(src[base + 2]);
-        let [ol, oa, ob] = oklab::rgb_to_oklab(r, g, bv, m1);
+        let [ol, oa, ob] = super::scalar::rgb_to_oklab(r, g, bv, m1);
         l_out[idx] = ol;
         a_out[idx] = oa;
         b_out[idx] = ob;
@@ -790,26 +796,28 @@ fn gather_oklab_to_srgb_u8_rite(
     let ch = channels as usize;
 
     // Inverse M2 coefficients (Oklab → LMS^(1/3), universal)
-    let im2_00 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[0][0]);
-    let im2_01 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[0][1]);
-    let im2_02 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[0][2]);
-    let im2_10 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[1][0]);
-    let im2_11 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[1][1]);
-    let im2_12 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[1][2]);
-    let im2_20 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[2][0]);
-    let im2_21 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[2][1]);
-    let im2_22 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[2][2]);
+    let im2 = LMS_CBRT_FROM_OKLAB.rows();
+    let im2_00 = f32x8::splat_t(token, im2[0][0]);
+    let im2_01 = f32x8::splat_t(token, im2[0][1]);
+    let im2_02 = f32x8::splat_t(token, im2[0][2]);
+    let im2_10 = f32x8::splat_t(token, im2[1][0]);
+    let im2_11 = f32x8::splat_t(token, im2[1][1]);
+    let im2_12 = f32x8::splat_t(token, im2[1][2]);
+    let im2_20 = f32x8::splat_t(token, im2[2][0]);
+    let im2_21 = f32x8::splat_t(token, im2[2][1]);
+    let im2_22 = f32x8::splat_t(token, im2[2][2]);
 
     // Inverse M1 coefficients (LMS → RGB, gamut-dependent)
-    let im1_00 = f32x8::splat_t(token, m1_inv[0][0]);
-    let im1_01 = f32x8::splat_t(token, m1_inv[0][1]);
-    let im1_02 = f32x8::splat_t(token, m1_inv[0][2]);
-    let im1_10 = f32x8::splat_t(token, m1_inv[1][0]);
-    let im1_11 = f32x8::splat_t(token, m1_inv[1][1]);
-    let im1_12 = f32x8::splat_t(token, m1_inv[1][2]);
-    let im1_20 = f32x8::splat_t(token, m1_inv[2][0]);
-    let im1_21 = f32x8::splat_t(token, m1_inv[2][1]);
-    let im1_22 = f32x8::splat_t(token, m1_inv[2][2]);
+    let im1 = m1_inv.rows();
+    let im1_00 = f32x8::splat_t(token, im1[0][0]);
+    let im1_01 = f32x8::splat_t(token, im1[0][1]);
+    let im1_02 = f32x8::splat_t(token, im1[0][2]);
+    let im1_10 = f32x8::splat_t(token, im1[1][0]);
+    let im1_11 = f32x8::splat_t(token, im1[1][1]);
+    let im1_12 = f32x8::splat_t(token, im1[1][2]);
+    let im1_20 = f32x8::splat_t(token, im1[2][0]);
+    let im1_21 = f32x8::splat_t(token, im1[2][1]);
+    let im1_22 = f32x8::splat_t(token, im1[2][2]);
 
     let mut i = 0;
     while i + 8 <= n {
@@ -837,9 +845,9 @@ fn gather_oklab_to_srgb_u8_rite(
         let b = im1_20.mul_add_compat(lms_l, im1_21.mul_add_compat(lms_m, im1_22 * lms_s));
 
         // LUT: linear f32 → sRGB u8 (includes clamp to [0, 1])
-        let r_u8 = linear_to_srgb_u8_v3(token, r.to_array());
-        let g_u8 = linear_to_srgb_u8_v3(token, g.to_array());
-        let b_u8 = linear_to_srgb_u8_v3(token, b.to_array());
+        let r_u8 = linear_to_srgb_u8_v3(r.to_array());
+        let g_u8 = linear_to_srgb_u8_v3(g.to_array());
+        let b_u8 = linear_to_srgb_u8_v3(b.to_array());
 
         // Reinterleave and store
         for j in 0..8 {
@@ -854,7 +862,7 @@ fn gather_oklab_to_srgb_u8_rite(
 
     // Scalar tail
     for idx in i..n {
-        let [r, g, bv] = oklab::oklab_to_rgb(l_in[idx], a_in[idx], b_in[idx], m1_inv);
+        let [r, g, bv] = super::scalar::oklab_to_rgb(l_in[idx], a_in[idx], b_in[idx], m1_inv);
         let base = idx * ch;
         dst[base] = linear_srgb::default::linear_to_srgb_u8(r);
         dst[base + 1] = linear_srgb::default::linear_to_srgb_u8(g);
@@ -1498,48 +1506,52 @@ fn fused_interleaved_adjust_rite(
     let n = dst.len() / ch;
 
     // Forward M1: RGB → LMS
-    let m1_00 = f32x8::splat_t(token, m1[0][0]);
-    let m1_01 = f32x8::splat_t(token, m1[0][1]);
-    let m1_02 = f32x8::splat_t(token, m1[0][2]);
-    let m1_10 = f32x8::splat_t(token, m1[1][0]);
-    let m1_11 = f32x8::splat_t(token, m1[1][1]);
-    let m1_12 = f32x8::splat_t(token, m1[1][2]);
-    let m1_20 = f32x8::splat_t(token, m1[2][0]);
-    let m1_21 = f32x8::splat_t(token, m1[2][1]);
-    let m1_22 = f32x8::splat_t(token, m1[2][2]);
+    let m1r = m1.rows();
+    let m1_00 = f32x8::splat_t(token, m1r[0][0]);
+    let m1_01 = f32x8::splat_t(token, m1r[0][1]);
+    let m1_02 = f32x8::splat_t(token, m1r[0][2]);
+    let m1_10 = f32x8::splat_t(token, m1r[1][0]);
+    let m1_11 = f32x8::splat_t(token, m1r[1][1]);
+    let m1_12 = f32x8::splat_t(token, m1r[1][2]);
+    let m1_20 = f32x8::splat_t(token, m1r[2][0]);
+    let m1_21 = f32x8::splat_t(token, m1r[2][1]);
+    let m1_22 = f32x8::splat_t(token, m1r[2][2]);
 
     // Forward M2: LMS^(1/3) → Oklab
-    let m2_00 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[0][0]);
-    let m2_01 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[0][1]);
-    let m2_02 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[0][2]);
-    let m2_10 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[1][0]);
-    let m2_11 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[1][1]);
-    let m2_12 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[1][2]);
-    let m2_20 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[2][0]);
-    let m2_21 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[2][1]);
-    let m2_22 = f32x8::splat_t(token, OKLAB_FROM_LMS_CBRT[2][2]);
+    let m2r = OKLAB_FROM_LMS_CBRT.rows();
+    let m2_00 = f32x8::splat_t(token, m2r[0][0]);
+    let m2_01 = f32x8::splat_t(token, m2r[0][1]);
+    let m2_02 = f32x8::splat_t(token, m2r[0][2]);
+    let m2_10 = f32x8::splat_t(token, m2r[1][0]);
+    let m2_11 = f32x8::splat_t(token, m2r[1][1]);
+    let m2_12 = f32x8::splat_t(token, m2r[1][2]);
+    let m2_20 = f32x8::splat_t(token, m2r[2][0]);
+    let m2_21 = f32x8::splat_t(token, m2r[2][1]);
+    let m2_22 = f32x8::splat_t(token, m2r[2][2]);
 
     // Inverse M2: Oklab → LMS^(1/3)
-    let im2_00 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[0][0]);
-    let im2_01 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[0][1]);
-    let im2_02 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[0][2]);
-    let im2_10 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[1][0]);
-    let im2_11 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[1][1]);
-    let im2_12 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[1][2]);
-    let im2_20 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[2][0]);
-    let im2_21 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[2][1]);
-    let im2_22 = f32x8::splat_t(token, LMS_CBRT_FROM_OKLAB[2][2]);
+    let im2 = LMS_CBRT_FROM_OKLAB.rows();
+    let im2_00 = f32x8::splat_t(token, im2[0][0]);
+    let im2_01 = f32x8::splat_t(token, im2[0][1]);
+    let im2_02 = f32x8::splat_t(token, im2[0][2]);
+    let im2_10 = f32x8::splat_t(token, im2[1][0]);
+    let im2_11 = f32x8::splat_t(token, im2[1][1]);
+    let im2_12 = f32x8::splat_t(token, im2[1][2]);
+    let im2_20 = f32x8::splat_t(token, im2[2][0]);
+    let im2_21 = f32x8::splat_t(token, im2[2][1]);
+    let im2_22 = f32x8::splat_t(token, im2[2][2]);
 
     // Inverse M1: LMS → RGB
-    let im1_00 = f32x8::splat_t(token, m1_inv[0][0]);
-    let im1_01 = f32x8::splat_t(token, m1_inv[0][1]);
-    let im1_02 = f32x8::splat_t(token, m1_inv[0][2]);
-    let im1_10 = f32x8::splat_t(token, m1_inv[1][0]);
-    let im1_11 = f32x8::splat_t(token, m1_inv[1][1]);
-    let im1_12 = f32x8::splat_t(token, m1_inv[1][2]);
-    let im1_20 = f32x8::splat_t(token, m1_inv[2][0]);
-    let im1_21 = f32x8::splat_t(token, m1_inv[2][1]);
-    let im1_22 = f32x8::splat_t(token, m1_inv[2][2]);
+    let im1 = m1_inv.rows();
+    let im1_00 = f32x8::splat_t(token, im1[0][0]);
+    let im1_01 = f32x8::splat_t(token, im1[0][1]);
+    let im1_02 = f32x8::splat_t(token, im1[0][2]);
+    let im1_10 = f32x8::splat_t(token, im1[1][0]);
+    let im1_11 = f32x8::splat_t(token, im1[1][1]);
+    let im1_12 = f32x8::splat_t(token, im1[1][2]);
+    let im1_20 = f32x8::splat_t(token, im1[2][0]);
+    let im1_21 = f32x8::splat_t(token, im1[2][1]);
+    let im1_22 = f32x8::splat_t(token, im1[2][2]);
 
     let inv_white_v = f32x8::splat_t(token, inv_white);
     let white_v = f32x8::splat_t(token, reference_white);
@@ -1662,7 +1674,7 @@ fn fused_interleaved_adjust_rite(
         let r = src[base] * inv_white;
         let g = src[base + 1] * inv_white;
         let bv = src[base + 2] * inv_white;
-        let [mut ok_l, mut ok_a, mut ok_b] = oklab::rgb_to_oklab(r, g, bv, m1);
+        let [mut ok_l, mut ok_a, mut ok_b] = super::scalar::rgb_to_oklab(r, g, bv, m1);
 
         // L adjust
         ok_l = ((ok_l - bp) * inv_range).max(0.0);
@@ -1689,7 +1701,7 @@ fn fused_interleaved_adjust_rite(
         ok_a *= vib_scale;
         ok_b *= vib_scale;
 
-        let [ro, go, bo] = oklab::oklab_to_rgb(ok_l, ok_a, ok_b, m1_inv);
+        let [ro, go, bo] = super::scalar::oklab_to_rgb(ok_l, ok_a, ok_b, m1_inv);
         dst[base] = (ro * reference_white).max(0.0);
         dst[base + 1] = (go * reference_white).max(0.0);
         dst[base + 2] = (bo * reference_white).max(0.0);

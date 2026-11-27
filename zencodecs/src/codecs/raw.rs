@@ -135,27 +135,47 @@ pub(crate) fn extract_gainmap(
     };
 
     let gm_output = decode_gainmap_jpeg(&gm_info.jpeg_data, limits, pulse)?;
-    use zenpixels_convert::PixelBufferConvertTypedExt as _;
-    let gm_rgb8 = gm_output.into_buffer().to_rgb8();
-    let gm_ref = gm_rgb8.as_imgref();
-    let gm_w = gm_ref.width() as u32;
-    let gm_h = gm_ref.height() as u32;
-    let gm_bytes: alloc::vec::Vec<u8> = bytemuck::cast_slice(gm_ref.buf()).to_vec();
+    let gm_rgb8 = zenpixels_convert::convert_to_buf(
+        &gm_output.pixels(),
+        &zenpixels::PixelFormat::RGB8_SRGB,
+        &zenpixels_convert::ConvertPolicy::permissive(),
+    )
+    .map_err(|e| {
+        at!(CodecError::InvalidInput(alloc::format!(
+            "converting gain map to RGB8: {e}"
+        )))
+    })?;
+    let gm_w = gm_rgb8.width();
+    let gm_h = gm_rgb8.height();
 
-    // Collapse to single-channel when provably achromatic. `try_reduce_to_
-    // load_bearing_format` runs the same R==G==B analysis AND the bit-exact
-    // byte selection in one call. (The full scan matters: the 100-pixel sample
-    // this replaced could collapse a map whose chroma appears later, silently
-    // discarding G/B.) The source is RGB8 — no alpha lane, already 8-bit — so
-    // chroma is the only axis of the report that can fire here.
-    use zenpixels_convert::PixelSliceLoadBearingExt as _;
-    let (gm_data, channels) = match gm_rgb8.as_slice().try_reduce_to_load_bearing_format() {
-        Some(reduced) => {
-            let channels = reduced.descriptor().channels() as u8;
-            (reduced.copy_to_contiguous_bytes(), channels)
-        }
-        None => (gm_bytes, 3u8),
-    };
+    // Collapse to single-channel when provably achromatic. `compact_to_buf`
+    // runs the R==G==B analysis AND bit-exact byte selection in one call.
+    // The source is RGB8 — no alpha lane, already 8-bit — so chroma is the
+    // only axis of the report that can fire here.
+    let (gm_data, channels) =
+        match zenpixels_convert::compact_to_buf(&gm_rgb8.as_view()).map_err(|e| {
+            at!(CodecError::InvalidInput(alloc::format!(
+                "compacting gain map: {e}"
+            )))
+        })? {
+            Some(reduced) => {
+                let channels = reduced.format().layout.channels() as u8;
+                let bytes = reduced
+                    .as_view()
+                    .to_contiguous_bytes()
+                    .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?
+                    .into_owned();
+                (bytes, channels)
+            }
+            None => (
+                gm_rgb8
+                    .as_view()
+                    .to_contiguous_bytes()
+                    .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?
+                    .into_owned(),
+                3u8,
+            ),
+        };
 
     // Convert zenraw's GainMapInfo XMP fields to GainMapMetadata.
     //
@@ -262,8 +282,7 @@ mod gainmap_controls {
     fn embedded_jpeg_keeps_timeout_and_limits() {
         let pixels = [128u8; 48];
         let view =
-            zenpixels::PixelSlice::new(&pixels, 4, 4, 12, zenpixels::PixelDescriptor::RGB8_SRGB)
-                .unwrap();
+            zenpixels::PixelView::new(&pixels, 4, 4, 12, &zenpixels::formats::RGB8_SRGB).unwrap();
         let bytes = crate::EncodeRequest::new(zencodec::ImageFormat::Jpeg)
             .encode(view, false)
             .unwrap()

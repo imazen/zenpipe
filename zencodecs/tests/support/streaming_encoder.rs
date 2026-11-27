@@ -1,5 +1,5 @@
 use zencodec::encode::{BoxedError, DynEncoder, EncodeOutput, OutputBuffer, OutputTiming};
-use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
+use zenpixels::{PixelFormat, PixelView, PixelViewMut};
 
 #[derive(Clone, Copy, Default)]
 pub enum Failure {
@@ -29,24 +29,17 @@ impl DynEncoder for TestEncoder {
         1
     }
 
-    fn encode(mut self: Box<Self>, pixels: PixelSlice<'_>) -> Result<EncodeOutput, BoxedError> {
+    fn encode(mut self: Box<Self>, pixels: PixelView<'_>) -> Result<EncodeOutput, BoxedError> {
         self.output.vec_mut().push(b'H');
         self.push_rows(pixels)?;
         self.finish()
     }
 
-    fn encode_srgba8(
-        self: Box<Self>,
-        _: &mut [u8],
-        _: bool,
-        _: u32,
-        _: u32,
-        _: u32,
-    ) -> Result<EncodeOutput, BoxedError> {
+    fn encode_in_place(self: Box<Self>, _: PixelViewMut<'_>) -> Result<EncodeOutput, BoxedError> {
         Err("unused test path".into())
     }
 
-    fn begin(&mut self, _: u32, _: u32, _: PixelDescriptor) -> Result<OutputTiming, BoxedError> {
+    fn begin(&mut self, _: u32, _: u32, _: PixelFormat) -> Result<OutputTiming, BoxedError> {
         self.output.vec_mut().push(b'H');
         Ok(if self.buffered {
             OutputTiming::AT_FINISH
@@ -73,11 +66,11 @@ impl DynEncoder for TestEncoder {
         }
     }
 
-    fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), BoxedError> {
+    fn push_rows(&mut self, rows: PixelView<'_>) -> Result<(), BoxedError> {
         if matches!(self.failure, Failure::Push) {
             return Err("injected push failure".into());
         }
-        for y in 0..rows.rows() {
+        for y in 0..rows.height() {
             self.output.vec_mut().extend_from_slice(rows.row(y));
         }
         Ok(())
@@ -93,7 +86,7 @@ impl DynEncoder for TestEncoder {
 
     fn encode_from(
         self: Box<Self>,
-        _: &mut dyn FnMut(u32, PixelSliceMut<'_>) -> usize,
+        _: &mut dyn FnMut(u32, PixelViewMut<'_>) -> usize,
     ) -> Result<EncodeOutput, BoxedError> {
         Err("unused test path".into())
     }

@@ -70,7 +70,7 @@ impl MaterializedSource {
         let width = upstream.width();
         let height = upstream.height();
         let format = upstream.format();
-        let row_bytes = format.aligned_stride(width);
+        let row_bytes = crate::format::aligned_stride(&format, width);
         let total = crate::limits::checked_stride_buffer(row_bytes, height)?;
         let mut data = vec![0u8; total];
         let mut y = 0u32;
@@ -84,7 +84,7 @@ impl MaterializedSource {
                 .check()
                 .map_err(|_| at!(crate::error::PipeError::Cancelled))?;
             let Some(strip) = strip else { break };
-            for r in 0..strip.rows() {
+            for r in 0..strip.height() {
                 let dst_start = (y as usize)
                     .checked_add(r as usize)
                     .and_then(|v| v.checked_mul(row_bytes))
@@ -109,7 +109,7 @@ impl MaterializedSource {
                 }
                 data[dst_start..dst_end].copy_from_slice(&src_row[..row_bytes]);
             }
-            y = y.saturating_add(strip.rows());
+            y = y.saturating_add(strip.height());
         }
 
         Ok(Self {
@@ -183,7 +183,7 @@ impl MaterializedSource {
 
     /// Stride (bytes per row, may include padding).
     pub fn stride(&self) -> usize {
-        self.format.aligned_stride(self.width)
+        crate::format::aligned_stride(&self.format, self.width)
     }
 
     /// Read a single row by index.
@@ -200,7 +200,7 @@ impl Clone for MaterializedSource {
             data: self.data.clone(),
             width: self.width,
             height: self.height,
-            format: self.format,
+            format: self.format.clone(),
             strip_height: self.strip_height,
             y: 0, // Reset cursor — clone starts from the beginning.
         }
@@ -215,7 +215,7 @@ impl Source for MaterializedSource {
         }
 
         let rows = self.strip_height.min(self.height - self.y);
-        let stride = self.format.aligned_stride(self.width);
+        let stride = crate::format::aligned_stride(&self.format, self.width);
         let start = self.y as usize * stride;
         let end = start + rows as usize * stride;
 
@@ -227,7 +227,7 @@ impl Source for MaterializedSource {
                 self.width,
                 rows,
                 stride,
-                self.format,
+                &self.format,
             )
             .pipe_err()?,
         ))
@@ -240,7 +240,7 @@ impl Source for MaterializedSource {
         self.height
     }
     fn format(&self) -> PixelFormat {
-        self.format
+        self.format.clone()
     }
 }
 
@@ -256,10 +256,10 @@ mod tests {
     /// Helper: collect all rows from a Source into a flat Vec.
     fn drain_all_rows(src: &mut dyn Source) -> Vec<Vec<u8>> {
         let mut rows = Vec::new();
-        let bpp = src.format().bytes_per_pixel();
+        let bpp = src.format().layout.bytes_per_pixel();
         let w = src.width() as usize;
         while let Some(strip) = src.next().unwrap() {
-            for r in 0..strip.rows() {
+            for r in 0..strip.height() {
                 let row = strip.row(r);
                 rows.push(row[..w * bpp].to_vec());
             }
@@ -272,9 +272,9 @@ mod tests {
         let w = 3u32;
         let h = 2u32;
         let fmt = RGBA8_SRGB;
-        let stride = fmt.aligned_stride(w); // 12
+        let stride = crate::format::aligned_stride(&fmt, w); // 12
         let data = vec![0u8; stride * h as usize];
-        let src = MaterializedSource::from_data(data, w, h, fmt);
+        let src = MaterializedSource::from_data(data, w, h, fmt.clone());
 
         assert_eq!(src.width(), w);
         assert_eq!(src.height(), h);
@@ -286,7 +286,7 @@ mod tests {
         let w = 2u32;
         let h = 3u32;
         let fmt = RGBA8_SRGB;
-        let stride = fmt.aligned_stride(w); // 8
+        let stride = crate::format::aligned_stride(&fmt, w); // 8
 
         // Fill with distinct per-row patterns.
         let mut data = vec![0u8; stride * h as usize];
@@ -312,7 +312,7 @@ mod tests {
         let w = 4u32;
         let h = 2u32;
         let fmt = RGB8_SRGB;
-        let stride = fmt.aligned_stride(w); // 12
+        let stride = crate::format::aligned_stride(&fmt, w); // 12
         let data: Vec<u8> = (0..stride * h as usize).map(|i| i as u8).collect();
         let src = MaterializedSource::from_data(data.clone(), w, h, fmt);
 
@@ -324,7 +324,8 @@ mod tests {
         let w = 5u32;
         let h = 1u32;
         let fmt = RGBA8_SRGB;
-        let src = MaterializedSource::from_data(vec![0u8; fmt.aligned_stride(w)], w, h, fmt);
+        let stride = crate::format::aligned_stride(&fmt, w);
+        let src = MaterializedSource::from_data(vec![0u8; stride], w, h, fmt);
 
         assert_eq!(src.stride(), w as usize * 4); // RGBA8 = 4 bpp
     }
@@ -334,20 +335,20 @@ mod tests {
         let w = 2u32;
         let h = 8u32;
         let fmt = RGBA8_SRGB;
-        let stride = fmt.aligned_stride(w);
+        let stride = crate::format::aligned_stride(&fmt, w);
         let data = vec![0u8; stride * h as usize];
 
         let mut src = MaterializedSource::from_data(data, w, h, fmt).with_strip_height(3);
 
         // Should get strips of 3, 3, 2 rows.
         let s1 = src.next().unwrap().unwrap();
-        assert_eq!(s1.rows(), 3);
+        assert_eq!(s1.height(), 3);
 
         let s2 = src.next().unwrap().unwrap();
-        assert_eq!(s2.rows(), 3);
+        assert_eq!(s2.height(), 3);
 
         let s3 = src.next().unwrap().unwrap();
-        assert_eq!(s3.rows(), 2);
+        assert_eq!(s3.height(), 2);
 
         assert!(src.next().unwrap().is_none());
     }

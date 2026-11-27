@@ -11,7 +11,7 @@
 use imgref::{ImgRef, ImgVec};
 use rgb::Rgba;
 use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, Metadata};
-use zenpixels::PixelSlice;
+use zenpixels::{ColorSpace, PixelView};
 
 fn rgba8_image(w: usize, h: usize) -> ImgVec<Rgba<u8>> {
     let pixels: Vec<Rgba<u8>> = (0..w * h)
@@ -102,11 +102,11 @@ fn gif_icc_input_is_dropped_by_default_and_refused_when_strict() {
     let img = rgba8_image(16, 16);
     let meta = Metadata::none().with_icc(vec![0u8; 256]);
 
-    let typed: PixelSlice<'_, Rgba<u8>> = PixelSlice::from(img.as_ref());
+    let view = PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB_ALPHA).expect("from_imgref");
     let bytes = EncodeRequest::new(ImageFormat::Gif)
         .with_quality(75.0)
         .with_metadata(meta.clone())
-        .encode(typed.erase(), true)
+        .encode(view, true)
         .expect("default policy drops an unusable profile")
         .into_vec();
     assert!(
@@ -118,12 +118,12 @@ fn gif_icc_input_is_dropped_by_default_and_refused_when_strict() {
         "GIF output must not claim an ICC profile"
     );
 
-    let typed: PixelSlice<'_, Rgba<u8>> = PixelSlice::from(img.as_ref());
+    let view = PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB_ALPHA).expect("from_imgref");
     let strict = EncodeRequest::new(ImageFormat::Gif)
         .with_quality(75.0)
         .with_metadata(meta)
         .with_encode_policy(zencodec::encode::EncodePolicy::none().with_strict(true))
-        .encode(typed.erase(), true);
+        .encode(view, true);
     assert!(
         strict.is_err(),
         "strict encode must refuse to drop a profile GIF cannot carry"

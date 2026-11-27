@@ -51,13 +51,14 @@ impl CallbackSource {
         callback: impl FnMut(&mut [u8]) -> crate::PipeResult<bool> + Send + 'static,
     ) -> Self {
         let sh = strip_height.min(height);
+        let buf = StripBuf::new(width, sh, format.clone());
         Self {
             callback: Box::new(callback),
             width,
             height,
             format,
             strip_height: sh,
-            buf: StripBuf::new(width, sh, format),
+            buf,
             y: 0,
             exhausted: false,
         }
@@ -71,7 +72,7 @@ impl CallbackSource {
         format: PixelFormat,
         strip_height: u32,
     ) -> Self {
-        let row_bytes = format.aligned_stride(width);
+        let row_bytes = crate::format::aligned_stride(&format, width);
         let data = data.to_vec();
         let mut offset = 0usize;
         Self::new(width, height, format, strip_height, move |buf| {
@@ -96,7 +97,7 @@ impl Source for CallbackSource {
         self.buf.reset();
 
         for _ in 0..rows_wanted {
-            let row_bytes = self.format.aligned_stride(self.width);
+            let row_bytes = crate::format::aligned_stride(&self.format, self.width);
             let mut row_buf = alloc::vec![0u8; row_bytes];
             let has_more = (self.callback)(&mut row_buf)?;
             self.buf.push_row(&row_buf);
@@ -121,6 +122,6 @@ impl Source for CallbackSource {
         self.height
     }
     fn format(&self) -> PixelFormat {
-        self.format
+        self.format.clone()
     }
 }

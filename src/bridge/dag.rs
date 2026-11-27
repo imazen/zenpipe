@@ -447,7 +447,7 @@ mod tests {
     #[allow(dead_code)]
     fn make_source(w: u32, h: u32) -> Box<dyn crate::Source> {
         use crate::sources::MaterializedSource;
-        let bpp = crate::format::RGBA8_SRGB.bytes_per_pixel();
+        let bpp = crate::format::RGBA8_SRGB.layout.bytes_per_pixel();
         let data = alloc::vec![128u8; w as usize * h as usize * bpp];
         let mat = MaterializedSource::from_data(data, w, h, crate::format::RGBA8_SRGB);
         Box::new(mat)

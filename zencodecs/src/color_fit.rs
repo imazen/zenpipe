@@ -41,7 +41,10 @@ use zencodec::Metadata;
     feature = "tiff",
 ))]
 use zencodec::encode::EncodeCapabilities;
-use zenpixels::{Cicp, ColorPrimaries, PixelDescriptor, PixelSlice, TransferFunction};
+use zenpixels::{
+    Cicp, ColorOrigin, ColorSpace, PeakSource, PixelBuf, PixelFormat, PixelView, Primaries,
+    RenderingIntent, SignalRange, Transfer,
+};
 
 /// What an encode does to fit its colour description to the target.
 #[cfg(any(
@@ -128,10 +131,10 @@ pub(crate) fn plan(metadata: Option<&Metadata>, caps: &EncodeCapabilities) -> Co
         if !cicp_ok {
             out.cicp = None;
         }
-        if zenpixels::icc::is_common_srgb(icc) {
+        if zenpixels::icc::IccIdentification::is_common_srgb(icc) {
             return ColorFit::Metadata(out);
         }
-        if let Some(id) = zenpixels::icc::identify_common(icc) {
+        if let Some(id) = zenpixels::icc::IccIdentification::from_icc(icc) {
             if id.is_srgb() {
                 return ColorFit::Metadata(out);
             }
@@ -200,21 +203,124 @@ impl ColorFit {
     }
 }
 
-/// The descriptor for pixels in `from`: a CICP source states primaries and
-/// transfer, which the descriptor must agree with; an ICC source keeps the
-/// pixels' own descriptor (the profile is the authority).
-fn source_descriptor(desc: PixelDescriptor, from: &Source) -> PixelDescriptor {
-    match from {
-        Source::Cicp(c) => desc
-            .with_primaries(ColorPrimaries::from_cicp(c.color_primaries).unwrap_or(desc.primaries))
-            .with_transfer(
-                TransferFunction::from_cicp(c.transfer_characteristics).unwrap_or(desc.transfer()),
-            ),
-        Source::Icc(_) => desc,
+fn primaries_and_transfer(fmt: &PixelFormat) -> Option<(Primaries, Transfer)> {
+    match &fmt.color {
+        ColorSpace::Rgb {
+            primaries,
+            transfer,
+            ..
+        } => Some((*primaries, *transfer)),
+        ColorSpace::Gray { transfer, .. } => Some((Primaries::Bt709, *transfer)),
+        _ => None,
     }
 }
 
-/// Convert `pixels` from `from` to sRGB in the same pixel format.
+/// The format for pixels in `from`: a CICP source states primaries and
+/// transfer, which the format must agree with; an ICC source attaches the
+/// profile as the authoritative color space.
+fn source_format(fmt: &PixelFormat, from: &Source) -> PixelFormat {
+    match from {
+        Source::Cicp(c) => {
+            let alpha = fmt.color.alpha();
+            let range = if c.full_range {
+                SignalRange::Full
+            } else {
+                SignalRange::Narrow
+            };
+            let transfer = Transfer::from_cicp(c.transfer_characteristics)
+                .unwrap_or_else(|| primaries_and_transfer(fmt).map_or(Transfer::Srgb, |(_, t)| t));
+            if fmt.layout.order.is_gray_family() {
+                PixelFormat::new(
+                    fmt.layout,
+                    ColorSpace::Gray {
+                        transfer,
+                        range,
+                        alpha,
+                        white: fmt.color.white(),
+                    },
+                )
+            } else {
+                let primaries = Primaries::from_cicp(c.color_primaries).unwrap_or_else(|| {
+                    primaries_and_transfer(fmt).map_or(Primaries::Bt709, |(p, _)| p)
+                });
+                PixelFormat::new(
+                    fmt.layout,
+                    ColorSpace::Rgb {
+                        primaries,
+                        transfer,
+                        range,
+                        alpha,
+                        white: fmt.color.white(),
+                    },
+                )
+            }
+        }
+        Source::Icc(icc) => {
+            let alpha = fmt.color.alpha();
+            if fmt.layout.order.is_cmyk_family() {
+                let inverted = matches!(fmt.color, ColorSpace::Cmyk { inverted: true, .. });
+                PixelFormat::new(
+                    fmt.layout,
+                    ColorSpace::Cmyk {
+                        inverted,
+                        alpha,
+                        icc: Some(icc.clone()),
+                    },
+                )
+            } else {
+                let color_channels = if fmt.layout.order.is_gray_family() {
+                    1
+                } else {
+                    3
+                };
+                PixelFormat::new(
+                    fmt.layout,
+                    ColorSpace::Icc {
+                        profile: icc.clone(),
+                        color_channels,
+                        alpha,
+                        intent: RenderingIntent::RelativeColorimetric,
+                    },
+                )
+            }
+        }
+    }
+}
+
+fn target_format_for_cicp(base: &PixelFormat, to: Cicp) -> PixelFormat {
+    let alpha = base.color.alpha();
+    let range = if to.full_range {
+        SignalRange::Full
+    } else {
+        SignalRange::Narrow
+    };
+    let transfer = Transfer::from_cicp(to.transfer_characteristics).unwrap_or(Transfer::Srgb);
+    if base.layout.order.is_gray_family() {
+        PixelFormat::new(
+            base.layout,
+            ColorSpace::Gray {
+                transfer,
+                range,
+                alpha,
+                white: None,
+            },
+        )
+    } else {
+        let primaries = Primaries::from_cicp(to.color_primaries).unwrap_or(Primaries::Bt709);
+        PixelFormat::new(
+            base.layout,
+            ColorSpace::Rgb {
+                primaries,
+                transfer,
+                range,
+                alpha,
+                white: None,
+            },
+        )
+    }
+}
+
+/// Convert `pixels` from `from` to sRGB in the same pixel layout.
 #[cfg(any(
     feature = "jpeg",
     feature = "webp",
@@ -226,54 +332,59 @@ fn source_descriptor(desc: PixelDescriptor, from: &Source) -> PixelDescriptor {
     feature = "tiff",
 ))]
 pub(crate) fn convert_to_srgb(
-    pixels: &PixelSlice<'_>,
+    pixels: &PixelView<'_>,
     from: &Source,
-) -> Result<zenpixels::PixelBuffer, alloc::string::String> {
-    convert_to(pixels, from, Cicp::SRGB, pixels.descriptor())
+) -> Result<PixelBuf, alloc::string::String> {
+    convert_to(pixels, from, Cicp::SRGB, pixels.format())
 }
 
 /// Convert `pixels` from `from` to the colour space `to`, in `format`'s
-/// pixel format.
+/// pixel layout.
 fn convert_to(
-    pixels: &PixelSlice<'_>,
+    pixels: &PixelView<'_>,
     from: &Source,
     to: Cicp,
-    format: PixelDescriptor,
-) -> Result<zenpixels::PixelBuffer, alloc::string::String> {
+    format: &PixelFormat,
+) -> Result<PixelBuf, alloc::string::String> {
     use alloc::string::ToString;
-    let desc = source_descriptor(pixels.descriptor(), from);
-    let bytes = pixels.contiguous_bytes().into_owned();
-    let (context, origin) = match from {
-        Source::Icc(icc) => (
-            zenpixels::ColorContext::from_icc(icc.clone()),
-            zenpixels::ColorOrigin::from_icc(icc.clone()),
-        ),
-        Source::Cicp(c) => (
-            zenpixels::ColorContext::from_cicp(*c),
-            zenpixels::ColorOrigin::from_cicp(*c),
-        ),
+    let src_fmt = source_format(pixels.format(), from);
+    let dst_fmt = target_format_for_cicp(format, to);
+    let origin = match from {
+        Source::Icc(icc) => ColorOrigin::from_icc(icc.clone()),
+        Source::Cicp(c) => ColorOrigin::from_cicp(*c),
     };
-    let buffer = zenpixels::PixelBuffer::from_vec(bytes, pixels.width(), pixels.rows(), desc)
-        .map_err(|e| e.to_string())?
-        .with_color_context(Arc::new(context));
+    let src_view = PixelView::new(
+        pixels.as_strided_bytes(),
+        pixels.width(),
+        pixels.height(),
+        pixels.stride_bytes(),
+        &src_fmt,
+    )
+    .map_err(|e| e.to_string())?
+    .with_origin(&origin)
+    .with_hdr(pixels.hdr());
+    #[allow(unused_mut)]
+    let mut policy = zenpixels_convert::ConvertPolicy::permissive();
     #[cfg(feature = "cms")]
-    let cms: Option<&dyn zenpixels_convert::cms::PluggableCms> =
-        Some(&zenpixels_convert::cms_moxcms::MoxCms);
-    #[cfg(not(feature = "cms"))]
-    let cms: Option<&dyn zenpixels_convert::cms::PluggableCms> = None;
-    let ready = zenpixels_convert::finalize_for_output_with(
-        &buffer,
-        &origin,
-        zenpixels_convert::OutputProfile::Named(to),
-        format.pixel_format(),
-        cms,
+    {
+        policy = policy.with_cms(Arc::new(zenpixels_convert::cms::MoxCms));
+    }
+    let plan = zenpixels_convert::OutputPlan::build(
+        &src_fmt,
+        &dst_fmt,
+        &policy,
+        PeakSource::Declared,
+        zenpixels_convert::OutputSignaling::Strip,
     )
     .map_err(|e| e.to_string())?;
-    Ok(ready.into_parts().0)
+    let ready = plan
+        .execute_view(src_view, &origin)
+        .map_err(|e| e.to_string())?;
+    ready.pixels.into_owned().map_err(|e| e.to_string())
 }
 
 /// When the encoder can't take `pixels` as they are and the format it can
-/// take (the one `adapt_for_encode_cow` would pick) has other primaries or
+/// take (the one `adapt_for_encode` would pick) has other primaries or
 /// another transfer, converting there changes what colour the samples mean.
 /// A colour description in `metadata` would then describe the source, not
 /// the written pixels. So convert from the described colour to the target's
@@ -281,10 +392,10 @@ fn convert_to(
 /// profile that no longer applies). `None`: nothing to do, the pixels and
 /// metadata stand as they are.
 pub(crate) fn fit_to_supported(
-    pixels: &PixelSlice<'_>,
+    pixels: &PixelView<'_>,
     metadata: Option<&Metadata>,
-    supported: &[PixelDescriptor],
-) -> Result<Option<(zenpixels::PixelBuffer, Metadata)>, alloc::string::String> {
+    supported: &[PixelFormat],
+) -> Result<Option<(PixelBuf, Metadata)>, alloc::string::String> {
     let Some(meta) = metadata else {
         return Ok(None);
     };
@@ -293,20 +404,30 @@ pub(crate) fn fit_to_supported(
         (None, Some(c)) => Source::Cicp(c),
         (None, None) => return Ok(None),
     };
-    let desc = pixels.descriptor();
-    // `adapt_for_encode_cow` passes these through without converting.
-    if supported.contains(&desc) || desc.transfer() == TransferFunction::Unknown {
+    let desc = pixels.format();
+    // `adapt_for_encode` passes these through without converting.
+    if supported.contains(desc)
+        || primaries_and_transfer(desc).is_some_and(|(_, t)| t == Transfer::Unknown)
+    {
         return Ok(None);
     }
-    let Some(target) =
-        zenpixels_convert::best_match(desc, supported, zenpixels_convert::ConvertIntent::Fastest)
-    else {
+    #[allow(unused_mut)]
+    let mut policy = zenpixels_convert::ConvertPolicy::permissive();
+    #[cfg(feature = "cms")]
+    {
+        policy = policy.with_cms(Arc::new(zenpixels_convert::cms::MoxCms));
+    }
+    let Some(negotiated) = zenpixels_convert::Negotiate::select(desc, supported, &policy) else {
         return Ok(None);
     };
-    if target.primaries == desc.primaries && target.transfer() == desc.transfer() {
+    let target = negotiated.format;
+    if primaries_and_transfer(&target) == primaries_and_transfer(desc) {
         return Ok(None);
     }
-    let (Some(p), Some(t)) = (target.primaries.to_cicp(), target.transfer().to_cicp()) else {
+    let Some((target_p, target_t)) = primaries_and_transfer(&target) else {
+        return Ok(None);
+    };
+    let (Some(p), Some(t)) = (target_p.to_cicp(), target_t.to_cicp()) else {
         return Ok(None);
     };
     let target_cicp = Cicp::new(p, t, 0, true);
@@ -316,7 +437,7 @@ pub(crate) fn fit_to_supported(
     if matches!(source, Source::Icc(_)) {
         return Ok(None);
     }
-    let converted = convert_to(pixels, &source, target_cicp, target)?;
+    let converted = convert_to(pixels, &source, target_cicp, &target)?;
     let mut out = meta.clone();
     out.icc_profile = None;
     out.cicp = Some(target_cicp);
@@ -332,8 +453,8 @@ pub(crate) fn exif_color_space(mut meta: Metadata) -> Metadata {
         return meta;
     };
     let srgb = meta.icc_profile.as_deref().is_none_or(|icc| {
-        zenpixels::icc::is_common_srgb(icc)
-            || zenpixels::icc::identify_common(icc).is_some_and(|id| id.is_srgb())
+        zenpixels::icc::IccIdentification::is_common_srgb(icc)
+            || zenpixels::icc::IccIdentification::from_icc(icc).is_some_and(|id| id.is_srgb())
     }) && meta.cicp.is_none_or(is_srgb_cicp);
     if let Some(fixed) = zencodec::helpers::set_exif_color_space(exif, srgb) {
         meta.exif = Some(fixed.into());

@@ -17,7 +17,7 @@ use zencodecs::DecodeRequest;
 #[cfg(feature = "avif-encode")]
 use zencodecs::{EncodeRequest, ImageFormat, Metadata};
 #[cfg(feature = "avif-encode")]
-use zenpixels::PixelSlice;
+use zenpixels::{ColorSpace, PixelView};
 
 #[cfg(feature = "avif-encode")]
 #[path = "avif_capability/orientation.rs"]
@@ -48,11 +48,11 @@ fn encode_avif_rgb8(img: ImgRef<'_, Rgb<u8>>, quality: f32) -> Vec<u8> {
 
 #[cfg(feature = "avif-encode")]
 fn encode_avif_with_meta(img: ImgRef<'_, Rgb<u8>>, meta: Metadata, quality: f32) -> Vec<u8> {
-    let typed: PixelSlice<'_, Rgb<u8>> = PixelSlice::from(img);
+    let view = PixelView::from_imgref(img, ColorSpace::SRGB).expect("from_imgref");
     EncodeRequest::new(ImageFormat::Avif)
         .with_quality(quality)
         .with_metadata(meta)
-        .encode(typed.erase(), false)
+        .encode(view, false)
         .expect("encode AVIF with metadata")
         .into_vec()
 }
@@ -70,6 +70,16 @@ fn synthetic_icc(len: usize) -> Vec<u8> {
     v.extend_from_slice(&(len as u32).to_be_bytes());
     while v.len() < len {
         v.push((v.len() as u8).wrapping_mul(31));
+    }
+    if len >= 20 {
+        v[12..16].copy_from_slice(b"mntr");
+        v[16..20].copy_from_slice(b"RGB ");
+    }
+    if len >= 40 {
+        v[36..40].copy_from_slice(b"acsp");
+    }
+    if len >= 132 {
+        v[128..132].copy_from_slice(&0u32.to_be_bytes());
     }
     v
 }
@@ -347,22 +357,23 @@ fn avif_hdr_fixture_surfaces_10bit_depth() {
 #[ignore = "needs gainmap-samples corpus at /mnt/v/input/; run with cargo test -- --ignored"]
 #[test]
 fn avif_hdr_fixture_decode_preserves_10bit_pixel_width() {
-    use zenpixels::ChannelType;
+    use zenpixels::SampleType;
     let bytes = std::fs::read(HDR_AVIF_FIXTURE).expect("HDR AVIF fixture must be present");
     let decoded = DecodeRequest::new(&bytes)
         .decode_full_frame()
         .expect("decode HDR AVIF");
-    let desc = decoded.pixels().descriptor();
+    let pixels = decoded.pixels();
+    let fmt = pixels.format();
     // zenavif-trait returns a 16-bit buffer for 10-bit sources (rather
     // than narrowing to u8). This test pins that invariant — if a future
     // refactor accidentally narrows to U8, we catch it.
     assert_ne!(
-        desc.channel_type(),
-        ChannelType::U8,
+        fmt.layout.sample,
+        SampleType::U8,
         "10-bit HDR AVIF must not narrow to U8; got {:?}",
-        desc.channel_type()
+        fmt.layout.sample
     );
-    // Verified empirically: zenavif returns ChannelType::U16 for 10-bit sources.
+    // Verified empirically: zenavif returns SampleType::U16 for 10-bit sources.
 }
 
 // ─── Robustness ───────────────────────────────────────────────────────────

@@ -29,8 +29,8 @@
 //! Usage:
 //!   pristine_kernel_ab --ratio 8 --tsv out.tsv <clean.png...>
 
-use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, PixelBufferConvertExt};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat};
+use zenpixels::{PixelFormat, PixelView};
 use zenresize::{Filter, ResizeConfig, Resizer};
 
 const KERNELS: &[(&str, Filter)] = &[
@@ -45,19 +45,27 @@ fn to_rgb8_bytes(data: &[u8]) -> Result<(Vec<u8>, u32, u32), String> {
         .decode_full_frame()
         .map_err(|e| format!("decode: {e}"))?;
     let (w, h) = (decoded.width(), decoded.height());
-    // Untyped conversion to a packed RGB8/sRGB buffer — one descriptor-driven
+    // Untyped conversion to a packed RGB8/sRGB buffer — one format-driven
     // step, so a 16-bit or YCbCr source lands here already normalised.
-    let buf = decoded
-        .into_buffer()
-        .convert_to(PixelDescriptor::RGB8_SRGB)
-        .map_err(|e| format!("to rgb8: {e}"))?;
-    let px = buf
-        .as_contiguous_pixels::<rgb::Rgb<u8>>()
-        .ok_or("converted buffer is not contiguous RGB8")?;
-    let mut out = Vec::with_capacity((w as usize) * (h as usize) * 3);
-    for p in px {
-        out.extend_from_slice(&[p.r, p.g, p.b]);
-    }
+    let buf = decoded.into_buffer();
+    let converted = if *buf.format() == zenpixels::formats::RGB8_SRGB {
+        buf
+    } else {
+        zenpixels_convert::ImagePlan::build(
+            buf.format(),
+            &zenpixels::formats::RGB8_SRGB,
+            &zenpixels_convert::ConvertPolicy::permissive(),
+            zenpixels::PeakSource::Declared,
+        )
+        .map_err(|e| format!("to rgb8 plan: {e}"))?
+        .execute(&buf.as_view())
+        .map_err(|e| format!("to rgb8: {e}"))?
+    };
+    let out = converted
+        .as_view()
+        .to_contiguous_bytes()
+        .map_err(|e| format!("to rgb8 bytes: {e}"))?
+        .into_owned();
     Ok((out, w, h))
 }
 
@@ -74,7 +82,7 @@ fn downscale(
         return Err("source smaller than one block".into());
     }
     let (ow, oh) = (crop_w / ratio, crop_h / ratio);
-    let desc = PixelDescriptor::RGB8_SRGB;
+    let desc = PixelFormat::RGB8_SRGB;
     let config = ResizeConfig::builder(w, h, ow, oh)
         .filter(filter)
         .format(desc)
@@ -84,12 +92,11 @@ fn downscale(
 }
 
 fn ssim2(a: &[u8], b: &[u8], w: u32, h: u32) -> Result<f64, String> {
-    let pack =
-        |v: &[u8]| -> Vec<[u8; 3]> { v.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect() };
-    let (pa, pb) = (pack(a), pack(b));
-    let ia = imgref::Img::new(pa, w as usize, h as usize);
-    let ib = imgref::Img::new(pb, w as usize, h as usize);
-    fast_ssim2::compute_ssimulacra2(ia.as_ref(), ib.as_ref()).map_err(|e| format!("ssim2: {e}"))
+    let va = zenpixels::PixelView::from_bytes(a, w, h, &zenpixels::formats::RGB8_SRGB)
+        .map_err(|e| format!("ssim2 view a: {e}"))?;
+    let vb = zenpixels::PixelView::from_bytes(b, w, h, &zenpixels::formats::RGB8_SRGB)
+        .map_err(|e| format!("ssim2 view b: {e}"))?;
+    fast_ssim2::compute_ssimulacra2(&va, &vb).map_err(|e| format!("ssim2: {e}"))
 }
 
 fn main() -> std::process::ExitCode {
@@ -155,15 +162,20 @@ fn main() -> std::process::ExitCode {
         for &q in &qs {
             // `encode` consumes the slice, so it is rebuilt per q — the wrap is a
             // bounds check over borrowed bytes, not a copy.
-            let slice =
-                match PixelSlice::new(&clean, w, h, (w as usize) * 3, PixelDescriptor::RGB8_SRGB) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        eprintln!("FAIL {src} — wrap: {e}");
-                        failed += 1;
-                        continue;
-                    }
-                };
+            let slice = match PixelView::new(
+                &clean,
+                w,
+                h,
+                (w as usize) * 3,
+                &zenpixels::formats::RGB8_SRGB,
+            ) {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("FAIL {src} — wrap: {e}");
+                    failed += 1;
+                    continue;
+                }
+            };
             let Ok(jpg) = EncodeRequest::new(ImageFormat::Jpeg)
                 .with_quality(q as f32)
                 .encode(slice, false)
@@ -202,10 +214,7 @@ fn main() -> std::process::ExitCode {
                         continue;
                     }
                 };
-                let fidelity = match ssim2(&ref_lanczos, cln_down, ow, oh) {
-                    Ok(v) => v,
-                    Err(_) => f64::NAN,
-                };
+                let fidelity = ssim2(&ref_lanczos, cln_down, ow, oh).unwrap_or(f64::NAN);
                 rows.push_str(&format!(
                     "{src}\t{q}\t{name}\t{rejection:.4}\t{fidelity:.4}\n"
                 ));

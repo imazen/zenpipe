@@ -4,7 +4,7 @@ use zencodec::encode::{EncodeDeclaration, EncodePlanError, InputRequirement};
 
 pub(super) trait PreparedJob: Sized {
     fn prepare(
-        request: &operation::EncodeRequest,
+        request: &operation::EncodeOptions,
         codecs: &CodecSet,
     ) -> Result<Vec<Self>, At<operation::OperationError>>;
     fn offer(&self) -> operation::EncodeOffer;
@@ -12,7 +12,7 @@ pub(super) trait PreparedJob: Sized {
 }
 impl PreparedJob for operation::PreparedEncode {
     fn prepare(
-        request: &operation::EncodeRequest,
+        request: &operation::EncodeOptions,
         codecs: &CodecSet,
     ) -> Result<Vec<Self>, At<operation::OperationError>> {
         request.prepare(codecs)
@@ -27,7 +27,7 @@ impl PreparedJob for operation::PreparedEncode {
 #[cfg(feature = "checked-transcode-async")]
 impl PreparedJob for operation::PreparedSendEncode {
     fn prepare(
-        request: &operation::EncodeRequest,
+        request: &operation::EncodeOptions,
         codecs: &CodecSet,
     ) -> Result<Vec<Self>, At<operation::OperationError>> {
         request.prepare_send(codecs)
@@ -58,8 +58,8 @@ enum Phase<J> {
     Verifying,
 }
 
-pub(super) struct Execution<'request, 'services, J> {
-    request: &'request TranscodeRequest<'services>,
+pub(super) struct Execution<'request, J> {
+    request: &'request TranscodeRequest,
     codecs: &'request CodecSet,
     bound: Option<PolicySet>,
     schedule: Option<operation::OutputScheduleOffer>,
@@ -68,9 +68,9 @@ pub(super) struct Execution<'request, 'services, J> {
     stage: Stage,
     phase: Phase<J>,
 }
-impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
+impl<'request, J: PreparedJob> Execution<'request, J> {
     pub(super) fn new(
-        request: &'request TranscodeRequest<'services>,
+        request: &'request TranscodeRequest,
         codecs: &'request CodecSet,
         bound: Option<PolicySet>,
         schedule: Option<operation::OutputScheduleOffer>,
@@ -131,6 +131,7 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
     ) -> Result<bool, Cause> {
         match event {
             Yield::Output(ControlledEvent::Suspended(boundary)) => {
+                let boundary_id = boundary.id();
                 if boundary.facts().state != InterpretationState::Final {
                     if !matches!(self.phase, Phase::Discovering(_)) {
                         return Err(Refusal::RepeatedInterpretation.into());
@@ -146,7 +147,7 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                         self.report.record(e.error().record());
                     })?;
                     self.report.record(record);
-                    held.resume(boundary.id(), action, Some(self.codecs.pulse()))?;
+                    held.resume(boundary_id, action, Some(self.codecs.pulse()))?;
                     return Ok(false);
                 }
                 let Phase::Discovering(prepared) =
@@ -166,46 +167,75 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                     self.request.metadata,
                 )?;
                 self.input.release_capture();
-                let descriptor = boundary
+                let decoded_format = boundary
                     .facts()
-                    .descriptor
+                    .pixel_format
+                    .clone()
                     .ok_or(Refusal::MissingDescriptor)?;
-                if matches!(
-                    descriptor.transfer(),
-                    zenpixels::TransferFunction::Pq | zenpixels::TransferFunction::Hlg
-                ) || info
-                    .source_color
-                    .cicp
-                    .is_some_and(|c| matches!(c.transfer_characteristics, 16 | 18))
+                let source_format = zencodec::helpers::pixel_format_for_decoded_pixels(
+                    decoded_format.layout,
+                    &info.source_color,
+                    Some(&decoded_format.color),
+                )?;
+                let is_hdr = |fmt: &PixelFormat| {
+                    matches!(
+                        fmt.color,
+                        zenpixels::ColorSpace::Rgb { transfer, .. }
+                            | zenpixels::ColorSpace::Gray { transfer, .. }
+                            if transfer.is_hdr()
+                    )
+                };
+                if is_hdr(&decoded_format)
+                    || is_hdr(&source_format)
+                    || info
+                        .source_color
+                        .cicp
+                        .is_some_and(|c| matches!(c.transfer_characteristics, 16 | 18))
                 {
                     return Err(Refusal::HdrRendering.into());
                 }
-                let current = Arc::new(info.source_color.to_color_context());
-                let origin = origin(info);
-                let (profile, output_format, options) = self.request.output.clone().unwrap_or((
-                    OutputProfile::SameAsOrigin,
-                    descriptor.pixel_format(),
-                    ConvertOptions::retain_channels(),
-                ));
-                let mut conversion = OutputPlan::new(
-                    descriptor,
-                    Some(current.clone()),
-                    &origin,
-                    profile,
-                    output_format,
-                    &options,
-                    self.request.cms,
+                let origin = info.source_color.authoritative_origin();
+                let (dst_format, mut policy, signaling) =
+                    if let Some((dst, policy)) = &self.request.output {
+                        (
+                            dst.clone(),
+                            policy.clone(),
+                            self.request
+                                .signaling
+                                .clone()
+                                .unwrap_or(OutputSignaling::Auto),
+                        )
+                    } else {
+                        (
+                            source_format.clone(),
+                            ConvertPolicy::lossless(),
+                            self.request
+                                .signaling
+                                .clone()
+                                .unwrap_or(OutputSignaling::SameAsOrigin),
+                        )
+                    };
+                if policy.cms.is_none()
+                    && let Some(cms) = &self.request.cms
+                {
+                    policy = policy.with_cms(cms.clone());
+                }
+                let output_plan = OutputPlan::build(
+                    &source_format,
+                    &dst_format,
+                    &policy,
+                    PeakSource::Declared,
+                    signaling,
                 )?;
-                conversion.prepare(info.width)?;
-                let output_descriptor = conversion.output_descriptor();
-                let output_color = sink::output_context(&conversion, &current);
+                let resolved_signaling = output_plan.resolve_signaling(&origin)?;
+                let row_plan = output_plan.build_row_plan(None)?;
+                let output_format = output_plan.destination_format().clone();
                 let declaration =
-                    EncodeDeclaration::new(info.width, info.height, output_descriptor)
-                        .with_color(&output_color);
-                if !output_descriptor.channel_type().is_integer() {
+                    EncodeDeclaration::new(info.width, info.height, output_format.clone());
+                if !output_format.layout.sample.is_integer() {
                     return Err(Refusal::UnqualifiedSampleType.into());
                 }
-                if requires_alpha(output_descriptor)
+                if requires_alpha(&output_format)
                     && !self
                         .codecs
                         .encoder_for(self.request.format)
@@ -217,7 +247,8 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                 }
                 let metadata = output_metadata(
                     info,
-                    &conversion,
+                    &output_format,
+                    &resolved_signaling,
                     self.request.metadata,
                     self.request.format,
                 )?;
@@ -235,8 +266,7 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                     let mut job = prepared.into_job();
                     // Retention is an explicit request choice. Bind the
                     // actual carriers before the joint resolver runs.
-                    #[allow(deprecated)]
-                    job.set_metadata(metadata.clone());
+                    job.set_unfiltered_metadata(metadata.clone());
                     if let Some(resolution) = resolution {
                         if let Err(cause) = job.try_set_resolution(resolution) {
                             rejections.push(operation::RouteRejection {
@@ -294,17 +324,19 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                 }
                 let rows = PreparedRows::new(
                     info,
-                    descriptor,
-                    current,
-                    conversion,
+                    decoded_format,
+                    row_plan,
                     self.request.strip_rows,
                     &self.request.storage,
                 )?;
                 let mut offers = Vec::new();
                 offers.try_reserve_exact(jobs.len())?;
                 for job in &jobs {
-                    let mut offer =
-                        TranscodeOffer::new(job.0, rows.output_descriptor(), self.request.metadata);
+                    let mut offer = TranscodeOffer::new(
+                        job.0,
+                        rows.output_format().clone(),
+                        self.request.metadata,
+                    );
                     // Accept both pinned bool and review Option<bool> evidence;
                     // the latter must be explicitly known, never left unknown.
                     #[allow(clippy::useless_conversion)]
@@ -337,14 +369,13 @@ impl<'request, 'services, J: PreparedJob> Execution<'request, 'services, J> {
                     metadata,
                     width: info.width,
                     height: info.height,
-                    descriptor: output_descriptor,
+                    format: output_format,
                     resolution,
                 };
                 let encoder = job.into_encoder()?;
-                held.sink_mut()
-                    .install(rows, encoder, Arc::new(output_color.clone()), plan)?;
+                held.sink_mut().install(rows, encoder, plan)?;
                 held.resume(
-                    boundary.id(),
+                    boundary_id,
                     BoundaryAction::AdoptInterpretation,
                     Some(self.codecs.pulse()),
                 )?;
@@ -438,7 +469,7 @@ mod tests {
     struct RecordingJob;
     impl PreparedJob for RecordingJob {
         fn prepare(
-            _: &operation::EncodeRequest,
+            _: &operation::EncodeOptions,
             _: &CodecSet,
         ) -> Result<Vec<Self>, At<operation::OperationError>> {
             PREPARATIONS.fetch_add(1, Ordering::SeqCst);
@@ -562,7 +593,7 @@ mod tests {
                         metadata: Metadata::none(),
                         width: 1,
                         height: 1,
-                        descriptor: PixelDescriptor::RGB8_SRGB,
+                        format: PixelFormat::RGB8_SRGB,
                         resolution: None,
                     },
                 };
@@ -571,7 +602,7 @@ mod tests {
                 let mut held = ControlledStepper::new(decoder, &mut destination);
                 let event = if done {
                     Yield::Finished(ControlledEvent::Decode(Event::Done(
-                        OutputInfo::full_decode(1, 1, PixelDescriptor::RGB8_SRGB),
+                        OutputInfo::full_decode(1, 1, PixelFormat::RGB8_SRGB),
                     )))
                 } else {
                     Yield::Output(ControlledEvent::Decode(Event::Metadata(

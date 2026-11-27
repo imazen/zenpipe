@@ -13,8 +13,8 @@ exclude = ["CLAUDE.md", "CONTEXT-HANDOFF.md", "FEEDBACK.md", ".claude/", ".super
 
 [dependencies]
 # Version edges: the consuming workspace root patches the core family.
-zenmeta = { version = "0.1.0", optional = true, default-features = false }
-zencodec-io = { version = "0.1.0", optional = true }
+zenmeta = { version = "0.2.0", optional = true, default-features = false }
+zencodec-io = { version = "0.2.0", optional = true }
 # Core (always available)
 enough = "0.4.4"
 whereat = "0.1.5"
@@ -22,7 +22,7 @@ thiserror = { version = "2.0.20", default-features = false }
 rgb = { version = "0.8.53", default-features = false, features = ["as-bytes"] }
 imgref = "1.12.3"
 bytemuck = { version = "1.25.2", default-features = false, features = ["extern_crate_alloc"] }
-zencodec = { version = ">=0.2.0, <0.4.0" }
+zencodec = { version = ">=0.3.0, <0.4.0" }
 # MLP content-aware format picker (optional `picker` feature). Git-dep'd until
 # zenpicker is published — flip to crates.io then. zenpicker is codec-agnostic
 # (returns its own CodecFamily); the adapter in picker.rs maps to ImageFormat.
@@ -33,8 +33,8 @@ zenpredict = { git = "https://github.com/imazen/zenanalyze", optional = true, re
 # `{ version = "0.1.0", path }`; consumed via git, that resolves to this same
 # registry crate, so the `zenanalyze_api` types unify to one instance.
 zenanalyze-api = { version = "0.1.0", optional = true, default-features = false }
-zenpixels = { version = ">=0.2.17, <0.4.0", default-features = false, features = ["imgref"] }
-zenpixels-convert = { version = ">=0.2.17, <0.4.0", features = ["imgref"] }
+zenpixels = { version = ">=0.5.0, <0.6.0", default-features = false, features = ["imgref"] }
+zenpixels-convert = { version = ">=0.5.0, <0.6.0", features = ["imgref"] }
 linear-srgb = { version = "0.6.12", default-features = false }
 # HDR -> SDR tone mapping (BT.2408 EETF) for targets that carry neither HDR
 # nor CICP. Optional: pulled only by the `tonemap` feature.
@@ -84,7 +84,7 @@ heic = { version = "0.2.0", optional = true, default-features = false, features 
 # `whereat::At<Error>` stops unifying across the zenavif / zenavif-parse
 # boundary. See the root manifest's zenavif entry for why that rev is the one
 # that decides which rav1d-safe decoder this repo uses.
-zenavif-parse = { version = "0.7.0", git = "https://github.com/imazen/zenavif", rev = "0237c6b32a6c152cb52a2ff2bc137cc5a9b264a6", optional = true, features = ["eager"] }
+zenavif-parse = { version = "0.7.0", git = "https://github.com/imazen/zenavif", rev = "8868bc5ebeeed6ba55ec2e94eb8f1c6cb425e7ac", optional = true, features = ["eager"] }
 zenpng = { version = "0.2.0", optional = true, features = ["zencodec"] }
 # TIFF decode/encode through the optional-control extras source and its
 # matching image-tiff fork, selected by each consumer's root patch table.
@@ -92,8 +92,8 @@ zentiff = { version = "0.1.2", optional = true, features = ["zencodec"] }
 # SVG/SVGZ rasterization (resvg) behind a zencodec decode adapter. Unpublished —
 # lives in the imazen/zenextras workspace next to zentiff, so it is a git dep
 # rather than a registry spec + root patch. Powers `svg` (zenpipe#1).
-zenjp2 = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b212def0602f4dd8cdee9560dc", optional = true }
-zensvg = { git = "https://github.com/imazen/zenextras", rev = "403d46b9973a58b212def0602f4dd8cdee9560dc", optional = true }
+zenjp2 = { git = "https://github.com/imazen/zenextras", rev = "a0f119c35e8443e7b39b8c528f2cc2bb9be2efa8", optional = true }
+zensvg = { git = "https://github.com/imazen/zenextras", rev = "a0f119c35e8443e7b39b8c528f2cc2bb9be2efa8", optional = true }
 zenjxl = { version = "0.3.0", optional = true, default-features = false, features = ["zencodec"] }
 # Lossless JXL→JPEG reconstruction (reconstruct_jpeg, JBRD / brunsli-parity). Its
 # `jpeg` feature pulls brotli for the JBRD box; needs neither zenjpeg nor the JXL
@@ -137,14 +137,14 @@ turbojpeg = { version = "1.5.1", optional = true }
 
 [dev-dependencies]
 # Shared codec conformance checks (operation matrix, metadata contracts).
-zencodec-testkit = { version = ">=0.2.0, <0.4.0" }
-zenmeta = { version = "0.1.0", default-features = false, features = ["xmp"] }
+zencodec-testkit = { version = ">=0.3.0, <0.4.0" }
+zenmeta = { version = "0.2.0", default-features = false, features = ["xmp"] }
 png = "0.18.1"
 # 0.4.0 unpublished (crates.io tops out at 0.3.1); resolved by the workspace-root
 # git patch; CI paths it to the sibling clone.
 zensim-regress = { version = "0.4.0" }
 codec-corpus = "1.1.0"
-fast-ssim2 = { version = "0.8.2", features = ["imgref"] }
+fast-ssim2 = { version = "0.9.1", features = ["imgref"] }
 rayon = "1.12.0"
 
 [features]
@@ -185,7 +185,7 @@ transcode-iqa = ["dep:zensim", "zenjxl?/jpeg-lossy"]
 
 # Individual codec features
 jpeg = ["dep:zenjpeg"]
-jpeg-ultrahdr = ["dep:zenmeta", "jpeg", "zenjpeg/ultrahdr", "dep:ultrahdr-core", "zenpixels-convert/hdr-experimental"]
+jpeg-ultrahdr = ["dep:zenmeta", "jpeg", "zenjpeg/ultrahdr", "dep:ultrahdr-core", "zenpixels-convert/hdr-transfers", "zenpixels-convert/gainmap"]
 webp = ["dep:zenwebp"]
 gif = ["dep:zengif"]
 gif-zenquant = ["gif", "zengif/zenquant"]
@@ -209,7 +209,7 @@ jxl-jpeg-reconstruct = ["dep:zenjxl-decoder"]
 # LosslessConfig::encode_jpeg_transcode (jxl-encoder `jpeg-reencoding`, pulled by
 # zenjxl/jpeg-lossy). Pulls the reconstruct side so a round-trip is self-contained.
 jpeg-jxl-transcode = ["jxl-encode", "jxl-jpeg-reconstruct", "zenjxl/jpeg-lossy"]
-heic-decode = ["dep:heic", "zenpixels-convert/hdr-experimental"]  # still-image container decode (zenpipe#43)
+heic-decode = ["dep:heic", "zenpixels-convert/hdr-transfers"]  # still-image container decode (zenpipe#43)
 tiff = ["dep:zentiff"]  # zentiff decode/encode adapter (git-patched main; zenpipe#43)
 svg = ["dep:zensvg"]  # SVG/SVGZ rasterization via zensvg (resvg); zenpipe#1
 jp2-decode = ["dep:zenjp2"]  # JPEG 2000 decode via zenjp2 (zenpipe#43)

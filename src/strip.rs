@@ -1,17 +1,17 @@
-use alloc::sync::Arc;
 use alloc::vec;
 
+use zenpixels::ColorOrigin;
 use zenpixels::buffer::BufferError;
-use zenpixels::color::ColorContext;
 
 use crate::PixelFormat;
 use crate::error::PipeError;
+use crate::format::aligned_stride;
 
-/// Type alias — strips are [`zenpixels::PixelSlice`] values.
+/// Type alias — strips are [`zenpixels::PixelView`] values.
 ///
-/// Color metadata (ICC profiles, CICP codes) flows automatically
-/// through the pipeline via `PixelSlice::color_context()`.
-pub type Strip<'a> = zenpixels::PixelSlice<'a>;
+/// Color metadata (ICC profiles, CICP codes) flows through the pipeline
+/// via `PixelView::origin()`.
+pub type Strip<'a> = zenpixels::PixelView<'a>;
 
 /// Owned buffer for accumulating strip rows.
 ///
@@ -22,7 +22,7 @@ pub struct StripBuf {
     width: u32,
     stride: usize,
     format: PixelFormat,
-    color: Option<Arc<ColorContext>>,
+    origin: Option<ColorOrigin>,
     rows_filled: u32,
     capacity_rows: u32,
 }
@@ -42,22 +42,22 @@ impl StripBuf {
     /// Fallible constructor. Returns `Err(LimitExceeded)` if
     /// `stride * max_rows` overflows `usize` (reachable on 32-bit / wasm32).
     pub fn try_new(width: u32, max_rows: u32, format: PixelFormat) -> crate::PipeResult<Self> {
-        let stride = format.aligned_stride(width);
+        let stride = aligned_stride(&format, width);
         let total = crate::limits::checked_stride_buffer(stride, max_rows)?;
         Ok(Self {
             data: vec![0u8; total],
             width,
             stride,
             format,
-            color: None,
+            origin: None,
             rows_filled: 0,
             capacity_rows: max_rows,
         })
     }
 
-    /// Set the color context for strips produced by this buffer.
-    pub fn set_color_context(&mut self, ctx: Option<Arc<ColorContext>>) {
-        self.color = ctx;
+    /// Set the color origin for strips produced by this buffer.
+    pub fn set_color_origin(&mut self, origin: Option<ColorOrigin>) {
+        self.origin = origin;
     }
 
     /// Reset for a new strip (clear filled count).
@@ -109,7 +109,7 @@ impl StripBuf {
         &mut self.data[start..start + self.stride]
     }
 
-    /// View the filled portion as a [`Strip`] (PixelSlice).
+    /// View the filled portion as a [`Strip`] (PixelView).
     pub fn as_strip(&self) -> Strip<'_> {
         let end = self.rows_filled as usize * self.stride;
         let mut strip = Strip::new(
@@ -117,11 +117,11 @@ impl StripBuf {
             self.width,
             self.rows_filled,
             self.stride,
-            self.format,
+            &self.format,
         )
         .expect("StripBuf::as_strip: invalid dimensions");
-        if let Some(ref ctx) = self.color {
-            strip = strip.with_color_context(Arc::clone(ctx));
+        if let Some(ref origin) = self.origin {
+            strip = strip.with_origin(origin);
         }
         strip
     }
@@ -154,7 +154,7 @@ impl StripBuf {
         max_rows: u32,
         format: PixelFormat,
     ) -> crate::PipeResult<()> {
-        let stride = format.aligned_stride(width);
+        let stride = aligned_stride(&format, width);
         if self.width != width || self.capacity_rows != max_rows || self.format != format {
             let needed = crate::limits::checked_stride_buffer(stride, max_rows)?;
             self.width = width;

@@ -11,13 +11,13 @@ use http::{FailureKind, Fault, HttpFailure, Server, StrictHttp};
 use zencodec::decode::{ErasedError, StepError};
 use zencodec::encode::{EncodeJob, EncoderConfig};
 use zencodec::how_far::StopOnly;
-use zencodec::operation::{DecodeRequest, PolicySet};
+use zencodec::operation::{DecodeOptions as CodecDecodeOptions, PolicySet};
 use zencodec::storage::StorageBudget;
 use zencodec::{CodecSet, SharedPulse};
 use zencodec_io::DriveOptions;
 use zenpipe::Source;
 use zenpipe::io::{DecodeOptions, DecodeSource};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::PixelView;
 
 const W: u32 = 200;
 const H: u32 = 150;
@@ -32,8 +32,14 @@ fn png() -> (Vec<u8>, Vec<u8>) {
             (state >> 24) as u8
         })
         .collect();
-    let pixels =
-        PixelSlice::new(&samples, W, H, (W * 3) as usize, PixelDescriptor::RGB8_SRGB).unwrap();
+    let pixels = PixelView::new(
+        &samples,
+        W,
+        H,
+        (W * 3) as usize,
+        &zenpixels::formats::RGB8_SRGB,
+    )
+    .unwrap();
     let file = zenpng::PngEncoderConfig::new()
         .job()
         .encode(pixels)
@@ -55,7 +61,7 @@ fn options(read_size: usize) -> DecodeOptions {
 fn drain(source: &mut dyn Source) -> Vec<u8> {
     let mut out = Vec::new();
     while let Some(strip) = source.next().unwrap() {
-        for r in 0..strip.rows() {
+        for r in 0..strip.height() {
             out.extend_from_slice(strip.row(r));
         }
     }
@@ -69,7 +75,7 @@ fn open(file: &[u8], fault: Fault, read_size: usize) -> (Server, zenpipe::PipeRe
         .and_then(|source| {
             let mut decode = DecodeSource::new(
                 &codecs(),
-                &DecodeRequest::new(),
+                &CodecDecodeOptions::new(),
                 source,
                 PolicySet::new(),
                 options(read_size),
@@ -162,7 +168,7 @@ fn cancellation_keeps_its_reason_and_stops_requests() {
     }));
     let error = DecodeSource::new(
         &codecs(),
-        &DecodeRequest::new(),
+        &CodecDecodeOptions::new(),
         source,
         PolicySet::new(),
         options(4096).with_pulse(pulse),

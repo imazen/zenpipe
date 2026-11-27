@@ -21,8 +21,8 @@ pub(crate) fn is_codec_stop(error: &(dyn core::error::Error + 'static)) -> bool 
 pub enum PipeError {
     /// Upstream source produced data in an unexpected format.
     FormatMismatch {
-        expected: crate::PixelFormat,
-        got: crate::PixelFormat,
+        expected: Box<crate::PixelFormat>,
+        got: Box<crate::PixelFormat>,
     },
     /// Resize operation failed.
     Resize(String),
@@ -42,7 +42,7 @@ impl fmt::Display for PipeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::FormatMismatch { expected, got } => {
-                write!(f, "format mismatch: expected {expected}, got {got}")
+                write!(f, "format mismatch: expected {expected:?}, got {got:?}")
             }
             Self::Resize(msg) => write!(f, "resize: {msg}"),
             Self::DimensionMismatch(msg) => write!(f, "dimension mismatch: {msg}"),

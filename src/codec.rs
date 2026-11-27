@@ -9,7 +9,6 @@ use alloc::vec::Vec;
 
 use zencodec::decode::DynStreamingDecoder;
 use zencodec::encode::DynEncoder;
-use zenpixels::PixelDescriptor;
 
 use crate::Source;
 #[allow(unused_imports)]
@@ -59,9 +58,9 @@ impl<'a> DecoderSource<'a> {
 
         let (format, first_batch) = match first {
             Some((_batch_y, pixels)) => {
-                let fmt = pixels.descriptor();
-                let rows = pixels.rows();
-                let bpp = fmt.bytes_per_pixel();
+                let fmt = pixels.format().clone();
+                let rows = pixels.height();
+                let bpp = fmt.layout.bytes_per_pixel();
                 let row_bytes = (w as usize).checked_mul(bpp).ok_or_else(|| {
                     at!(PipeError::LimitExceeded(alloc::format!(
                         "DecoderSource row_bytes overflow: w={w} bpp={bpp}"
@@ -93,13 +92,14 @@ impl<'a> DecoderSource<'a> {
         };
 
         let sh = 16u32.min(h);
+        let buf = StripBuf::try_new(w, sh, format.clone())?;
 
         Ok(Self {
             decoder,
             width: w,
             height: h,
             format,
-            buf: StripBuf::try_new(w, sh, format)?,
+            buf,
             first_batch,
             y: 0,
         })
@@ -116,13 +116,14 @@ impl<'a> DecoderSource<'a> {
         let w = info.width;
         let h = info.height;
         let sh = 16u32.min(h);
+        let buf = StripBuf::try_new(w, sh, format.clone())?;
 
         Ok(Self {
             decoder,
             width: w,
             height: h,
             format,
-            buf: StripBuf::try_new(w, sh, format)?,
+            buf,
             first_batch: None,
             y: 0,
         })
@@ -137,7 +138,7 @@ impl Source for DecoderSource<'_> {
 
         // Serve the eagerly-decoded first batch if available.
         if let Some((rows, data, row_bytes)) = self.first_batch.take() {
-            self.buf.reconfigure(self.width, rows, self.format);
+            self.buf.reconfigure(self.width, rows, self.format.clone());
             self.buf.reset();
             let rb = row_bytes as usize;
             for r in 0..rows as usize {
@@ -157,11 +158,11 @@ impl Source for DecoderSource<'_> {
             return Ok(None);
         };
 
-        let rows = pixels.rows();
-        let bpp = self.format.bytes_per_pixel();
+        let rows = pixels.height();
+        let bpp = self.format.layout.bytes_per_pixel();
         let row_bytes = self.width as usize * bpp;
 
-        self.buf.reconfigure(self.width, rows, self.format);
+        self.buf.reconfigure(self.width, rows, self.format.clone());
         self.buf.reset();
 
         for r in 0..rows {
@@ -180,7 +181,7 @@ impl Source for DecoderSource<'_> {
         self.height
     }
     fn format(&self) -> PixelFormat {
-        self.format
+        self.format.clone()
     }
 }
 
@@ -190,7 +191,7 @@ impl Source for DecoderSource<'_> {
 
 /// Wraps a zencodec [`DynEncoder`] as a zenpipe [`Sink`].
 ///
-/// Receives pixel strips, converts them to [`PixelSlice`]s, and pushes
+/// Receives pixel strips, converts them to [`PixelView`]s, and pushes
 /// rows into the encoder. Call [`take_output()`](EncoderSink::take_output)
 /// after [`finish()`](crate::Sink::finish) to retrieve the encoded bytes.
 ///
@@ -210,7 +211,7 @@ impl Source for DecoderSource<'_> {
 pub struct EncoderSink<'a> {
     encoder: Option<Box<dyn DynEncoder + Send + 'a>>,
     output: Option<zencodec::encode::EncodeOutput>,
-    descriptor: PixelDescriptor,
+    format: PixelFormat,
     writer: Option<Writer<'a>>,
     timing: Option<zencodec::encode::OutputTiming>,
     rows_started: bool,
@@ -228,7 +229,7 @@ impl<'a> EncoderSink<'a> {
         Self {
             encoder: Some(encoder),
             output: None,
-            descriptor: format,
+            format,
             writer: None,
             timing: None,
             rows_started: false,
@@ -266,7 +267,7 @@ impl<'a> EncoderSink<'a> {
             .as_mut()
             .ok_or_else(|| at!(PipeError::Op("encoder already finished".to_string())))?;
         let timing = encoder
-            .begin(width, height, self.descriptor)
+            .begin(width, height, self.format.clone())
             .map_err(|e| at!(PipeError::Op(e.to_string())))?;
         self.timing = Some(timing);
         self.drain()?;
@@ -348,18 +349,18 @@ impl crate::Sink for EncoderSink<'_> {
             .as_mut()
             .ok_or_else(|| at!(PipeError::Op("encoder already finished".to_string())))?;
 
-        let pixels = match zenpixels::PixelSlice::new(
+        let pixels = match zenpixels::PixelView::new(
             strip.as_strided_bytes(),
             strip.width(),
-            strip.rows(),
-            strip.stride(),
-            self.descriptor,
+            strip.height(),
+            strip.stride_bytes(),
+            &self.format,
         ) {
             Ok(pixels) => pixels,
             Err(e) => {
                 self.abort();
                 return Err(at!(PipeError::Op(alloc::format!(
-                    "PixelSlice construction failed: {e}"
+                    "PixelView construction failed: {e}"
                 ))));
             }
         };

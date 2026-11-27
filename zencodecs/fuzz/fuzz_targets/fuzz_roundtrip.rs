@@ -7,7 +7,7 @@
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
 use zencodecs::{AllowedFormats, DecodeRequest, EncodeRequest, ImageFormat, Limits};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::{PixelFormat, PixelView};
 
 #[derive(Debug, Arbitrary)]
 struct RoundtripInput {
@@ -31,11 +31,11 @@ fuzz_target!(|input: RoundtripInput| {
         _ => ImageFormat::Gif,
     };
 
-    // Build pixel descriptor and data
+    // Build pixel format and data
     let (descriptor, bpp) = if input.has_alpha {
-        (PixelDescriptor::RGBA8, 4usize)
+        (PixelFormat::RGBA8_SRGB, 4usize)
     } else {
-        (PixelDescriptor::RGB8, 3usize)
+        (PixelFormat::RGB8_SRGB, 3usize)
     };
 
     let stride = width as usize * bpp;
@@ -43,8 +43,8 @@ fuzz_target!(|input: RoundtripInput| {
     let mut pixels = input.pixels;
     pixels.resize(needed, 128);
 
-    // Create PixelSlice
-    let slice = match PixelSlice::new(&pixels, width, height, stride, descriptor) {
+    // Create PixelView
+    let slice = match PixelView::new(&pixels, width, height, stride, &descriptor) {
         Ok(s) => s,
         Err(_) => return,
     };

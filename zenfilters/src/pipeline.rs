@@ -1,15 +1,15 @@
 use crate::prelude::*;
 use whereat::{At, at};
-use zenpixels::ColorPrimaries;
+use zenpixels::Primaries;
 use zenpixels_convert::gamut::GamutMatrix;
-use zenpixels_convert::oklab;
+use zenpixels_convert::oklab::OklabSpace;
+use zenpixels_convert::tonemap::SoftCompress;
 
 use crate::context::FilterContext;
 use crate::filter::Filter;
 use crate::gamut_map::GamutMapping;
 use crate::planes::OklabPlanes;
 use crate::scatter_gather::scatter_to_oklab;
-use zenpixels_convert::hdr::GamutBoundaryLut;
 
 /// Compute the number of core rows per strip for L3-friendly processing.
 ///
@@ -75,7 +75,7 @@ pub enum WorkingSpace {
 #[non_exhaustive]
 pub struct PipelineConfig {
     /// Color primaries (determines RGB↔LMS matrices).
-    pub primaries: ColorPrimaries,
+    pub primaries: Primaries,
     /// Reference white luminance for HDR normalization.
     /// Use 1.0 for SDR, 203.0 for PQ (ITU-R BT.2408).
     pub reference_white: f32,
@@ -138,7 +138,7 @@ impl PipelineConfig {
 impl Default for PipelineConfig {
     fn default() -> Self {
         Self {
-            primaries: ColorPrimaries::Bt709,
+            primaries: Primaries::Bt709,
             reference_white: 1.0,
             gamut_mapping: GamutMapping::Clip,
             working_space: WorkingSpace::Oklab,
@@ -152,7 +152,7 @@ impl Default for PipelineConfig {
 #[non_exhaustive]
 pub enum PipelineError {
     /// The requested color primaries are not supported (Unknown).
-    UnsupportedPrimaries(ColorPrimaries),
+    UnsupportedPrimaries(Primaries),
     /// Input buffer has wrong size.
     BufferSize { expected: usize, actual: usize },
     /// The operation was cancelled via the cooperative-cancellation token.
@@ -183,22 +183,20 @@ pub struct Pipeline {
     filters: Vec<Box<dyn Filter>>,
     m1: GamutMatrix,
     m1_inv: GamutMatrix,
-    gamut_lut: Option<alloc::sync::Arc<GamutBoundaryLut>>,
+    soft_compress: Option<SoftCompress>,
 }
 
 impl Pipeline {
     /// Create a new pipeline with the given configuration.
     #[track_caller]
     pub fn new(config: PipelineConfig) -> Result<Self, At<PipelineError>> {
-        let m1 = oklab::rgb_to_lms_matrix(config.primaries)
+        let space = OklabSpace::for_primaries(config.primaries)
             .ok_or_else(|| at!(PipelineError::UnsupportedPrimaries(config.primaries)))?;
-        let m1_inv = oklab::lms_to_rgb_matrix(config.primaries)
-            .ok_or_else(|| at!(PipelineError::UnsupportedPrimaries(config.primaries)))?;
+        let m1 = *space.rgb_to_lms();
+        let m1_inv = *space.lms_to_rgb();
 
-        let gamut_lut = match config.gamut_mapping {
-            GamutMapping::SoftCompress { .. } => {
-                Some(alloc::sync::Arc::new(GamutBoundaryLut::new(&m1_inv)))
-            }
+        let soft_compress = match config.gamut_mapping {
+            GamutMapping::SoftCompress { knee } => Some(SoftCompress::new(&space, knee)),
             _ => None,
         };
 
@@ -207,7 +205,7 @@ impl Pipeline {
             filters: Vec::new(),
             m1,
             m1_inv,
-            gamut_lut,
+            soft_compress,
         })
     }
 
@@ -339,14 +337,14 @@ impl Pipeline {
             filters: Vec::new(),
             m1: self.m1,
             m1_inv: self.m1_inv,
-            gamut_lut: self.gamut_lut.clone(),
+            soft_compress: self.soft_compress.clone(),
         };
         let mut post = Self {
             config: self.config,
             filters: Vec::new(),
             m1: self.m1,
             m1_inv: self.m1_inv,
-            gamut_lut: self.gamut_lut,
+            soft_compress: self.soft_compress,
         };
 
         for filter in self.filters {
@@ -745,10 +743,8 @@ impl Pipeline {
 
         stop.check().map_err(|r| at!(PipelineError::Cancelled(r)))?;
         // Apply gamut mapping after all filters
-        if let (GamutMapping::SoftCompress { knee }, Some(lut)) =
-            (self.config.gamut_mapping, &self.gamut_lut)
-        {
-            lut.compress_planes(&planes.l, &mut planes.a, &mut planes.b, knee);
+        if let Some(sc) = &self.soft_compress {
+            let _ = sc.compress_oklab_planes(&planes.l, &mut planes.a, &mut planes.b);
         }
         Ok(())
     }
@@ -777,7 +773,7 @@ mod tests {
     #[test]
     fn unsupported_primaries() {
         let result = Pipeline::new(PipelineConfig {
-            primaries: ColorPrimaries::Unknown,
+            primaries: Primaries::Unknown,
             reference_white: 1.0,
             gamut_mapping: GamutMapping::Clip,
             working_space: WorkingSpace::Oklab,
@@ -802,12 +798,12 @@ mod tests {
     fn neighborhood_strip_matches_full_frame() {
         use crate::filters;
         use crate::scatter_gather::gather_from_oklab;
-        use zenpixels_convert::oklab;
 
         let (w, h) = (128, 128);
         let n = (w as usize) * (h as usize);
-        let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
-        let m1_inv = oklab::lms_to_rgb_matrix(ColorPrimaries::Bt709).unwrap();
+        let space = OklabSpace::for_primaries(Primaries::Bt709).unwrap();
+        let m1 = *space.rgb_to_lms();
+        let m1_inv = *space.lms_to_rgb();
 
         // Generate a test image with enough spatial variation to exercise
         // neighborhood filters meaningfully.

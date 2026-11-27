@@ -13,7 +13,7 @@ use zenjpeg::encoder::{ChromaSubsampling, EncoderConfig as NativeConfig, PixelLa
 use zenjpeg::{JpegDecoderConfig, JpegEncoderConfig};
 use zenpipe::codec::{DecoderSource, EncoderSink};
 use zenpipe::{Sink, Source, execute, format};
-use zenpixels::PixelDescriptor;
+use zenpixels::PixelFormat;
 
 const W: u32 = 320;
 const H: u32 = 240;
@@ -40,7 +40,7 @@ fn source_jpeg() -> Vec<u8> {
 fn decoder(jpeg: &[u8]) -> DecoderSource<'_> {
     let streaming = JpegDecoderConfig::default()
         .job()
-        .dyn_streaming_decoder(Cow::Borrowed(jpeg), &[PixelDescriptor::RGBA8_SRGB])
+        .dyn_streaming_decoder(Cow::Borrowed(jpeg), &[PixelFormat::RGBA8_SRGB])
         .unwrap();
     DecoderSource::new(streaming).unwrap()
 }

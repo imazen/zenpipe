@@ -62,8 +62,22 @@
 use std::path::{Path, PathBuf};
 
 use zencodecs::{ColorEmitPolicy, DecodeRequest, EncodeRequest, ImageFormat};
-use zenpixels::{ColorPrimaries, PixelSlice, TransferFunction};
+use zenpixels::{ColorSpace, PixelFormat, PixelView, Primaries, SampleType, Transfer};
 use zenresize::{Bt709, Filter, Hlg, Pq, ResizeConfig, Resizer, Srgb, TransferCurve};
+
+fn format_primaries(fmt: &PixelFormat) -> Primaries {
+    match fmt.color {
+        ColorSpace::Rgb { primaries, .. } => primaries,
+        _ => Primaries::Unknown,
+    }
+}
+
+fn format_transfer(fmt: &PixelFormat) -> Transfer {
+    match fmt.color {
+        ColorSpace::Rgb { transfer, .. } | ColorSpace::Gray { transfer, .. } => transfer,
+        _ => Transfer::Unknown,
+    }
+}
 
 fn filter_by_name(name: &str) -> Option<Filter> {
     Some(match name {
@@ -78,12 +92,12 @@ fn filter_by_name(name: &str) -> Option<Filter> {
 
 /// The source's real transfer curve. Refuses to guess: a wrong curve here
 /// corrupts highlights silently, which is worse than failing.
-fn curve_for(tf: TransferFunction) -> Result<Box<dyn TransferCurve<Luts = ()>>, String> {
+fn curve_for(tf: Transfer) -> Result<Box<dyn TransferCurve<Luts = ()>>, String> {
     match tf {
-        TransferFunction::Srgb => Ok(Box::new(Srgb)),
-        TransferFunction::Pq => Ok(Box::new(Pq)),
-        TransferFunction::Hlg => Ok(Box::new(Hlg)),
-        TransferFunction::Bt709 => Ok(Box::new(Bt709)),
+        Transfer::Srgb => Ok(Box::new(Srgb)),
+        Transfer::Pq => Ok(Box::new(Pq)),
+        Transfer::Hlg(_) => Ok(Box::new(Hlg)),
+        Transfer::Bt709 => Ok(Box::new(Bt709)),
         other => Err(format!("no transfer curve for {other:?}")),
     }
 }
@@ -97,7 +111,7 @@ struct Rendered {
     crop_h: u32,
     out_w: u32,
     out_h: u32,
-    transfer: TransferFunction,
+    transfer: Transfer,
     transfer_assumed: bool,
     color_untagged: bool,
     cicp: String,
@@ -113,7 +127,7 @@ fn render(src: &Path, ratio: u32, filter: Filter) -> Result<Rendered, String> {
     let transfer = decoded.info().source_color.transfer_function();
     let has_alpha = decoded.has_alpha();
     let pixels = decoded.pixels();
-    let (src_w, src_h) = (pixels.width(), pixels.rows());
+    let (src_w, src_h) = (pixels.width(), pixels.height());
 
     // Reconcile the descriptor with the source's own colour before doing
     // anything with it. A decoder can hand back pixels whose descriptor says
@@ -122,7 +136,7 @@ fn render(src: &Path, ratio: u32, filter: Filter) -> Result<Rendered, String> {
     // file gets written with the other. The container is the authority on what
     // the colour IS, so it wins here and descriptor and tag agree from this
     // point on.
-    let mut descriptor = pixels.descriptor();
+    let mut descriptor = pixels.format().clone();
     // Only when the container ACTUALLY declares a colour. `color_primaries()`
     // returns a default rather than an Option, so overriding unconditionally
     // stamps BT.709 over a decoder-supplied Display-P3 descriptor whenever the
@@ -130,14 +144,18 @@ fn render(src: &Path, ratio: u32, filter: Filter) -> Result<Rendered, String> {
     // doing that dropped 18 of 44 Display-P3 tags in this corpus.
     if info_cicp.is_some() {
         let src_primaries = decoded.info().color_primaries();
-        if descriptor.primaries != src_primaries {
-            descriptor.primaries = src_primaries;
+        if format_primaries(&descriptor) != src_primaries
+            && let Some(c) = descriptor.color.clone().try_with_primaries(src_primaries)
+        {
+            descriptor.color = c;
         }
     }
     let src_transfer = decoded.info().transfer_function();
-    if descriptor.transfer == TransferFunction::Unknown && src_transfer != TransferFunction::Unknown
+    if format_transfer(&descriptor) == Transfer::Unknown
+        && src_transfer != Transfer::Unknown
+        && let Some(c) = descriptor.color.clone().try_with_transfer(src_transfer)
     {
-        descriptor.transfer = src_transfer;
+        descriptor.color = c;
     }
     // Only after the container has had its say: an untagged JPEG genuinely IS
     // sRGB by web convention, and most of this corpus is untagged. zenresize
@@ -145,13 +163,22 @@ fn render(src: &Path, ratio: u32, filter: Filter) -> Result<Rendered, String> {
     // which is right, so the assumption is made here, explicitly, and recorded
     // per row -- an assumed transfer is a fact about the reference set a
     // consumer needs, not an implementation detail to bury.
-    let transfer_assumed = descriptor.transfer == TransferFunction::Unknown
-        || descriptor.primaries == ColorPrimaries::Unknown;
-    if descriptor.transfer == TransferFunction::Unknown {
-        descriptor.transfer = TransferFunction::Srgb;
+    let transfer_assumed = format_transfer(&descriptor) == Transfer::Unknown
+        || (matches!(descriptor.color, ColorSpace::Rgb { .. })
+            && format_primaries(&descriptor) == Primaries::Unknown);
+    if format_transfer(&descriptor) == Transfer::Unknown
+        && let Some(c) = descriptor.color.clone().try_with_transfer(Transfer::Srgb)
+    {
+        descriptor.color = c;
     }
-    if descriptor.primaries == ColorPrimaries::Unknown {
-        descriptor.primaries = ColorPrimaries::Bt709;
+    if matches!(descriptor.color, ColorSpace::Rgb { .. })
+        && format_primaries(&descriptor) == Primaries::Unknown
+        && let Some(c) = descriptor
+            .color
+            .clone()
+            .try_with_primaries(Primaries::Bt709)
+    {
+        descriptor.color = c;
     }
 
     // Whole blocks only — a partial MCU cannot have its AC cancelled.
@@ -174,41 +201,41 @@ fn render(src: &Path, ratio: u32, filter: Filter) -> Result<Rendered, String> {
     // resampled as linear f32, and re-encoded. That keeps one code path honest
     // for SDR and HDR instead of silently mis-resampling the HDR half.
     let src_bytes = pixels.as_strided_bytes();
-    let bpp = descriptor.bytes_per_pixel();
-    let channels = descriptor.channels();
-    let is_u8 = descriptor.channel_type() == zenpixels::ChannelType::U8;
+    let bpp = descriptor.layout.bytes_per_pixel();
+    let channels = descriptor.layout.channels();
+    let is_u8 = descriptor.layout.sample == SampleType::U8;
 
     let (resized, out_desc) = if is_u8 {
         let config = ResizeConfig::builder(src_w, src_h, out_w, out_h)
             .filter(filter)
-            .format(descriptor)
+            .format(descriptor.clone())
             .crop(0, 0, crop_w, crop_h)
             .build();
         (Resizer::new(&config).resize(src_bytes), descriptor)
     } else {
-        if descriptor.channel_type() != zenpixels::ChannelType::U16 {
+        if descriptor.layout.sample != SampleType::U16 {
             return Err(format!(
                 "unsupported sample type {:?}; only U8 and U16 sources are handled",
-                descriptor.channel_type()
+                descriptor.layout.sample
             ));
         }
-        let curve = curve_for(descriptor.transfer)?;
-        let stride = pixels.stride();
+        let curve = curve_for(format_transfer(&descriptor))?;
+        let stride = pixels.stride_bytes();
 
         // u16 -> linear f32, via the source's real transfer curve.
         let mut lin = Vec::with_capacity((src_w as usize) * (src_h as usize) * channels);
         for y in 0..src_h as usize {
             let row = &src_bytes[y * stride..y * stride + (src_w as usize) * bpp];
-            for c in row.chunks_exact(2) {
-                let v = u16::from_ne_bytes([c[0], c[1]]) as f32 / 65535.0;
+            for c in row.as_chunks::<2>().0 {
+                let v = u16::from_ne_bytes(*c) as f32 / 65535.0;
                 lin.push(curve.to_linear(v));
             }
         }
 
         let lin_desc = match channels {
-            3 => zenpixels::PixelDescriptor::RGBF32_LINEAR,
-            4 => zenpixels::PixelDescriptor::RGBAF32_LINEAR,
-            1 => zenpixels::PixelDescriptor::GRAYF32_LINEAR,
+            3 => PixelFormat::RGBF32_LINEAR,
+            4 => PixelFormat::RGBAF32_LINEAR,
+            1 => PixelFormat::GRAYF32_LINEAR,
             n => return Err(format!("unsupported channel count {n}")),
         };
         let config = ResizeConfig::builder(src_w, src_h, out_w, out_h)
@@ -227,8 +254,8 @@ fn render(src: &Path, ratio: u32, filter: Filter) -> Result<Rendered, String> {
         (out16, descriptor)
     };
 
-    let out_stride = (out_w as usize) * out_desc.bytes_per_pixel();
-    let out_slice = PixelSlice::new(&resized, out_w, out_h, out_stride, out_desc)
+    let out_stride = (out_w as usize) * out_desc.layout.bytes_per_pixel();
+    let out_slice = PixelView::new(&resized, out_w, out_h, out_stride, &out_desc)
         .map_err(|e| format!("wrap resized: {e}"))?;
 
     // Verbatim: emit the source's colour exactly as it came in. The default
@@ -276,20 +303,22 @@ fn render(src: &Path, ratio: u32, filter: Filter) -> Result<Rendered, String> {
             diff.max(1),
             resized.len(),
             out_desc,
-            check_px.descriptor()
+            check_px.format()
         ));
     }
     // Pixels survived. Whether the COLOUR survived is a separate fact, and for
     // anything non-sRGB it is load-bearing: PQ pixels in a container that does
     // not say PQ are a mislabelled file even though every byte is intact.
-    let readback = check_px.descriptor();
-    let color_kept =
-        readback.transfer == out_desc.transfer && readback.primaries == out_desc.primaries;
+    let readback = check_px.format();
+    let out_tf = format_transfer(&out_desc);
+    let out_prim = format_primaries(&out_desc);
+    let rb_tf = format_transfer(readback);
+    let rb_prim = format_primaries(readback);
+    let color_kept = rb_tf == out_tf && rb_prim == out_prim;
     // sRGB/BT.709 is conventionally untagged; a PNG with no colour chunk means
     // exactly that, so an Unknown readback there is not a loss.
-    let conventional_srgb = readback.transfer == TransferFunction::Unknown
-        && out_desc.transfer == TransferFunction::Srgb
-        && out_desc.primaries == ColorPrimaries::Bt709;
+    let conventional_srgb =
+        rb_tf == Transfer::Unknown && out_tf == Transfer::Srgb && out_prim == Primaries::Bt709;
     // Some transfers have no cICP code point to be written as — `Gamma22` is
     // the one this corpus hits (2 of 507 sources). PNG could carry it in `gAMA`
     // instead, but zencodecs does not derive that, so the file genuinely cannot
@@ -297,15 +326,14 @@ fn render(src: &Path, ratio: u32, filter: Filter) -> Result<Rendered, String> {
     // carries `color_untagged`, and it is only tolerated when the transfer is
     // inexpressible AND the primaries survived. Anything else -- a lost PQ or
     // Display-P3 tag -- still fails.
-    let inexpressible =
-        out_desc.transfer.to_cicp().is_none() && readback.primaries == out_desc.primaries;
+    let inexpressible = out_tf.to_cicp().is_none() && rb_prim == out_prim;
     let color_untagged = !color_kept;
     if !color_kept && !conventional_srgb && !inexpressible {
         return Err(format!(
             "write-verify: pixels are intact but the colour tag was lost — wrote \
              {:?}/{:?}, reads back {:?}/{:?}. A reference file that does not \
              describe its own colour is mislabelled.",
-            out_desc.transfer, out_desc.primaries, readback.transfer, readback.primaries
+            out_tf, out_prim, rb_tf, rb_prim
         ));
     }
 

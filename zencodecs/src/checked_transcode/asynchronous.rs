@@ -2,7 +2,7 @@
 use super::*;
 use zencodec_io::tokio_io::{AsyncCursor, AsyncSource};
 
-impl TranscodeRequest<'_> {
+impl TranscodeRequest {
     /// Transcode from asynchronous byte demand using the request's built-in
     /// policy. `transcode_async_with` takes the policy as an argument.
     ///

@@ -17,7 +17,7 @@
 
 use zenbench::prelude::*;
 use zenfilters::__bench_kernels as k;
-use zenpixels_convert::gamut::GamutMatrix;
+use zenpixels_convert::oklab::OklabSpace;
 
 #[cfg(target_arch = "aarch64")]
 type TierToken = archmage::NeonToken;
@@ -167,7 +167,9 @@ fn bench_kernels(suite: &mut Suite) {
     });
 
     // The fused colour-space entry/exit points: u8 <-> planar Oklab.
-    let m1 = GamutMatrix::default();
+    let space = OklabSpace::for_primaries(zenpixels::Primaries::Bt709).unwrap();
+    let m1 = *space.rgb_to_lms();
+    let m1_inv = *space.lms_to_rgb();
     two_arms!(
         suite,
         "scatter_srgb_u8_to_oklab",
@@ -187,7 +189,7 @@ fn bench_kernels(suite: &mut Suite) {
         move |b: &mut Bencher, simd| {
             let (l, a, c) = (planef(N, 67), planef(N, 71), planef(N, 73));
             let mut dst = vec![0u8; N * 3];
-            let m = m1;
+            let m = m1_inv;
             b.iter(move || {
                 set_simd(simd);
                 k::gather_oklab_to_srgb_u8(&l, &a, &c, &mut dst, 3, &m)

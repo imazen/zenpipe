@@ -899,12 +899,12 @@ mod core_tests {
                 return Ok(None);
             }
             let rows = 16.min(self.height - self.y);
-            let stride = self.format.aligned_stride(self.width);
+            let stride = crate::format::aligned_stride(&self.format, self.width);
             let data = alloc::vec![128u8; stride * rows as usize];
             self.y += rows;
             let leaked: &'static [u8] = alloc::vec::Vec::leak(data);
             Ok(Some(
-                Strip::new(leaked, self.width, rows, stride, self.format).pipe_err()?,
+                Strip::new(leaked, self.width, rows, stride, &self.format).pipe_err()?,
             ))
         }
 
@@ -917,7 +917,7 @@ mod core_tests {
         }
 
         fn format(&self) -> crate::PixelFormat {
-            self.format
+            self.format.clone()
         }
     }
 
@@ -1072,7 +1072,7 @@ mod core_tests {
         let mut result = build_pipeline(source, &nodes, &[]).unwrap();
         let mut total_rows = 0u32;
         while let Some(strip) = result.source.next().unwrap() {
-            total_rows += strip.rows();
+            total_rows += strip.height();
         }
         assert_eq!(total_rows, 100);
     }

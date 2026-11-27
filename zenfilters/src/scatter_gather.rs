@@ -266,8 +266,8 @@ pub fn gather_srgb_u8_passthrough(planes: &OklabPlanes, dst: &mut [u8], channels
 mod tests {
     use super::*;
     use crate::prelude::*;
-    use zenpixels::ColorPrimaries;
-    use zenpixels_convert::oklab;
+    use zenpixels::Primaries;
+    use zenpixels_convert::oklab::OklabSpace;
 
     /// The dispatched deinterleave matches the plain index loop for widths that
     /// leave SIMD tails, with and without an alpha plane. With three channels
@@ -319,8 +319,9 @@ mod tests {
     #[test]
     fn scatter_gather_roundtrip() {
         let (w, h) = (64, 48);
-        let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
-        let m1_inv = oklab::lms_to_rgb_matrix(ColorPrimaries::Bt709).unwrap();
+        let space = OklabSpace::for_primaries(Primaries::Bt709).unwrap();
+        let m1 = *space.rgb_to_lms();
+        let m1_inv = *space.lms_to_rgb();
 
         let src = make_test_rgb(w, h);
         let mut planes = OklabPlanes::new(w, h);
@@ -343,8 +344,9 @@ mod tests {
     #[test]
     fn scatter_gather_roundtrip_rgba() {
         let (w, h) = (32, 32);
-        let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
-        let m1_inv = oklab::lms_to_rgb_matrix(ColorPrimaries::Bt709).unwrap();
+        let space = OklabSpace::for_primaries(Primaries::Bt709).unwrap();
+        let m1 = *space.rgb_to_lms();
+        let m1_inv = *space.lms_to_rgb();
 
         let n = (w as usize) * (h as usize);
         let mut src = Vec::with_capacity(n * 4);
@@ -384,7 +386,8 @@ mod tests {
 
     #[test]
     fn white_produces_l_near_one() {
-        let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
+        let space = OklabSpace::for_primaries(Primaries::Bt709).unwrap();
+        let m1 = *space.rgb_to_lms();
         let src = vec![1.0f32; 3]; // single white pixel
         let mut planes = OklabPlanes::new(1, 1);
         scatter_to_oklab(&src, &mut planes, 3, &m1, 1.0);
@@ -399,7 +402,8 @@ mod tests {
 
     #[test]
     fn black_produces_l_near_zero() {
-        let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
+        let space = OklabSpace::for_primaries(Primaries::Bt709).unwrap();
+        let m1 = *space.rgb_to_lms();
         let src = vec![0.0f32; 3];
         let mut planes = OklabPlanes::new(1, 1);
         scatter_to_oklab(&src, &mut planes, 3, &m1, 1.0);
@@ -408,8 +412,9 @@ mod tests {
 
     #[test]
     fn hdr_normalization() {
-        let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
-        let m1_inv = oklab::lms_to_rgb_matrix(ColorPrimaries::Bt709).unwrap();
+        let space = OklabSpace::for_primaries(Primaries::Bt709).unwrap();
+        let m1 = *space.rgb_to_lms();
+        let m1_inv = *space.lms_to_rgb();
 
         // Simulate PQ reference white at 203 nits
         let ref_white = 203.0;
@@ -438,8 +443,9 @@ mod tests {
     /// Test that non-8-aligned pixel counts work correctly (SIMD tail handling).
     #[test]
     fn non_aligned_pixel_count() {
-        let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
-        let m1_inv = oklab::lms_to_rgb_matrix(ColorPrimaries::Bt709).unwrap();
+        let space = OklabSpace::for_primaries(Primaries::Bt709).unwrap();
+        let m1 = *space.rgb_to_lms();
+        let m1_inv = *space.lms_to_rgb();
 
         // 13 pixels — not a multiple of 8
         let src = make_test_rgb(13, 1);
@@ -471,8 +477,9 @@ mod tests {
     #[test]
     fn fused_srgb_u8_roundtrip() {
         let (w, h) = (64, 48);
-        let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
-        let m1_inv = oklab::lms_to_rgb_matrix(ColorPrimaries::Bt709).unwrap();
+        let space = OklabSpace::for_primaries(Primaries::Bt709).unwrap();
+        let m1 = *space.rgb_to_lms();
+        let m1_inv = *space.lms_to_rgb();
 
         let src = make_test_srgb_u8(w, h);
         let mut planes = OklabPlanes::new(w, h);
@@ -500,8 +507,9 @@ mod tests {
 
     #[test]
     fn fused_srgb_u8_non_aligned() {
-        let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
-        let m1_inv = oklab::lms_to_rgb_matrix(ColorPrimaries::Bt709).unwrap();
+        let space = OklabSpace::for_primaries(Primaries::Bt709).unwrap();
+        let m1 = *space.rgb_to_lms();
+        let m1_inv = *space.lms_to_rgb();
 
         // 13 pixels — not a multiple of 8
         let src = make_test_srgb_u8(13, 1);
@@ -526,7 +534,8 @@ mod tests {
     fn fused_matches_general_path() {
         // Verify fused path produces same Oklab values as general path
         let (w, h) = (32, 32);
-        let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
+        let space = OklabSpace::for_primaries(Primaries::Bt709).unwrap();
+        let m1 = *space.rgb_to_lms();
 
         let src_u8 = make_test_srgb_u8(w, h);
 

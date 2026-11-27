@@ -21,7 +21,7 @@ use crate::context::FilterContext;
 use crate::filter::Filter;
 use crate::planes::OklabPlanes;
 use crate::prelude::*;
-use zenpixels_convert::oklab;
+use zenpixels_convert::oklab::OklabSpace;
 
 /// 3D color lookup table loaded from Adobe .cube format.
 ///
@@ -699,17 +699,14 @@ impl Filter for TensorLut {
     }
 
     fn apply(&self, planes: &mut OklabPlanes, _ctx: &mut FilterContext) {
-        let m1_inv = oklab::lms_to_rgb_matrix(zenpixels::ColorPrimaries::Bt709)
-            .expect("BT.709 always supported");
-        let m1 = oklab::rgb_to_lms_matrix(zenpixels::ColorPrimaries::Bt709)
+        let space = OklabSpace::for_primaries(zenpixels::Primaries::Bt709)
             .expect("BT.709 always supported");
 
         let n = planes.pixel_count();
         for i in 0..n {
-            let [r, g, b] = oklab::oklab_to_rgb(planes.l[i], planes.a[i], planes.b[i], &m1_inv);
+            let [r, g, b] = space.to_rgb([planes.l[i], planes.a[i], planes.b[i]]);
             let out = self.lookup([r.max(0.0), g.max(0.0), b.max(0.0)]);
-            let [l, oa, ob] =
-                oklab::rgb_to_oklab(out[0].max(0.0), out[1].max(0.0), out[2].max(0.0), &m1);
+            let [l, oa, ob] = space.from_rgb([out[0].max(0.0), out[1].max(0.0), out[2].max(0.0)]);
             planes.l[i] = l;
             planes.a[i] = oa;
             planes.b[i] = ob;
@@ -938,9 +935,7 @@ impl Filter for CubeLut {
             return;
         }
 
-        let m1_inv = oklab::lms_to_rgb_matrix(zenpixels::ColorPrimaries::Bt709)
-            .expect("BT.709 always supported");
-        let m1 = oklab::rgb_to_lms_matrix(zenpixels::ColorPrimaries::Bt709)
+        let space = OklabSpace::for_primaries(zenpixels::Primaries::Bt709)
             .expect("BT.709 always supported");
 
         let n = planes.pixel_count();
@@ -949,7 +944,7 @@ impl Filter for CubeLut {
 
         for i in 0..n {
             // Oklab → linear RGB
-            let [r, g, b] = oklab::oklab_to_rgb(planes.l[i], planes.a[i], planes.b[i], &m1_inv);
+            let [r, g, b] = space.to_rgb([planes.l[i], planes.a[i], planes.b[i]]);
 
             // Apply 3D LUT
             let lut_rgb = self.lookup([r.max(0.0), g.max(0.0), b.max(0.0)]);
@@ -960,7 +955,7 @@ impl Filter for CubeLut {
             let b2 = inv_blend * b + blend * lut_rgb[2];
 
             // Linear RGB → Oklab
-            let [l, oa, ob] = oklab::rgb_to_oklab(r2.max(0.0), g2.max(0.0), b2.max(0.0), &m1);
+            let [l, oa, ob] = space.from_rgb([r2.max(0.0), g2.max(0.0), b2.max(0.0)]);
             planes.l[i] = l;
             planes.a[i] = oa;
             planes.b[i] = ob;

@@ -199,7 +199,7 @@ fn decode_pixels_raw(data: &[u8]) -> crate::PipeResult<DecodedPixels> {
     let pixels = decoded.pixels();
     let w = decoded.width();
     let h = decoded.height();
-    let bpp = pixels.descriptor().bytes_per_pixel();
+    let bpp = pixels.format().layout.bytes_per_pixel();
     let pixel_data = pixels.as_strided_bytes().to_vec();
 
     Ok(DecodedPixels {
@@ -970,13 +970,13 @@ impl<'a> ImageJob<'a> {
             .map_err(|e| at!(PipeError::Codec(Box::new(e))))?;
         // The job embeds this metadata's carriers; the rows are declared with
         // the same interpretation, so planning compares like with like.
-        let color = metadata.map(|m| {
-            let mut context = zenpixels::ColorContext::default();
-            context.icc = m.icc_profile.clone();
-            context.cicp = m.cicp;
-            alloc::sync::Arc::new(context)
+        let origin = metadata.map(|m| match (m.icc_profile.clone(), m.cicp) {
+            (Some(icc), Some(cicp)) => zenpixels::ColorOrigin::from_icc_and_cicp(icc, cicp),
+            (Some(icc), None) => zenpixels::ColorOrigin::from_icc(icc),
+            (None, Some(cicp)) => zenpixels::ColorOrigin::from_cicp(cicp),
+            (None, None) => zenpixels::ColorOrigin::assumed(),
         });
-        let rows = crate::io::PipelineRows::new(source, color)?;
+        let rows = crate::io::PipelineRows::new(source, origin)?;
         let limits = self.limits.as_ref();
         let storage = zencodec::storage::StorageBudget::new(
             limits
@@ -1336,7 +1336,7 @@ impl<'a> ImageJob<'a> {
                 let pixels = decoded.pixels();
                 let w = decoded.width();
                 let h = decoded.height();
-                let format: PixelFormat = pixels.descriptor();
+                let format: PixelFormat = pixels.format().clone();
 
                 let data = pixels.as_strided_bytes().to_vec();
                 let source = crate::sources::MaterializedSource::from_data(data, w, h, format);
@@ -1371,7 +1371,7 @@ impl<'a> ImageJob<'a> {
         let pixels = decoded.pixels();
         let w = decoded.width();
         let h = decoded.height();
-        let format: PixelFormat = pixels.descriptor();
+        let format: PixelFormat = pixels.format().clone();
         let data = pixels.as_strided_bytes().to_vec();
         Ok(Box::new(crate::sources::MaterializedSource::from_data(
             data, w, h, format,
@@ -1408,7 +1408,7 @@ impl<'a> ImageJob<'a> {
         let pixels = decoded.pixels();
         let w = decoded.width();
         let h = decoded.height();
-        let format: PixelFormat = pixels.descriptor();
+        let format: PixelFormat = pixels.format().clone();
         let pixel_data = pixels.as_strided_bytes().to_vec();
         let source = crate::sources::MaterializedSource::from_data(pixel_data, w, h, format);
 
@@ -1431,17 +1431,13 @@ impl<'a> ImageJob<'a> {
             // sample gain maps.
             let gm_format = if gm_channels == 1 {
                 crate::format::PixelFormat::new(
-                    crate::ChannelType::U8,
-                    crate::ChannelLayout::Gray,
-                    None,
-                    crate::TransferFunction::Linear,
+                    zenpixels::SampleLayout::GRAY8,
+                    zenpixels::ColorSpace::GRAY_LINEAR,
                 )
             } else {
                 crate::format::PixelFormat::new(
-                    crate::ChannelType::U8,
-                    crate::ChannelLayout::Rgb,
-                    None,
-                    crate::TransferFunction::Linear,
+                    zenpixels::SampleLayout::RGB8,
+                    zenpixels::ColorSpace::LINEAR_SRGB,
                 )
             };
 
@@ -1561,25 +1557,43 @@ impl<'a> ImageJob<'a> {
         };
 
         // Build and apply the transform.
-        let src_descriptor = source.format();
-        let pf = src_descriptor.pixel_format();
+        let format = source.format();
+        let layout = format.layout;
+        let alpha = format.color.alpha();
+        let color_channels = layout.order.channels() as u8
+            - u8::from(layout.order.has_alpha_slot() || layout.order.has_padding_slot());
+        let src_icc_arc: std::sync::Arc<[u8]> = std::sync::Arc::from(src_icc.as_slice());
+        let dst_icc_arc: std::sync::Arc<[u8]> = std::sync::Arc::from(dst_icc.as_slice());
+        let src_fmt = crate::format::PixelFormat::new(
+            layout,
+            zenpixels::ColorSpace::Icc {
+                profile: src_icc_arc,
+                color_channels,
+                intent: zenpixels::RenderingIntent::Perceptual,
+                alpha,
+            },
+        );
+        let dst_fmt = crate::format::PixelFormat::new(
+            layout,
+            zenpixels::ColorSpace::Icc {
+                profile: std::sync::Arc::clone(&dst_icc_arc),
+                color_channels,
+                intent: zenpixels::RenderingIntent::Perceptual,
+                alpha,
+            },
+        );
 
-        // ColorManagement is deprecated upstream (PluggableCms yields RowTransformMut);
-        // IccTransformSource's public `from_transform` takes `Box<dyn RowTransform>`, so
-        // the old builder stays until zenpipe's CMS surface migrates (see lib.rs).
-        #[allow(deprecated)]
         let transform = {
-            use crate::ColorManagement as _;
-            crate::MoxCms.build_transform_for_format(&src_icc, &dst_icc, pf, pf)
+            use crate::CmsBackend as _;
+            crate::MoxCms.build_transform(&src_fmt, &dst_fmt)
         };
 
         match transform {
             Ok(row_transform) => {
-                let dst_arc: std::sync::Arc<[u8]> = std::sync::Arc::from(dst_icc.as_slice());
                 let transformed = crate::sources::IccTransformSource::from_transform(
                     source,
                     row_transform,
-                    dst_arc,
+                    dst_icc_arc,
                 );
                 Ok(Box::new(transformed))
             }
@@ -1603,24 +1617,26 @@ impl<'a> ImageJob<'a> {
         // HDR keeps its alpha for now. zencodecs tone-maps inside the encoder, and a matte
         // only means something after that. Opaque HDR encodes, translucent HDR refuses.
         let hdr = matches!(
-            format.transfer,
-            crate::TransferFunction::Pq | crate::TransferFunction::Hlg
+            crate::format::format_transfer(&format),
+            crate::Transfer::Pq | crate::Transfer::Hlg(_)
         );
-        let needs_alpha_removal = !target_format.supports_alpha() && format.has_alpha() && !hdr;
+        let format_has_alpha = crate::format::format_has_alpha(&format);
+        let needs_alpha_removal = !target_format.supports_alpha() && format_has_alpha && !hdr;
 
         if needs_alpha_removal {
             let matte = decision.matte.unwrap_or([255, 255, 255]);
-            if format.has_alpha() {
+            if format_has_alpha {
                 // Composite onto the requested matte color, then drop alpha
                 // (MatteFlattenOp: RGBA8 → RGB8). The old path was a bare
                 // RGBA→RGB conversion that ignored the configured matte.
                 if format != crate::format::RGBA8_SRGB {
-                    let conv = crate::ops::RowConverterOp::new(format, crate::format::RGBA8_SRGB)
-                        .ok_or_else(|| {
-                        at!(PipeError::Op(alloc::format!(
-                            "no conversion from {format} to composite on a matte"
-                        )))
-                    })?;
+                    let conv =
+                        crate::ops::RowConverterOp::new(format.clone(), crate::format::RGBA8_SRGB)
+                            .ok_or_else(|| {
+                                at!(PipeError::Op(alloc::format!(
+                                    "no conversion from {format:?} to composite on a matte"
+                                )))
+                            })?;
                     source = Box::new(
                         crate::sources::TransformSource::new(source).push_boxed(Box::new(conv)),
                     );
@@ -1628,7 +1644,7 @@ impl<'a> ImageJob<'a> {
                 let op = crate::ops::MatteFlattenOp::new(matte[0], matte[1], matte[2]);
                 source = Box::new(crate::sources::TransformSource::new(source).push(op));
             } else if let Some(conv) =
-                crate::ops::RowConverterOp::new(format, crate::format::RGB8_SRGB)
+                crate::ops::RowConverterOp::new(format.clone(), crate::format::RGB8_SRGB)
             {
                 source = Box::new(
                     crate::sources::TransformSource::new(source).push_boxed(Box::new(conv)),
@@ -1701,7 +1717,7 @@ impl<'a> ImageJob<'a> {
             // not pixel inspection; a resized sidecar comes out of the
             // layout pipeline expanded to RGBA with stride padding.
             let (width, height) = (sidecar.width(), sidecar.height());
-            let src_ch = sidecar.format().channels();
+            let src_ch = sidecar.format().layout.channels();
             let channels: u8 = if metadata.is_single_channel() { 1 } else { 3 };
             let out_ch = channels as usize;
             let mut data =
@@ -1781,12 +1797,12 @@ impl<'a> ImageJob<'a> {
             None => {
                 // One-shot encode (full-frame materialize).
                 let materialized = crate::sources::MaterializedSource::from_source(source)?;
-                let pixels = at_crate!(zenpixels::PixelSlice::new(
+                let pixels = at_crate!(zenpixels::PixelView::new(
                     materialized.data(),
                     materialized.width(),
                     materialized.height(),
                     materialized.stride(),
-                    src_format,
+                    &src_format,
                 ))
                 .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
 
@@ -1811,7 +1827,7 @@ impl<'a> ImageJob<'a> {
                         });
                 }
 
-                let encode_output = at_crate!(oneshot_request.encode(pixels, format.has_alpha()))
+                let encode_output = at_crate!(oneshot_request.encode(pixels, format_has_alpha))
                     .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
 
                 Ok(EncodeResult {
@@ -1836,14 +1852,24 @@ fn ensure_rgba(source: Box<dyn Source>) -> crate::PipeResult<Box<dyn Source>> {
 
     // Build a target that matches the source primaries and transfer function
     // but has RGBA layout with straight alpha at the same channel precision.
-    let target = crate::format::PixelFormat::new(
-        src_format.channel_type(),
-        crate::ChannelLayout::Rgba,
-        Some(crate::AlphaMode::Straight),
-        src_format.transfer,
-    )
-    .with_primaries(src_format.primaries)
-    .with_signal_range(src_format.signal_range);
+    let target_layout =
+        zenpixels::SampleLayout::new(src_format.layout.sample, zenpixels::ChannelOrder::Rgba);
+    let target_color = match &src_format.color {
+        zenpixels::ColorSpace::Gray {
+            transfer,
+            range,
+            white,
+            ..
+        } => zenpixels::ColorSpace::Rgb {
+            primaries: zenpixels::Primaries::Bt709,
+            transfer: *transfer,
+            alpha: zenpixels::AlphaMode::Straight,
+            range: *range,
+            white: *white,
+        },
+        other => other.clone().with_alpha(zenpixels::AlphaMode::Straight),
+    };
+    let target = crate::format::PixelFormat::new(target_layout, target_color);
 
     if src_format == target {
         return Ok(source);
@@ -1871,13 +1897,14 @@ mod tests {
 
     #[test]
     fn layout_normalization_keeps_narrow_u16_samples_and_interpretation() {
-        let descriptor = zenpixels::PixelDescriptor::RGBA16_SRGB
-            .with_signal_range(zenpixels::SignalRange::Narrow);
+        let descriptor =
+            zenpixels::PixelFormat::RGBA16_SRGB.with_range(zenpixels::SignalRange::Narrow);
         let data: Vec<u8> = [4096u16, 60160, 32768, 65535]
             .into_iter()
             .flat_map(u16::to_ne_bytes)
             .collect();
-        let source = crate::sources::MaterializedSource::from_data(data.clone(), 1, 1, descriptor);
+        let source =
+            crate::sources::MaterializedSource::from_data(data.clone(), 1, 1, descriptor.clone());
         let normalized = ensure_rgba(Box::new(source)).unwrap();
         assert_eq!(normalized.format(), descriptor);
         let output = crate::sources::MaterializedSource::from_source(normalized).unwrap();
@@ -2492,14 +2519,9 @@ mod animation_control_tests {
             let bytes: Vec<u8> = (0..W * H)
                 .flat_map(|n| [(n * 7 + frame * 40) as u8, (frame * 60) as u8, 200, 255])
                 .collect();
-            let pixels = zenpixels::PixelSlice::new(
-                &bytes,
-                W,
-                H,
-                stride,
-                zenpixels::PixelDescriptor::RGBA8_SRGB,
-            )
-            .unwrap();
+            let pixels =
+                zenpixels::PixelView::new(&bytes, W, H, stride, &zenpixels::formats::RGBA8_SRGB)
+                    .unwrap();
             encoder.push_frame(pixels, 100, None).unwrap();
         }
         encoder.finish(None).unwrap().into_vec()

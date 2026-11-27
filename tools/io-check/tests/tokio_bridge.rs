@@ -17,7 +17,7 @@ use tokio::io::AsyncWrite;
 use tokio::runtime::Handle;
 use zencodec::decode::BoxedError;
 use zencodec::encode::{EncodeJob, EncoderConfig};
-use zencodec::operation::{DecodeRequest, OutputSchedule, PolicySet};
+use zencodec::operation::{DecodeOptions as CodecDecodeOptions, OutputSchedule, PolicySet};
 use zencodec::source::ReadAt;
 use zencodec::storage::StorageBudget;
 use zencodec::{CodecSet, NoPulse};
@@ -26,7 +26,7 @@ use zencodec_io::tokio_io::{AsyncSource, BytesSource};
 use zenpipe::io::tokio_bridge::{BlockingReadAt, DriveError, drive_to_async_writer};
 use zenpipe::io::{DecodeOptions, DecodeSource, PipelineRows};
 use zenpipe::{PipeResult, Source, Strip};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::PixelView;
 
 const W: u32 = 97;
 const H: u32 = 65;
@@ -40,8 +40,14 @@ fn png_fixture() -> Vec<u8> {
             samples.extend_from_slice(&[(x * 2) as u8, (y * 3) as u8, ((x * 7) ^ (y * 5)) as u8]);
         }
     }
-    let pixels =
-        PixelSlice::new(&samples, W, H, (W * 3) as usize, PixelDescriptor::RGB8_SRGB).unwrap();
+    let pixels = PixelView::new(
+        &samples,
+        W,
+        H,
+        (W * 3) as usize,
+        &zenpixels::formats::RGB8_SRGB,
+    )
+    .unwrap();
     zenpng::PngEncoderConfig::new()
         .job()
         .encode(pixels)
@@ -75,7 +81,7 @@ impl<S: Source> Source for Counted<S> {
         let strip = self.inner.next()?;
         if let Some(strip) = &strip {
             self.rows
-                .fetch_add(u64::from(strip.rows()), Ordering::SeqCst);
+                .fetch_add(u64::from(strip.height()), Ordering::SeqCst);
         }
         Ok(strip)
     }
@@ -88,8 +94,8 @@ impl<S: Source> Source for Counted<S> {
     fn format(&self) -> zenpipe::PixelFormat {
         self.inner.format()
     }
-    fn color_context(&self) -> Option<std::sync::Arc<zenpixels::ColorContext>> {
-        self.inner.color_context()
+    fn color_origin(&self) -> Option<zenpixels::ColorOrigin> {
+        self.inner.color_origin()
     }
 }
 
@@ -106,7 +112,7 @@ fn pipeline<S: AsyncSource + 'static>(
     let reader = BlockingReadAt::new(source, handle);
     let decode = DecodeSource::new(
         &codecs,
-        &DecodeRequest::new(),
+        &CodecDecodeOptions::new(),
         reader,
         PolicySet::new(),
         decode_options(),

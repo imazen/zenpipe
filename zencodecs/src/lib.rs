@@ -35,12 +35,12 @@
 //!
 //! ```no_run
 //! use zencodecs::{EncodeRequest, ImageFormat};
-//! use zenpixels::{PixelBuffer, PixelDescriptor};
+//! use zenpixels::{PixelBuf, PixelFormat};
 //!
-//! let buf = PixelBuffer::from_vec(vec![0u8; 100 * 100 * 4], 100, 100, PixelDescriptor::RGBA8_SRGB).unwrap();
+//! let buf = PixelBuf::from_bytes(vec![0u8; 100 * 100 * 4], 100, 100, PixelFormat::RGBA8_SRGB).unwrap();
 //! let webp = EncodeRequest::new(ImageFormat::WebP)
 //!     .with_quality(85.0)
-//!     .encode(buf.as_slice(), false)?;
+//!     .encode(buf.as_view(), false)?;
 //! println!("Encoded {} bytes", webp.data().len());
 //! # Ok::<(), whereat::At<zencodecs::CodecError>>(())
 //! ```
@@ -256,9 +256,8 @@ pub use zencodec::encode::{
 };
 pub use zencodec::{AnimationFrame, OwnedAnimationFrame};
 
-// Pixel conversion extension traits
-pub use zenpixels_convert::PixelBufferConvertExt;
-pub use zenpixels_convert::PixelBufferConvertTypedExt;
+// Pixel conversion helpers (zenpixels-convert 0.5 free functions)
+pub use zenpixels_convert::{to_bgra8, to_gray8_if_opaque, to_rgb8_if_opaque, to_rgba8};
 
 #[cfg(feature = "png")]
 pub use zenpng::{PngDecodeJob, PngDecoderConfig, PngEncodeJob, PngEncoderConfig};

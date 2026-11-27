@@ -238,12 +238,30 @@ impl Services for PublishingServices {
         }
         // The application owns conversion policy; no CMS dependency enters zencodecs.
         // This bounded profile copy is explicit and never touches image pixels.
-        let target = zenpixels_convert::OutputProfile::Icc(icc.into()).normalize_known_icc();
-        pulse.check().map_err(stopped)?;
-        let zenpixels_convert::OutputProfile::Icc(normalized) = target else {
-            unreachable!("normalization preserves ICC target kind")
+        use zenpixels::icc::{IccFingerprint, normalized_eq, normalized_hash};
+        use zenpixels_convert::icc_profiles::{
+            ADOBE_RGB, DISPLAY_P3_V2, DISPLAY_P3_V4, bundled_icc_profile,
         };
-        Ok((normalized.as_ref() != icc).then(|| normalized.to_vec()))
+        const REC2020_V4: &[u8] =
+            match bundled_icc_profile(zenpixels::Primaries::Bt2020, zenpixels::Transfer::Bt709) {
+                Some(b) => b,
+                None => unreachable!(),
+            };
+        const KNOWN: &[(IccFingerprint, &[u8])] = &[
+            (normalized_hash(DISPLAY_P3_V4), DISPLAY_P3_V4),
+            (normalized_hash(DISPLAY_P3_V2), DISPLAY_P3_V2),
+            (normalized_hash(ADOBE_RGB), ADOBE_RGB),
+            (normalized_hash(REC2020_V4), REC2020_V4),
+        ];
+        let hash = normalized_hash(icc);
+        let normalized = KNOWN
+            .iter()
+            .find(|(key, bytes)| *key == hash && normalized_eq(icc, bytes))
+            .map(|(_, bytes)| *bytes);
+        pulse.check().map_err(stopped)?;
+        Ok(normalized
+            .filter(|canonical| *canonical != icc)
+            .map(|canonical| canonical.to_vec()))
     }
     fn decompress(
         &self,

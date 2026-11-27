@@ -5,7 +5,18 @@
 //!
 //! Run: `cargo run --example icc_roundtrip --features all,std`
 
-use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, PixelBufferConvertTypedExt as _};
+use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat};
+
+fn to_rgb8_img(decoded: &zencodecs::DecodeOutput) -> imgref::ImgVec<rgb::Rgb<u8>> {
+    let rgb_buf = zenpixels_convert::convert_to_buf(
+        &decoded.pixels(),
+        zenpixels::PixelFormat::RGB8_SRGB,
+        &zenpixels_convert::ConvertPolicy::permissive(),
+    )
+    .unwrap();
+    let (w, h) = (rgb_buf.width() as usize, rgb_buf.height() as usize);
+    imgref::ImgVec::new(rgb_buf.into_vec().unwrap(), w, h)
+}
 
 fn main() {
     let jpeg_data = include_bytes!("../tests/images/ultrahdr_sample.jpg");
@@ -30,8 +41,8 @@ fn main() {
     );
 
     let meta = decoded.metadata();
-    let rgb8 = decoded.into_buffer().to_rgb8();
-    let img = rgb8.as_imgref();
+    let rgb8 = to_rgb8_img(&decoded);
+    let img = rgb8.as_ref();
 
     // Chain: JPEG → WebP → PNG → JPEG
     let chain = [
@@ -79,8 +90,8 @@ fn main() {
             .expect("decode failed");
 
         let step_meta = step.metadata();
-        let step_rgb8 = step.into_buffer().to_rgb8();
-        let step_img = step_rgb8.as_imgref();
+        let step_rgb8 = to_rgb8_img(&step);
+        let step_img = step_rgb8.as_ref();
 
         let encoded = EncodeRequest::new(format)
             .with_quality(95.0)

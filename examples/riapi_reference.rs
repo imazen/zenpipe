@@ -161,12 +161,11 @@ fn emit_node_sections(
         writeln!(out, "### `{}` — {}\n", node_id, label)?;
 
         // Pull description from the JSON schema if available.
-        if let Some(defs) = defs {
-            if let Some(schema) = defs.get(node_id) {
-                if let Some(desc) = schema.get("description").and_then(|d| d.as_str()) {
-                    writeln!(out, "{}\n", desc)?;
-                }
-            }
+        if let Some(defs) = defs
+            && let Some(schema) = defs.get(node_id)
+            && let Some(desc) = schema.get("description").and_then(|d| d.as_str())
+        {
+            writeln!(out, "{}\n", desc)?;
         }
 
         let keys = match node.get("keys").and_then(|k| k.as_array()) {
@@ -237,10 +236,10 @@ fn emit_node_sections(
         writeln!(out)?;
 
         // Emit enum value lists if present in the schema.
-        if let Some(defs) = defs {
-            if let Some(schema) = defs.get(node_id) {
-                emit_enum_values(out, schema)?;
-            }
+        if let Some(defs) = defs
+            && let Some(schema) = defs.get(node_id)
+        {
+            emit_enum_values(out, schema)?;
         }
 
         writeln!(out, "---\n")?;

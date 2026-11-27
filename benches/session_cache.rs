@@ -19,7 +19,7 @@ use zenbench::black_box;
 use zencodec::decode::{DecodeJob, DecoderConfig};
 use zenjpeg::JpegDecoderConfig;
 use zenjpeg::encoder::{ChromaSubsampling, EncoderConfig, PixelLayout};
-use zenpixels::PixelDescriptor;
+use zenpixels::PixelFormat;
 
 use zenpipe::Source;
 use zenpipe::codec::DecoderSource;
@@ -83,7 +83,7 @@ fn decode_jpeg() -> Box<dyn Source> {
     let decoder = job
         .dyn_streaming_decoder(
             Cow::Borrowed(JPEG_4K.as_slice()),
-            &[PixelDescriptor::RGBA8_SRGB],
+            &[PixelFormat::RGBA8_SRGB],
         )
         .expect("streaming decoder");
     Box::new(DecoderSource::new(decoder).expect("DecoderSource"))
@@ -137,7 +137,7 @@ fn materialize_and_encode_bmp(source: Box<dyn Source>) -> Vec<u8> {
     let h = mat.height();
     let fmt = mat.format();
     let data = mat.data();
-    let bpp = fmt.bytes_per_pixel();
+    let bpp = fmt.layout.bytes_per_pixel();
     let row_bytes = w as usize * bpp;
     // Strip alignment padding: BMP expects packed rows.
     let packed: Vec<u8> = (0..h)
@@ -160,7 +160,7 @@ fn materialize_and_encode_bmp(source: Box<dyn Source>) -> Vec<u8> {
 fn drain(mut source: Box<dyn Source>) -> u32 {
     let mut total = 0u32;
     while let Some(strip) = source.next().expect("next") {
-        total += strip.rows();
+        total += strip.height();
     }
     total
 }

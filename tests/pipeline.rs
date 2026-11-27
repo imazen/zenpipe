@@ -57,7 +57,7 @@ fn callback_source_strips_cover_image() {
     let mut strip_count = 0u32;
     while let Ok(Some(strip)) = src.next() {
         assert_eq!(strip.width(), 4);
-        total_rows += strip.rows();
+        total_rows += strip.height();
         strip_count += 1;
     }
     assert_eq!(total_rows, 50);
@@ -371,7 +371,7 @@ fn small_strip_height() {
 
     let mut strip_count = 0;
     while let Ok(Some(strip)) = src.next() {
-        assert_eq!(strip.rows(), 1);
+        assert_eq!(strip.height(), 1);
         strip_count += 1;
     }
     assert_eq!(strip_count, 4);
@@ -558,10 +558,10 @@ fn crop_keeps_every_row_across_unaligned_upstream_strips() {
             let mut crop = CropSource::new(Box::new(upstream), x, y, w, h).unwrap();
             let (mut got, mut rows) = (Vec::new(), 0);
             while let Some(strip) = crop.next().unwrap() {
-                for r in 0..strip.rows() {
+                for r in 0..strip.height() {
                     got.extend_from_slice(strip.row(r));
                 }
-                rows += strip.rows();
+                rows += strip.height();
             }
             let mut expected = Vec::new();
             for row in y..y + h {

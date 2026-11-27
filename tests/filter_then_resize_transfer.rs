@@ -4,11 +4,11 @@ use zencodec::ImageFormat;
 use zencodecs::{BoolKeep, CodecIntent, DecodeRequest, EncodeRequest, FormatChoice};
 use zenpipe::bridge::{NodeConverter, ZenFiltersConverter};
 use zenpipe::job::{CmsMode, ImageJob};
-use zenpixels::{PixelBuffer, PixelDescriptor as D};
+use zenpixels::{PixelBuf, PixelFormat as D};
 
 fn solid_png() -> Vec<u8> {
-    let mut b = PixelBuffer::try_new(16, 16, D::RGBA8_SRGB).unwrap();
-    let mut m = b.as_slice_mut();
+    let mut b = PixelBuf::new(16, 16, D::RGBA8_SRGB).unwrap();
+    let mut m = b.as_view_mut();
     for y in 0..16 {
         for c in m.row_mut(y).as_chunks_mut::<4>().0 {
             *c = [200, 100, 50, 255];
@@ -16,7 +16,7 @@ fn solid_png() -> Vec<u8> {
     }
     EncodeRequest::new(ImageFormat::Png)
         .with_lossless(true)
-        .encode(b.as_slice(), true)
+        .encode(b.as_view(), true)
         .unwrap()
         .into_vec()
 }
@@ -42,9 +42,9 @@ fn run(input: &[u8], query: &str) -> ([u8; 3], [u8; 3]) {
         .decode_full_frame()
         .unwrap();
     let pixels = decoded.pixels();
-    let bytes = pixels.descriptor().bytes_per_pixel();
+    let bytes = pixels.format().layout.bytes_per_pixel();
     let (mut low, mut high) = ([255u8; 3], [0u8; 3]);
-    for y in 0..pixels.rows() {
+    for y in 0..pixels.height() {
         for px in pixels.row(y).chunks_exact(bytes) {
             for c in 0..3 {
                 low[c] = low[c].min(px[c]);

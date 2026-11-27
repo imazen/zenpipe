@@ -9,7 +9,7 @@ use hashbrown::HashMap;
 use zencodec::decode::{AnimationFrameDecoder as _, DecodeJob as _, DecoderConfig as _};
 use zencodec::encode::{AnimationFrameEncoder as _, EncodeJob as _, EncoderConfig as _};
 use zengif::{GifDecoderConfig, GifEncoderConfig};
-use zenpixels::PixelDescriptor;
+use zenpixels::PixelFormat;
 
 use zenpipe::Source;
 use zenpipe::animation::{FrameSink, FrameSource};
@@ -35,12 +35,12 @@ fn build_test_gif(frame_count: usize, width: u16, height: u16) -> Vec<u8> {
         for px in pixels.as_chunks_mut::<4>().0.iter_mut() {
             px.copy_from_slice(&[gray, gray, gray, 255]);
         }
-        let slice = zenpixels::PixelSlice::new(
+        let slice = zenpixels::PixelView::new(
             &pixels,
             width as u32,
             height as u32,
             stride,
-            PixelDescriptor::RGBA8_SRGB,
+            &zenpixels::formats::RGBA8_SRGB,
         )
         .unwrap();
         encoder.push_frame(slice, 100, None).unwrap();
@@ -62,7 +62,7 @@ fn drain(source: &mut dyn Source) -> Vec<u8> {
 fn make_gif_decoder(data: Vec<u8>) -> Box<dyn zencodec::decode::DynAnimationFrameDecoder> {
     let dec = GifDecoderConfig::new();
     dec.job()
-        .dyn_animation_frame_decoder(Cow::Owned(data), &[PixelDescriptor::RGBA8_SRGB])
+        .dyn_animation_frame_decoder(Cow::Owned(data), &[PixelFormat::RGBA8_SRGB])
         .unwrap()
 }
 
@@ -122,7 +122,7 @@ fn frame_source_strips_cover_frame() {
     let mut strip_count = 0u32;
     while let Ok(Some(strip)) = source.next() {
         assert_eq!(strip.width(), 4);
-        total_rows += strip.rows();
+        total_rows += strip.height();
         strip_count += 1;
     }
     assert_eq!(total_rows, 50);
@@ -165,7 +165,7 @@ fn frame_sink_encode_2_frames() {
     let dec = GifDecoderConfig::new();
     let mut verify = dec
         .job()
-        .animation_frame_decoder(Cow::Owned(encoded), &[PixelDescriptor::RGBA8_SRGB])
+        .animation_frame_decoder(Cow::Owned(encoded), &[PixelFormat::RGBA8_SRGB])
         .unwrap();
 
     // Frame 0: should be reddish
@@ -222,7 +222,7 @@ fn transcode_gif_passthrough() {
     let dec = GifDecoderConfig::new();
     let mut verify = dec
         .job()
-        .animation_frame_decoder(Cow::Owned(encoded), &[PixelDescriptor::RGBA8_SRGB])
+        .animation_frame_decoder(Cow::Owned(encoded), &[PixelFormat::RGBA8_SRGB])
         .unwrap();
 
     let frame_count = 3usize;
@@ -284,7 +284,7 @@ fn transcode_gif_with_crop() {
     let dec = GifDecoderConfig::new();
     let mut verify = dec
         .job()
-        .animation_frame_decoder(Cow::Owned(encoded), &[PixelDescriptor::RGBA8_SRGB])
+        .animation_frame_decoder(Cow::Owned(encoded), &[PixelFormat::RGBA8_SRGB])
         .unwrap();
 
     assert_eq!(verify.info().width, 4);
@@ -394,7 +394,7 @@ mod imagejob_animation {
             .job()
             .animation_frame_decoder(
                 std::borrow::Cow::Owned(gif.to_vec()),
-                &[PixelDescriptor::RGBA8_SRGB],
+                &[PixelFormat::RGBA8_SRGB],
             )
             .unwrap();
         let mut n = 0;
@@ -459,7 +459,8 @@ fn frame_sink_refuses_a_strip_in_another_format() {
     let mut sink = FrameSink::new(make_gif_encoder(4, 2), 4, 2, format::RGBA8_SRGB);
     sink.begin_frame();
     let rgb = vec![7u8; 4 * 2 * 3];
-    let strip = zenpixels::PixelSlice::new(&rgb, 4, 2, 4 * 3, PixelDescriptor::RGB8_SRGB).unwrap();
+    let strip =
+        zenpixels::PixelView::new(&rgb, 4, 2, 4 * 3, &zenpixels::formats::RGB8_SRGB).unwrap();
     let err = sink
         .consume(&strip)
         .expect_err("an RGB8 strip in an RGBA8 frame sink must be refused");
@@ -503,26 +504,27 @@ fn open_frame_sink() -> FrameSink {
 fn first_gif_frame(gif: &[u8]) -> Vec<u8> {
     let mut decoder = GifDecoderConfig::new()
         .job()
-        .animation_frame_decoder(Cow::Owned(gif.to_vec()), &[PixelDescriptor::RGBA8_SRGB])
+        .animation_frame_decoder(Cow::Owned(gif.to_vec()), &[PixelFormat::RGBA8_SRGB])
         .unwrap();
     decoder
         .render_next_frame_owned(None)
         .unwrap()
         .expect("one frame")
         .into_buffer()
-        .copy_to_contiguous_bytes()
+        .into_vec::<u8>()
+        .unwrap()
 }
 
 /// Give the sink the valid frame and return what its encoder wrote.
 fn finish_with_valid_frame(mut sink: FrameSink) -> Vec<u8> {
     use zenpipe::Sink as _;
     let rgba = sink_rgba();
-    let strip = zenpixels::PixelSlice::new(
+    let strip = zenpixels::PixelView::new(
         &rgba,
         SINK_W,
         SINK_H,
         SINK_W as usize * 4,
-        PixelDescriptor::RGBA8_SRGB,
+        &zenpixels::formats::RGBA8_SRGB,
     )
     .unwrap();
     sink.consume(&strip).unwrap();
@@ -536,12 +538,12 @@ fn frame_sink_reads_strided_rgba_rows_exactly() {
     use zenpipe::Sink as _;
     let rgba = sink_rgba();
     let rows = padded(&rgba, SINK_W as usize * 4, 12);
-    let strip = zenpixels::PixelSlice::new(
+    let strip = zenpixels::PixelView::new(
         &rows,
         SINK_W,
         SINK_H,
         SINK_W as usize * 4 + 12,
-        PixelDescriptor::RGBA8_SRGB,
+        &zenpixels::formats::RGBA8_SRGB,
     )
     .unwrap();
     let mut sink = open_frame_sink();
@@ -561,12 +563,12 @@ fn frame_sink_refuses_strided_rgb_before_writing() {
         .flat_map(|p| [p[0], p[1], p[2]])
         .collect();
     let rows = padded(&rgb, SINK_W as usize * 3, 6);
-    let strip = zenpixels::PixelSlice::new(
+    let strip = zenpixels::PixelView::new(
         &rows,
         SINK_W,
         SINK_H,
         SINK_W as usize * 3 + 6,
-        PixelDescriptor::RGB8_SRGB,
+        &zenpixels::formats::RGB8_SRGB,
     )
     .unwrap();
     let mut sink = open_frame_sink();
@@ -587,12 +589,12 @@ fn frame_sink_refuses_other_widths_before_writing() {
     let mut sink = open_frame_sink();
     for width in [SINK_W - 1, SINK_W + 1] {
         let pixels = vec![9u8; width as usize * 4 * SINK_H as usize];
-        let strip = zenpixels::PixelSlice::new(
+        let strip = zenpixels::PixelView::new(
             &pixels,
             width,
             SINK_H,
             width as usize * 4,
-            PixelDescriptor::RGBA8_SRGB,
+            &zenpixels::formats::RGBA8_SRGB,
         )
         .unwrap();
         let err = sink
@@ -614,7 +616,6 @@ fn frame_sink_refuses_other_widths_before_writing() {
 
 #[cfg(all(feature = "job", feature = "nodes-webp", feature = "nodes-gif"))]
 mod animated_webp_frames {
-    use super::*;
     use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat};
     use zenpipe::job::ImageJob;
 
@@ -673,7 +674,7 @@ mod animated_webp_frames {
         for (index, ms) in durations.iter().enumerate() {
             let bytes = frame(index as u32);
             let pixels =
-                zenpixels::PixelSlice::new(&bytes, W, H, stride, PixelDescriptor::RGBA8_SRGB)
+                zenpixels::PixelView::new(&bytes, W, H, stride, &zenpixels::formats::RGBA8_SRGB)
                     .unwrap();
             encoder.push_frame(pixels, *ms, None).unwrap();
         }
@@ -696,9 +697,9 @@ mod animated_webp_frames {
 
     /// A decoded frame's pixels as RGBA8: an opaque frame rendered as RGB8 gains
     /// opaque alpha here, in the test, so frames compare in one layout.
-    fn rgba8(buffer: zenpixels::PixelBuffer) -> Vec<u8> {
-        let bpp = buffer.descriptor().bytes_per_pixel();
-        let bytes = buffer.copy_to_contiguous_bytes();
+    fn rgba8(buffer: zenpixels::PixelBuf) -> Vec<u8> {
+        let bpp = buffer.format().layout.bytes_per_pixel();
+        let bytes = buffer.into_vec::<u8>().unwrap();
         match bpp {
             4 => bytes,
             3 => bytes
@@ -789,7 +790,7 @@ mod animated_webp_frames {
             .unwrap()
             .expect("a first frame");
         assert_eq!(
-            first.pixels().descriptor().bytes_per_pixel(),
+            first.pixels().format().layout.bytes_per_pixel(),
             3,
             "this control needs a decoder that renders RGB8 frames"
         );
@@ -873,6 +874,13 @@ mod pulse_forwarding {
         fn loop_count(&self) -> Option<u32> {
             self.0.loop_count()
         }
+        fn render_next_frame(
+            &mut self,
+            pulse: Option<&dyn Pulse>,
+        ) -> Result<Option<zencodec::AnimationFrame<'_>>, BoxedError> {
+            self.1.lock().unwrap().push(("decode_ref", identity(pulse)));
+            self.0.render_next_frame(pulse)
+        }
         fn render_next_frame_owned(
             &mut self,
             pulse: Option<&dyn Pulse>,
@@ -905,7 +913,7 @@ mod pulse_forwarding {
         }
         fn push_frame(
             &mut self,
-            pixels: zenpixels::PixelSlice<'_>,
+            pixels: zenpixels::PixelView<'_>,
             duration_ms: u32,
             pulse: Option<&dyn Pulse>,
         ) -> Result<(), BoxedError> {

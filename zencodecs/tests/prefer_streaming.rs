@@ -3,7 +3,7 @@
 
 use zencodecs::{EncodeRequest, ImageFormat, config::CodecConfig};
 use zenjpeg::encoder::{ChromaSubsampling, EncoderConfig};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::PixelView;
 
 #[test]
 fn jpeg_preference_reaches_both_paths_and_native_settings_win() {
@@ -11,7 +11,8 @@ fn jpeg_preference_reaches_both_paths_and_native_settings_win() {
     let data: Vec<u8> = (0..w * h * 3)
         .map(|i| ((i * 73) ^ (i >> 5)) as u8)
         .collect();
-    let pixels = PixelSlice::new(&data, w, h, w as usize * 3, PixelDescriptor::RGB8_SRGB).unwrap();
+    let pixels =
+        PixelView::new(&data, w, h, w as usize * 3, &zenpixels::formats::RGB8_SRGB).unwrap();
     let empty = CodecConfig::default();
     let decoder_only = CodecConfig::default().with_jpeg_decoder(Default::default());
     #[cfg(feature = "gif")]
@@ -44,7 +45,7 @@ fn jpeg_preference_reaches_both_paths_and_native_settings_win() {
             };
             let whole = make().encode(pixels.clone(), false).unwrap();
             let mut encoder = make().build_streaming_encoder(w, h).unwrap().encoder;
-            let timing = encoder.begin(w, h, pixels.descriptor()).unwrap();
+            let timing = encoder.begin(w, h, pixels.format().clone()).unwrap();
             assert_eq!(timing.streams(), prefer && !has_override);
             let mut out = Vec::new();
             encoder.take_output(&mut out);
@@ -53,14 +54,8 @@ fn jpeg_preference_reaches_both_paths_and_native_settings_win() {
                 let start = y as usize * w as usize * 3;
                 encoder
                     .push_rows(
-                        PixelSlice::new(
-                            &data[start..],
-                            w,
-                            rows,
-                            w as usize * 3,
-                            pixels.descriptor(),
-                        )
-                        .unwrap(),
+                        PixelView::new(&data[start..], w, rows, w as usize * 3, pixels.format())
+                            .unwrap(),
                     )
                     .unwrap();
                 encoder.take_output(&mut out);

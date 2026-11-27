@@ -13,9 +13,10 @@ use rgb::Rgb;
 use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat};
 use zenfilters::filters::*;
 use zenfilters::{FilterContext, OklabPlanes, gather_oklab_to_srgb_u8, scatter_srgb_u8_to_oklab};
-use zenpixels::ColorPrimaries;
+use zenpixels::Primaries;
 use zenpixels_convert::gamut::GamutMatrix;
 use zenpixels_convert::oklab;
+use zenpixels_convert::{ConvertPolicy, convert_to_buf};
 use zensim::{RgbSlice, Zensim, ZensimProfile};
 
 const ORIGINAL_DIR: &str = "/mnt/v/input/fivek/original";
@@ -38,12 +39,20 @@ fn load_u32s(path: &Path) -> Vec<u32> {
 }
 
 fn load_resized(path: &Path, max_dim: u32) -> Option<(Vec<u8>, u32, u32)> {
-    use zenresize::{Filter, PixelDescriptor, ResizeConfig, Resizer};
+    use zenresize::{Filter, PixelFormat, ResizeConfig, Resizer};
     let bytes = fs::read(path).ok()?;
     let decoded = DecodeRequest::new(&bytes).decode().ok()?;
     let (iw, ih) = (decoded.width(), decoded.height());
-    use zenpixels_convert::PixelBufferConvertTypedExt;
-    let rgb8 = decoded.into_buffer().to_rgb8().copy_to_contiguous_bytes();
+    let rgb8 = convert_to_buf(
+        &decoded.into_buffer().as_view(),
+        zenpixels::PixelFormat::RGB8_SRGB,
+        &ConvertPolicy::permissive(),
+    )
+    .ok()?
+    .as_view()
+    .to_contiguous_bytes()
+    .ok()?
+    .into_owned();
 
     if iw <= max_dim && ih <= max_dim {
         return Some((rgb8, iw, ih));
@@ -53,7 +62,7 @@ fn load_resized(path: &Path, max_dim: u32) -> Option<(Vec<u8>, u32, u32)> {
     let nh = ((ih as f64 * scale) as u32).max(1);
     let config = ResizeConfig::builder(iw, ih, nw, nh)
         .filter(Filter::Lanczos)
-        .format(PixelDescriptor::RGB8_SRGB)
+        .format(PixelFormat::RGB8_SRGB)
         .build();
     let mut resizer = Resizer::new(&config);
     Some((resizer.resize(&rgb8), nw, nh))
@@ -186,8 +195,9 @@ fn main() {
         sample_indices.push(best_idx);
     }
 
-    let m1 = oklab::rgb_to_lms_matrix(ColorPrimaries::Bt709).unwrap();
-    let m1_inv = oklab::lms_to_rgb_matrix(ColorPrimaries::Bt709).unwrap();
+    let space = oklab::OklabSpace::for_primaries(Primaries::Bt709).unwrap();
+    let m1 = space.rgb_to_lms();
+    let m1_inv = space.lms_to_rgb();
     let zs = Zensim::new(ZensimProfile::latest());
     let mut ctx = FilterContext::new();
 

@@ -184,15 +184,19 @@ fn apply_zenfilter(img: &RgbImage, filter: Box<dyn Filter>) -> RgbImage {
     let (w, h) = img.dimensions();
     let input_bytes: Vec<u8> = img.as_raw().clone();
 
-    let desc = zenpixels::PixelDescriptor::RGB8_SRGB;
-    let input_buf = zenpixels::buffer::PixelBuffer::from_vec(input_bytes, w, h, desc).unwrap();
+    let desc = zenpixels::PixelFormat::RGB8_SRGB;
+    let input_buf = zenpixels::buffer::PixelBuf::from_bytes(input_bytes, w, h, desc).unwrap();
 
     let mut pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
     pipeline.push(filter);
 
     let mut ctx = FilterContext::new();
     let output_buf = apply_to_buffer(&pipeline, &input_buf, true, &mut ctx).unwrap();
-    let output_bytes = output_buf.copy_to_contiguous_bytes();
+    let output_bytes = output_buf
+        .as_view()
+        .to_contiguous_bytes()
+        .unwrap()
+        .into_owned();
 
     ImageBuffer::from_raw(w, h, output_bytes).unwrap()
 }
@@ -205,15 +209,19 @@ fn apply_zenfilter_with_config(
     let (w, h) = img.dimensions();
     let input_bytes: Vec<u8> = img.as_raw().clone();
 
-    let desc = zenpixels::PixelDescriptor::RGB8_SRGB;
-    let input_buf = zenpixels::buffer::PixelBuffer::from_vec(input_bytes, w, h, desc).unwrap();
+    let desc = zenpixels::PixelFormat::RGB8_SRGB;
+    let input_buf = zenpixels::buffer::PixelBuf::from_bytes(input_bytes, w, h, desc).unwrap();
 
     let mut pipeline = Pipeline::new(config).unwrap();
     pipeline.push(filter);
 
     let mut ctx = FilterContext::new();
     let output_buf = apply_to_buffer(&pipeline, &input_buf, true, &mut ctx).unwrap();
-    let output_bytes = output_buf.copy_to_contiguous_bytes();
+    let output_bytes = output_buf
+        .as_view()
+        .to_contiguous_bytes()
+        .unwrap()
+        .into_owned();
 
     ImageBuffer::from_raw(w, h, output_bytes).unwrap()
 }
@@ -1181,8 +1189,8 @@ fn fused_adjust_matches_standalone_on_real_images() {
         // Standalone chain (same order as FusedAdjust)
         let (w, h) = img.dimensions();
         let input_bytes: Vec<u8> = img.as_raw().clone();
-        let desc = zenpixels::PixelDescriptor::RGB8_SRGB;
-        let input_buf = zenpixels::buffer::PixelBuffer::from_vec(input_bytes, w, h, desc).unwrap();
+        let desc = zenpixels::PixelFormat::RGB8_SRGB;
+        let input_buf = zenpixels::buffer::PixelBuf::from_bytes(input_bytes, w, h, desc).unwrap();
 
         let mut pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
         pipeline.push({
@@ -1245,7 +1253,11 @@ fn fused_adjust_matches_standalone_on_real_images() {
 
         let mut ctx = FilterContext::new();
         let output_buf = apply_to_buffer(&pipeline, &input_buf, true, &mut ctx).unwrap();
-        let output_bytes = output_buf.copy_to_contiguous_bytes();
+        let output_bytes = output_buf
+            .as_view()
+            .to_contiguous_bytes()
+            .unwrap()
+            .into_owned();
         let standalone_result: RgbImage = ImageBuffer::from_raw(w, h, output_bytes).unwrap();
 
         let score = zensim_score(&fused_result, &standalone_result);
@@ -1907,9 +1919,9 @@ fn dt_combined_exposure_contrast() {
         |img| {
             let (w, h) = img.dimensions();
             let input_bytes: Vec<u8> = img.as_raw().clone();
-            let desc = zenpixels::PixelDescriptor::RGB8_SRGB;
+            let desc = zenpixels::PixelFormat::RGB8_SRGB;
             let input_buf =
-                zenpixels::buffer::PixelBuffer::from_vec(input_bytes, w, h, desc).unwrap();
+                zenpixels::buffer::PixelBuf::from_bytes(input_bytes, w, h, desc).unwrap();
 
             let mut pipeline = Pipeline::new(PipelineConfig::default()).unwrap();
             pipeline.push({
@@ -1930,7 +1942,11 @@ fn dt_combined_exposure_contrast() {
 
             let mut ctx = FilterContext::new();
             let output_buf = apply_to_buffer(&pipeline, &input_buf, true, &mut ctx).unwrap();
-            let output_bytes = output_buf.copy_to_contiguous_bytes();
+            let output_bytes = output_buf
+                .as_view()
+                .to_contiguous_bytes()
+                .unwrap()
+                .into_owned();
             ImageBuffer::from_raw(w, h, output_bytes).unwrap()
         },
         || {

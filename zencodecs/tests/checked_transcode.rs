@@ -16,11 +16,11 @@ use zencodec::storage::StorageBudget;
 use zencodec::{At, CodecSet, ImageFormat, Metadata, MetadataPolicy, ResourceLimits, SharedPulse};
 use zencodecs::checked_transcode::{Stage, TranscodeRequest};
 use zenjpeg::{JpegDecoderConfig, JpegEncoderConfig};
-use zenpixels::{
-    Cicp, ColorProfileSource, ConvertOptions, PixelDescriptor, PixelFormat, PixelSlice,
-};
+use zenpixels::{AlphaMode, ColorSpace, PixelFormat, PixelView, RenderingIntent, SampleLayout};
 use zenpixels_convert::{
-    OutputProfile, cms::PluggableCms, cms_moxcms::MoxCms, icc_profiles::ADOBE_RGB,
+    ConvertPolicy,
+    cms::{CmsBackend, MoxCms},
+    icc_profiles::ADOBE_RGB,
 };
 
 const WIDTH: u32 = 97;
@@ -58,10 +58,12 @@ fn fixture_oriented(progressive: bool, orientation: zencodec::Orientation) -> Ve
         .with_xmp(format!("<malformed-private>{SECRET}").into_bytes());
     jpeg_config(progressive)
         .job()
-        .with_metadata_policy(metadata, MetadataPolicy::PreserveExact)
+        .with_unfiltered_metadata(metadata.filtered(&MetadataPolicy::PreserveExact))
         .encoder()
         .unwrap()
-        .encode(PixelSlice::new(&raw, WIDTH, HEIGHT, stride, PixelDescriptor::RGB8_SRGB).unwrap())
+        .encode(
+            PixelView::new(&raw, WIDTH, HEIGHT, stride, &zenpixels::formats::RGB8_SRGB).unwrap(),
+        )
         .unwrap()
         .data()
         .to_vec()
@@ -73,14 +75,15 @@ fn codecs() -> CodecSet {
         .with_send_encoder(jpeg_config(false))
         .with_send_encoder(zenpng::PngEncoderConfig::new())
 }
-fn request<'a>(budget: StorageBudget) -> TranscodeRequest<'a> {
+fn request(budget: StorageBudget) -> TranscodeRequest {
     TranscodeRequest::new(ImageFormat::Png)
         .with_storage(budget)
-        .with_cms(&MoxCms)
+        .with_cms(Arc::new(MoxCms))
         .with_output(
-            OutputProfile::Named(Cicp::SRGB),
-            PixelFormat::Rgb8,
-            ConvertOptions::retain_channels(),
+            PixelFormat::RGB8_SRGB,
+            ConvertPolicy::lossless()
+                .with_depth(zenpixels_convert::DepthPolicy::Round)
+                .with_gamut(zenpixels_convert::GamutPolicy::Clip),
         )
         .with_metadata(MetadataTransfer::DiscardDescriptive)
 }
@@ -99,18 +102,20 @@ fn native_jpeg_to_png_matches_separate_cms_and_png_oracles() {
     let codecs = codecs();
     for progressive in [false, true] {
         let input = fixture(progressive);
-        let source = zencodec::operation::DecodeRequest::new()
+        let source = zencodec::operation::DecodeOptions::new()
             .decode(&codecs, &input)
             .unwrap();
-        let mut cms = MoxCms
-            .build_source_transform(
-                ColorProfileSource::Icc(ADOBE_RGB),
-                ColorProfileSource::Cicp(Cicp::SRGB),
-                PixelFormat::Rgb8,
-                PixelFormat::Rgb8,
-                &ConvertOptions::retain_channels(),
-            )
-            .unwrap()
+        let src_fmt = PixelFormat::new(
+            SampleLayout::RGB8,
+            ColorSpace::Icc {
+                profile: Arc::from(ADOBE_RGB),
+                color_channels: 3,
+                alpha: AlphaMode::None,
+                intent: RenderingIntent::RelativeColorimetric,
+            },
+        );
+        let cms = MoxCms
+            .build_transform(&src_fmt, &zenpixels::formats::RGB8_SRGB)
             .unwrap();
         let mut expected = vec![0; WIDTH as usize * HEIGHT as usize * 3];
         for y in 0..HEIGHT {
@@ -119,7 +124,8 @@ fn native_jpeg_to_png_matches_separate_cms_and_png_oracles() {
                 &mut expected
                     [y as usize * WIDTH as usize * 3..(y + 1) as usize * WIDTH as usize * 3],
                 WIDTH,
-            );
+            )
+            .unwrap();
         }
         let budget = StorageBudget::new(512 * 1024, 16);
         let mut joint = 0;
@@ -176,7 +182,7 @@ fn opaque_profile_policy_is_explicit_and_refusal_releases_all_managed_owners() {
     let budget = StorageBudget::new(512 * 1024, 16);
     let request = TranscodeRequest::new(ImageFormat::Jpeg)
         .with_storage(budget.clone())
-        .with_cms(&MoxCms);
+        .with_cms(Arc::new(MoxCms));
     let error = request
         .transcode_with(&codecs, &input, &mut |question: Question<'_>| -> Result<
             Decision,
@@ -283,8 +289,8 @@ impl<C: EncoderConfig> EncoderConfig for IgnoresMetadata<C> {
     fn format() -> ImageFormat {
         C::format()
     }
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
-        C::supported_descriptors()
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
+        C::supported_pixel_formats()
     }
     fn job(self) -> Self::Job {
         IgnoresMetadataJob(self.0.job())
@@ -300,12 +306,11 @@ impl<J: EncodeJob> EncodeJob for IgnoresMetadataJob<J> {
     fn with_limits(self, limits: ResourceLimits) -> Self {
         Self(self.0.with_limits(limits))
     }
-    #[allow(deprecated)] // Deliberately keep color while violating descriptive retention.
-    fn with_metadata(self, metadata: Metadata) -> Self {
+    fn with_unfiltered_metadata(self, metadata: Metadata) -> Self {
         let mut retained = Metadata::none();
         retained.icc_profile = metadata.icc_profile;
         retained.cicp = metadata.cicp;
-        Self(self.0.with_metadata(retained))
+        Self(self.0.with_unfiltered_metadata(retained))
     }
     fn try_set_policy(
         &mut self,
@@ -316,7 +321,7 @@ impl<J: EncodeJob> EncodeJob for IgnoresMetadataJob<J> {
     // Planning reports the inner job, configured with the reduced metadata.
     fn plan_encode(
         &self,
-        declaration: &zencodec::encode::EncodeDeclaration<'_>,
+        declaration: &zencodec::encode::EncodeDeclaration,
     ) -> Result<zencodec::encode::EncodePlan, zencodec::encode::BoxedError> {
         self.0.plan_encode(declaration)
     }
@@ -340,8 +345,8 @@ impl<C: EncoderConfig> EncoderConfig for CannotPlan<C> {
     fn format() -> ImageFormat {
         C::format()
     }
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
-        C::supported_descriptors()
+    fn supported_pixel_formats() -> &'static [PixelFormat] {
+        C::supported_pixel_formats()
     }
     fn job(self) -> Self::Job {
         CannotPlanJob(self.0.job())
@@ -357,9 +362,8 @@ impl<J: EncodeJob> EncodeJob for CannotPlanJob<J> {
     fn with_limits(self, limits: ResourceLimits) -> Self {
         Self(self.0.with_limits(limits))
     }
-    #[allow(deprecated)] // Forwarding the codec's own setter unchanged.
-    fn with_metadata(self, metadata: Metadata) -> Self {
-        Self(self.0.with_metadata(metadata))
+    fn with_unfiltered_metadata(self, metadata: Metadata) -> Self {
+        Self(self.0.with_unfiltered_metadata(metadata))
     }
     fn try_set_policy(
         &mut self,
@@ -383,7 +387,7 @@ fn an_encoder_that_cannot_plan_rows_is_excluded_before_the_joint_question() {
         .with_encoder(CannotPlan(jpeg_config(false)));
     let budget = StorageBudget::new(512 * 1024, 16);
     let error = TranscodeRequest::new(ImageFormat::Jpeg)
-        .with_cms(&MoxCms)
+        .with_cms(Arc::new(MoxCms))
         .with_storage(budget.clone())
         .transcode(&codecs, &input)
         .unwrap_err();
@@ -405,7 +409,7 @@ fn a_real_encoder_that_ignores_metadata_cannot_publish_success() {
         .with_encoder(IgnoresMetadata(jpeg_config(false)));
     let budget = StorageBudget::new(512 * 1024, 16);
     let error = TranscodeRequest::new(ImageFormat::Jpeg)
-        .with_cms(&MoxCms)
+        .with_cms(Arc::new(MoxCms))
         .with_storage(budget.clone())
         .transcode(&codecs, &input)
         .unwrap_err();
@@ -452,7 +456,7 @@ fn discarded_descriptions_keep_rendering_orientation_and_builtin_policy_is_enfor
         reason = "compatibility placement: a preset PolicySet still enforces its requirements"
     )]
     let error = TranscodeRequest::new(ImageFormat::Jpeg)
-        .with_cms(&MoxCms)
+        .with_cms(Arc::new(MoxCms))
         .with_storage(budget.clone())
         .with_policy_set(privacy)
         .transcode(&codecs, &input)
@@ -611,7 +615,7 @@ fn reported_physical_resolution_cannot_silently_disappear() {
         .unwrap();
     assert_eq!(source.resolution.unwrap().dpi(), (300.0, 150.0));
     let error = TranscodeRequest::new(ImageFormat::Png)
-        .with_cms(&MoxCms)
+        .with_cms(Arc::new(MoxCms))
         .transcode(&codecs, &input)
         .unwrap_err();
     // Refuse during preparation, before an
@@ -641,13 +645,14 @@ fn default_p3_preservation_keeps_authority_and_required_policies_still_win() {
     for progressive in [false, true] {
         let input = jpeg_config(progressive)
             .job()
-            .with_metadata_policy(
-                Metadata::none().with_icc(DISPLAY_P3_V4),
-                MetadataPolicy::PreserveExact,
+            .with_unfiltered_metadata(
+                Metadata::none()
+                    .with_icc(DISPLAY_P3_V4)
+                    .filtered(&MetadataPolicy::PreserveExact),
             )
             .encoder()
             .unwrap()
-            .encode(PixelSlice::new(&bytes, 17, 9, 51, PixelDescriptor::RGB8_SRGB).unwrap())
+            .encode(PixelView::new(&bytes, 17, 9, 51, &zenpixels::formats::RGB8_SRGB).unwrap())
             .unwrap();
         let expected = codecs.decode(input.data()).unwrap();
         let output = TranscodeRequest::new(ImageFormat::Png)
@@ -685,12 +690,9 @@ fn default_p3_preservation_keeps_authority_and_required_policies_still_win() {
             assert_eq!(actual.pixels().row(y), expected.pixels().row(y));
         }
         // Conflicting required fields are not replaced by the adapter default.
-        // This codec has not qualified the strict/embed fields, so even an
-        // invalid source is rejected at preparation with the policy cause.
-        for required in [
-            EncodePolicy::none().with_strict(true),
-            EncodePolicy::none().with_embed_icc(false),
-        ] {
+        // zenpng 0.2 qualifies `color`/`embed_*`, leaving `strict` unqualified,
+        // so even an invalid source is rejected at preparation with the policy cause.
+        for required in [EncodePolicy::none().with_strict(true)] {
             for request in [
                 TranscodeRequest::new(ImageFormat::Png),
                 TranscodeRequest::new(ImageFormat::Png).with_encode_policy(required),

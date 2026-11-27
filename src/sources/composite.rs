@@ -58,17 +58,16 @@ impl CompositeSource {
         fg_x: u32,
         fg_y: u32,
     ) -> crate::PipeResult<Self> {
-        let fmt = format::RGBAF32_LINEAR_PREMUL;
-        if background.format() != fmt {
+        if background.format() != format::RGBAF32_LINEAR_PREMUL {
             return Err(at!(PipeError::FormatMismatch {
-                expected: fmt,
-                got: background.format(),
+                expected: Box::new(format::RGBAF32_LINEAR_PREMUL),
+                got: Box::new(background.format()),
             }));
         }
-        if foreground.format() != fmt {
+        if foreground.format() != format::RGBAF32_LINEAR_PREMUL {
             return Err(at!(PipeError::FormatMismatch {
-                expected: fmt,
-                got: foreground.format(),
+                expected: Box::new(format::RGBAF32_LINEAR_PREMUL),
+                got: Box::new(foreground.format()),
             }));
         }
 
@@ -76,7 +75,7 @@ impl CompositeSource {
         let h = background.height();
         let fg_h = foreground.height();
         let sh = 16u32.min(h);
-        let buf = StripBuf::try_new(w, sh, fmt)?;
+        let buf = StripBuf::try_new(w, sh, format::RGBAF32_LINEAR_PREMUL)?;
         let stride = buf.stride();
 
         Ok(Self {
@@ -121,20 +120,20 @@ impl Source for CompositeSource {
 
         // Check if foreground overlaps this strip's y range (saturating —
         // u32 add wrap could otherwise push the comparison out of bounds).
-        let strip_y_end = self.y.saturating_add(bg_strip.rows());
+        let strip_y_end = self.y.saturating_add(bg_strip.height());
         let fg_y_end = self.fg_y.saturating_add(self.fg_h);
         let fg_overlaps = self.y < fg_y_end && strip_y_end > self.fg_y;
 
         if !fg_overlaps {
             // No foreground — pass through background
-            for r in 0..bg_strip.rows() {
+            for r in 0..bg_strip.height() {
                 self.buf.push_row(bg_strip.row(r));
             }
         } else {
             // Pull foreground strip
             let fg_strip = self.foreground.next()?;
 
-            for r in 0..bg_strip.rows() {
+            for r in 0..bg_strip.height() {
                 let abs_y = self.y.saturating_add(r);
                 let bg_row = bg_strip.row(r);
 
@@ -143,7 +142,7 @@ impl Source for CompositeSource {
                 if has_fg {
                     let fg = fg_strip.as_ref().unwrap();
                     let fg_local_y = abs_y - self.fg_y;
-                    if fg_local_y < fg.rows() {
+                    if fg_local_y < fg.height() {
                         let fg_row = fg.row(fg_local_y);
                         let out_row = &mut self.composite_row_buf[..stride];
                         composite_row_over(

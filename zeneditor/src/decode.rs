@@ -8,7 +8,7 @@
 //! high-quality decode that the pipeline actually uses.
 
 #[cfg(feature = "decode")]
-use zenpixels::PixelDescriptor;
+use zenpixels::PixelFormat;
 
 /// Decoded image: RGBA8 pixels + dimensions (no metadata).
 pub struct DecodedImage {
@@ -46,13 +46,13 @@ pub fn decode_native(bytes: &[u8]) -> Result<NativeDecodeOutput, String> {
         output.info().gain_map,
         zencodec::gainmap::GainMapPresence::Available(_)
     );
-    let src_desc = output.descriptor();
+    let src_desc = output.pixel_format().clone();
 
     // Convert decoded pixels to tightly-packed RGBA8 sRGB.
-    let dst_desc = PixelDescriptor::RGBA8_SRGB;
+    let dst_desc = PixelFormat::RGBA8_SRGB;
     let pixels = output.pixels();
-    let src_stride = pixels.stride();
-    let src_bpp = src_desc.bytes_per_pixel();
+    let src_stride = pixels.stride_bytes();
+    let src_bpp = src_desc.layout.bytes_per_pixel();
     let src_row_bytes = width as usize * src_bpp;
     let dst_row_bytes = width as usize * 4;
 
@@ -69,19 +69,25 @@ pub fn decode_native(bytes: &[u8]) -> Result<NativeDecodeOutput, String> {
             packed
         }
     } else {
-        // Use RowConverter for any other format
-        let mut converter = zenpipe::RowConverter::new(src_desc, dst_desc)
-            .map_err(|e| format!("pixel conversion {src_desc} → {dst_desc}: {e}"))?;
+        // Use RowPlan for any other format
+        let plan = zenpipe::RowPlan::build(
+            &src_desc,
+            &dst_desc,
+            &zenpipe::ConvertPolicy::permissive(),
+            None,
+        )
+        .map_err(|e| format!("pixel conversion {src_desc:?} → {dst_desc:?}: {e}"))?;
         let mut packed = vec![0u8; dst_row_bytes * height as usize];
         let src_data = pixels.as_strided_bytes();
         for y in 0..height as usize {
             let src_start = y * src_stride;
             let dst_start = y * dst_row_bytes;
-            converter.convert_row(
+            plan.convert_row(
                 &src_data[src_start..src_start + src_row_bytes],
                 &mut packed[dst_start..dst_start + dst_row_bytes],
                 width,
-            );
+            )
+            .map_err(|e| format!("pixel conversion row {y}: {e}"))?;
         }
         packed
     };
@@ -155,7 +161,8 @@ mod tests {
 
     #[test]
     fn detect_avif() {
-        let mut bytes = vec![0u8; 12];
+        let mut bytes = vec![0u8; 16];
+        bytes[0..4].copy_from_slice(&16u32.to_be_bytes());
         bytes[4..8].copy_from_slice(b"ftyp");
         bytes[8..12].copy_from_slice(b"avif");
         assert_eq!(detect_format(&bytes), Some(zencodec::ImageFormat::Avif));
@@ -163,7 +170,8 @@ mod tests {
 
     #[test]
     fn detect_heic() {
-        let mut bytes = vec![0u8; 12];
+        let mut bytes = vec![0u8; 16];
+        bytes[0..4].copy_from_slice(&16u32.to_be_bytes());
         bytes[4..8].copy_from_slice(b"ftyp");
         bytes[8..12].copy_from_slice(b"heic");
         assert_eq!(detect_format(&bytes), Some(zencodec::ImageFormat::Heic));

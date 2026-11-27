@@ -4,28 +4,19 @@ use crate::{ImageFormat, Limits};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use zencodec::encode::{BoxedError, DynEncoder, EncodeOutput, OutputTiming};
-use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
+use zenpixels::{PixelFormat, PixelView, PixelViewMut};
 
 /// Empty inputs accepted by the bitmap encoders stay accepted.
 /// Other formats require a nonempty canvas; validate before backend calls
 /// that may otherwise panic while constructing row or plane views.
 pub(crate) fn check_dimensions(
-    format: ImageFormat,
+    _format: ImageFormat,
     width: u32,
     height: u32,
 ) -> core::result::Result<(), BoxedError> {
-    let invalid = match format {
-        ImageFormat::Jpeg
-        | ImageFormat::Png
-        | ImageFormat::WebP
-        | ImageFormat::Gif
-        | ImageFormat::Avif
-        | ImageFormat::Jxl
-        | ImageFormat::Tiff => width == 0 || height == 0,
-        ImageFormat::Farbfeld => width == 0,
-        _ => false,
-    };
-    if invalid {
+    // zenpixels 0.5 forbids zero-dimension PixelViews at construction time, so
+    // no encoder can accept an empty canvas through either one-shot or streaming.
+    if width == 0 || height == 0 {
         Err(
             crate::CodecError::InvalidInput("empty canvas is not supported by this encoder".into())
                 .into(),
@@ -40,8 +31,8 @@ pub(crate) struct RowEncoder {
     format: ImageFormat,
     limits: Limits,
     orientation: zencodec::Orientation,
-    declaration: Option<(u32, u32, PixelDescriptor)>,
-    layout: Option<(u32, PixelDescriptor)>,
+    declaration: Option<(u32, u32, PixelFormat)>,
+    layout: Option<(u32, PixelFormat)>,
     timing: Option<OutputTiming>,
     rows: u32,
     sent: u64,
@@ -105,30 +96,24 @@ impl DynEncoder for RowEncoder {
 
     fn encode(
         self: Box<Self>,
-        pixels: PixelSlice<'_>,
+        pixels: PixelView<'_>,
     ) -> core::result::Result<EncodeOutput, BoxedError> {
         self.one_shot()?;
-        self.dimensions(pixels.width(), pixels.rows())?;
+        self.dimensions(pixels.width(), pixels.height())?;
         let limits = self.limits;
         let output = self.inner.encode(pixels)?;
         limits.check_output_size(output.len() as u64)?;
         Ok(output)
     }
 
-    fn encode_srgba8(
+    fn encode_in_place(
         self: Box<Self>,
-        data: &mut [u8],
-        opaque: bool,
-        width: u32,
-        height: u32,
-        stride: u32,
+        pixels: PixelViewMut<'_>,
     ) -> core::result::Result<EncodeOutput, BoxedError> {
         self.one_shot()?;
-        self.dimensions(width, height)?;
+        self.dimensions(pixels.width(), pixels.height())?;
         let limits = self.limits;
-        let output = self
-            .inner
-            .encode_srgba8(data, opaque, width, height, stride)?;
+        let output = self.inner.encode_in_place(pixels)?;
         limits.check_output_size(output.len() as u64)?;
         Ok(output)
     }
@@ -137,7 +122,7 @@ impl DynEncoder for RowEncoder {
         &mut self,
         width: u32,
         height: u32,
-        descriptor: PixelDescriptor,
+        pixel_format: PixelFormat,
     ) -> core::result::Result<OutputTiming, BoxedError> {
         if self.started || self.declaration.is_some() || self.failed {
             return Err("begin after an earlier declaration or rows".into());
@@ -150,15 +135,15 @@ impl DynEncoder for RowEncoder {
         let mut timing = if empty {
             OutputTiming::AT_FINISH
         } else {
-            self.inner.begin(width, height, descriptor)?
+            self.inner.begin(width, height, pixel_format.clone())?
         };
         if timing.streams() && timing.lag_rows().is_some_and(|lag| lag >= height) {
             timing = OutputTiming::AT_FINISH;
         }
         self.pending_limit()?;
         self.empty = empty;
-        self.declaration = Some((width, height, descriptor));
-        self.layout = Some((width, descriptor));
+        self.declaration = Some((width, height, pixel_format.clone()));
+        self.layout = Some((width, pixel_format));
         self.timing = Some(timing);
         Ok(timing)
     }
@@ -199,29 +184,42 @@ impl DynEncoder for RowEncoder {
         }
     }
 
-    fn push_rows(&mut self, rows: PixelSlice<'_>) -> core::result::Result<(), BoxedError> {
+    fn push_rows(&mut self, rows: PixelView<'_>) -> core::result::Result<(), BoxedError> {
         if self.failed {
             return Err("row encoding already failed".into());
         }
         let result = (|| {
-            let layout = (rows.width(), rows.descriptor());
-            if self.layout.is_some_and(|l| l != layout) {
-                return Err("rows differ from the declared width or descriptor".into());
+            if let Some((w, ref fmt)) = self.layout
+                && (w != rows.width() || fmt != rows.format())
+            {
+                return Err("rows differ from the declared width or pixel format".into());
             }
             let count = self
                 .rows
-                .checked_add(rows.rows())
+                .checked_add(rows.height())
                 .ok_or("row count overflow")?;
-            if self.declaration.is_some_and(|(_, h, _)| count > h) {
+            if self
+                .declaration
+                .as_ref()
+                .is_some_and(|&(_, h, _)| count > h)
+            {
                 return Err("more rows than declared".into());
             }
             if self.declaration.is_none() {
                 self.dimensions(rows.width(), count.max(1))?;
             }
+            let width = rows.width();
+            let fmt = if self.layout.is_none() {
+                Some(rows.format().clone())
+            } else {
+                None
+            };
             if !self.empty {
                 self.inner.push_rows(rows)?;
             }
-            self.layout = Some(layout);
+            if let Some(fmt) = fmt {
+                self.layout = Some((width, fmt));
+            }
             self.rows = count;
             self.started = true;
             self.pending_limit()
@@ -236,7 +234,11 @@ impl DynEncoder for RowEncoder {
         if self.failed {
             return Err("row encoding already failed".into());
         }
-        if self.declaration.is_some_and(|(_, h, _)| self.rows != h) {
+        if self
+            .declaration
+            .as_ref()
+            .is_some_and(|&(_, h, _)| self.rows != h)
+        {
             return Err("fewer rows than declared".into());
         }
         if self.declaration.is_none() && !self.started {
@@ -254,12 +256,12 @@ impl DynEncoder for RowEncoder {
             ..
         } = *self;
         let output = if empty {
-            let (width, height, descriptor) =
+            let (width, height, pixel_format) =
                 declaration.ok_or("missing empty canvas declaration")?;
             let stride = (width as usize)
-                .checked_mul(descriptor.bytes_per_pixel())
+                .checked_mul(pixel_format.layout.bytes_per_pixel())
                 .ok_or("row size overflow")?;
-            inner.encode(PixelSlice::new(&[], width, height, stride, descriptor)?)?
+            inner.encode(PixelView::new(&[], width, height, stride, &pixel_format)?)?
         } else {
             inner.finish()?
         };
@@ -272,7 +274,7 @@ impl DynEncoder for RowEncoder {
 
     fn encode_from(
         self: Box<Self>,
-        source: &mut dyn FnMut(u32, PixelSliceMut<'_>) -> usize,
+        source: &mut dyn FnMut(u32, PixelViewMut<'_>) -> usize,
     ) -> core::result::Result<EncodeOutput, BoxedError> {
         self.one_shot()?;
         let limits = self.limits;

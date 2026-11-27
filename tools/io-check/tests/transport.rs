@@ -13,14 +13,14 @@ use std::sync::{Arc, Mutex};
 
 use transport_model::{Config, Ledger, Transport};
 use zencodec::encode::{EncodeJob, EncoderConfig};
-use zencodec::operation::{DecodeRequest, PolicySet};
+use zencodec::operation::{DecodeOptions as CodecDecodeOptions, PolicySet};
 use zencodec::source::SliceReadAt;
 use zencodec::storage::StorageBudget;
 use zencodec::{CodecSet, ImageFormat};
 use zencodec_io::DriveOptions;
 use zenpipe::Source;
 use zenpipe::io::{DecodeOptions, DecodeSource};
-use zenpixels::{PixelDescriptor, PixelSlice};
+use zenpixels::PixelView;
 
 const W: u32 = 320;
 const H: u32 = 240;
@@ -43,15 +43,27 @@ fn noisy() -> Vec<u8> {
 
 fn fixtures() -> Vec<(&'static str, Vec<u8>)> {
     let samples = noisy();
-    let pixels =
-        PixelSlice::new(&samples, W, H, (W * 3) as usize, PixelDescriptor::RGB8_SRGB).unwrap();
+    let pixels = PixelView::new(
+        &samples,
+        W,
+        H,
+        (W * 3) as usize,
+        &zenpixels::formats::RGB8_SRGB,
+    )
+    .unwrap();
     let png = zenpng::PngEncoderConfig::new()
         .job()
         .encode(pixels)
         .unwrap()
         .into_vec();
-    let pixels =
-        PixelSlice::new(&samples, W, H, (W * 3) as usize, PixelDescriptor::RGB8_SRGB).unwrap();
+    let pixels = PixelView::new(
+        &samples,
+        W,
+        H,
+        (W * 3) as usize,
+        &zenpixels::formats::RGB8_SRGB,
+    )
+    .unwrap();
     let jpeg = zenjpeg::JpegEncoderConfig::new()
         .job()
         .encode(pixels)
@@ -91,7 +103,7 @@ fn config(rtt_ms: f64, cache_bytes: u64, shared_cache: bool) -> Config {
 fn drain(source: &mut dyn Source) -> Vec<u8> {
     let mut out = Vec::new();
     while let Some(strip) = source.next().unwrap() {
-        for r in 0..strip.rows() {
+        for r in 0..strip.height() {
             out.extend_from_slice(strip.row(r));
         }
     }
@@ -108,7 +120,7 @@ fn decode_through(
         Transport::new(SliceReadAt::new(file), "object".into(), cfg, ledger.clone()).unwrap();
     let mut source = DecodeSource::new(
         &codecs(),
-        &DecodeRequest::new(),
+        &CodecDecodeOptions::new(),
         transport,
         PolicySet::new(),
         DecodeOptions::new(StorageBudget::new(64 << 20, 64))

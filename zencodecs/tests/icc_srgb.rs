@@ -265,7 +265,7 @@ fn source_color_cicp_srgb() {
 fn source_color_cicp_pq() {
     use zencodecs::SourceColor;
     use zenpixels::Cicp;
-    let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ);
+    let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ_RGB);
     assert!(!sc.is_srgb());
 }
 

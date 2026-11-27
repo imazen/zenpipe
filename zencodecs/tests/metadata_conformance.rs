@@ -52,7 +52,7 @@ use rgb::{Rgb, Rgba};
 use zencodec::exif::Exif;
 use zencodec::{Cicp, Orientation};
 use zencodecs::{DecodeRequest, EncodeRequest, ImageFormat, Metadata};
-use zenpixels::PixelSlice;
+use zenpixels::{ColorSpace, PixelView};
 
 /// Where the alignment gaps recorded in the [`codecs`] table are tracked.
 const GAP_TRACKING: &str = "imazen/zenpipe#36 (cross-codec metadata alignment)";
@@ -87,6 +87,27 @@ fn rgba8_image(w: usize, h: usize) -> ImgVec<Rgba<u8>> {
 /// and re-encodes color, so it gets a *valid* profile instead — see
 /// `icc_present_for_reencoding_codecs`.)
 fn synthetic_icc(len: usize) -> Vec<u8> {
+    let mut v = Vec::with_capacity(len);
+    v.extend_from_slice(&(len as u32).to_be_bytes());
+    while v.len() < len {
+        v.push((v.len() as u8).wrapping_mul(31));
+    }
+    if len >= 20 {
+        v[12..16].copy_from_slice(b"mntr");
+        v[16..20].copy_from_slice(b"RGB ");
+    }
+    if len >= 40 {
+        v[36..40].copy_from_slice(b"acsp");
+    }
+    if len >= 132 {
+        v[128..132].copy_from_slice(&0u32.to_be_bytes());
+    }
+    v
+}
+
+/// Unresolved bytes describing no ICC color space (used to verify carrier-free
+/// codecs drop an unparseable profile under default policy and refuse under strict).
+fn unresolved_icc(len: usize) -> Vec<u8> {
     let mut v = Vec::with_capacity(len);
     v.extend_from_slice(&(len as u32).to_be_bytes());
     while v.len() < len {
@@ -361,11 +382,11 @@ fn encode_with(c: &Support, meta: Metadata, strict: bool) -> Result<Vec<u8>, Str
         req = req.with_encode_policy(zencodec::encode::EncodePolicy::none().with_strict(true));
     }
     let out = if c.needs_rgba {
-        let s: PixelSlice<'_, Rgba<u8>> = PixelSlice::from(rgba.as_ref());
-        req.encode(s.erase(), false)
+        let s = PixelView::from_imgref(rgba.as_ref(), ColorSpace::SRGB_ALPHA).expect("from_imgref");
+        req.encode(s, false)
     } else {
-        let s: PixelSlice<'_, Rgb<u8>> = PixelSlice::from(rgb.as_ref());
-        req.encode(s.erase(), false)
+        let s = PixelView::from_imgref(rgb.as_ref(), ColorSpace::SRGB).expect("from_imgref");
+        req.encode(s, false)
     };
     out.map(|o| o.into_vec()).map_err(|e| format!("{e}"))
 }
@@ -535,7 +556,7 @@ fn icc_present_for_reencoding_codecs() {
 fn gif_drops_unresolved_icc_unless_strict_and_emits_no_profile() {
     for c in codecs() {
         if c.fmt == ImageFormat::Gif {
-            let meta = Metadata::none().with_icc(synthetic_icc(256));
+            let meta = Metadata::none().with_icc(unresolved_icc(256));
             let bytes = encode(&c, meta.clone()).expect("default policy drops the profile");
             let out = decode(&bytes).expect("decode");
             assert!(out.info().source_color.icc_profile.is_none());

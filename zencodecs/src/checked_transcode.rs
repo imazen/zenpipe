@@ -21,8 +21,10 @@ use zencodec::{At, CodecSet, ImageFormat, ImageInfo, Metadata};
 use zencodec_io::{
     ControlledEvent, ControlledStepper, DriveOptions, ReadAtCursor, SliceCursor, Yield,
 };
-use zenpixels::{ColorOrigin, ConvertOptions, PixelDescriptor, PixelFormat};
-use zenpixels_convert::{OutputPlan, OutputProfile, cms::PluggableCms};
+use zenpixels::{PeakSource, PixelFormat};
+use zenpixels_convert::{
+    ConvertPolicy, OutputPlan, OutputSignaling, ResolvedSignaling, RowPlan, cms::CmsBackend,
+};
 
 #[cfg(feature = "checked-transcode-async")]
 mod asynchronous;
@@ -38,7 +40,7 @@ struct ExpectedOutput {
     metadata: Metadata,
     width: u32,
     height: u32,
-    descriptor: PixelDescriptor,
+    format: PixelFormat,
     resolution: Option<zencodec::Resolution>,
 }
 type Held<'a> = ControlledStepper<'a, Box<zencodec::decode::DynControlledDecoder>, Destination>;
@@ -178,30 +180,32 @@ impl core::error::Error for Error {
 /// `with_output` makes permitted conversion explicit. The default managed
 /// allowance is 64 MiB / 128 allocations, and does not bound native workspace.
 #[derive(Clone)]
-pub struct TranscodeRequest<'a> {
-    decode: operation::DecodeRequest,
-    encode: operation::EncodeRequest,
+pub struct TranscodeRequest {
+    decode: operation::DecodeOptions,
+    encode: operation::EncodeOptions,
     format: ImageFormat,
-    output: Option<(OutputProfile, PixelFormat, ConvertOptions)>,
+    output: Option<(PixelFormat, ConvertPolicy)>,
+    signaling: Option<OutputSignaling>,
     metadata: MetadataTransfer,
     storage: StorageBudget,
-    cms: Option<&'a dyn PluggableCms>,
+    cms: Option<Arc<dyn CmsBackend>>,
     preset: PolicySet,
     strip_rows: u32,
     output_limit: usize,
     io: DriveOptions,
 }
-impl<'a> TranscodeRequest<'a> {
+impl TranscodeRequest {
     /// Preserve current color and reported metadata in this destination format.
     pub fn new(format: ImageFormat) -> Self {
         Self {
-            decode: operation::DecodeRequest::new(),
-            encode: operation::EncodeRequest::new(format).with_policy_defaults(
+            decode: operation::DecodeOptions::new(),
+            encode: operation::EncodeOptions::new(format).with_policy_defaults(
                 zencodec::encode::EncodePolicy::none()
                     .with_color(zencodec::ColorEmitPolicy::Verbatim),
             ),
             format,
             output: None,
+            signaling: None,
             metadata: MetadataTransfer::PreserveReported,
             storage: StorageBudget::new(64 * 1024 * 1024, 128),
             cms: None,
@@ -212,33 +216,34 @@ impl<'a> TranscodeRequest<'a> {
         }
     }
     /// Required source policy/output; uses the same registered controlled path.
-    pub fn with_decode(mut self, request: operation::DecodeRequest) -> Self {
-        self.decode = request;
+    pub fn with_decode(mut self, options: operation::DecodeOptions) -> Self {
+        self.decode = options;
         self
     }
     /// Require this fidelity configuration from the destination codec.
     pub fn with_fidelity(mut self, target: zencodec::encode::Fidelity) -> Self {
-        self.encode = self.encode.with_fidelity(target);
+        self.encode = self.encode.require_fidelity(target);
         self
     }
     /// Permit only these fidelity alternatives in the joint transcode question.
     pub fn preferring_fidelity(mut self, targets: Vec<zencodec::encode::Fidelity>) -> Self {
-        self.encode = self.encode.preferring_fidelity(targets);
+        self.encode = self.encode.prefer_fidelities(targets);
         self
     }
     /// Required encoder policy; the legacy best-effort setter is never used.
     pub fn with_encode_policy(mut self, policy: zencodec::encode::EncodePolicy) -> Self {
-        self.encode = self.encode.with_policy(policy);
+        self.encode = self.encode.require_policy(policy);
         self
     }
-    /// Explicit destination samples, color profile and permitted sample changes.
-    pub fn with_output(
-        mut self,
-        profile: OutputProfile,
-        format: PixelFormat,
-        options: ConvertOptions,
-    ) -> Self {
-        self.output = Some((profile, format, options));
+    /// Explicit destination pixel format and conversion policy.
+    pub fn with_output(mut self, format: PixelFormat, policy: ConvertPolicy) -> Self {
+        self.output = Some((format, policy));
+        self
+    }
+    /// Explicit container color signaling override (`Auto` when `with_output` is
+    /// set, `SameAsOrigin` when preserving source color).
+    pub fn with_signaling(mut self, signaling: OutputSignaling) -> Self {
+        self.signaling = Some(signaling);
         self
     }
     /// Explicit descriptive metadata treatment; color and orientation stay required.
@@ -247,7 +252,7 @@ impl<'a> TranscodeRequest<'a> {
         self
     }
     /// Inject the color service used during preparation and conversion.
-    pub fn with_cms(mut self, cms: &'a dyn PluggableCms) -> Self {
+    pub fn with_cms(mut self, cms: Arc<dyn CmsBackend>) -> Self {
         self.cms = Some(cms);
         self
     }
@@ -401,28 +406,22 @@ fn require_primary(info: &ImageInfo) -> Result<(), Cause> {
     }
     Ok(())
 }
-fn origin(info: &ImageInfo) -> ColorOrigin {
-    let c = &info.source_color;
-    match (&c.icc_profile, c.cicp) {
-        (Some(icc), Some(cicp)) => ColorOrigin::from_icc_and_cicp(icc.clone(), cicp),
-        (Some(icc), None) => ColorOrigin::from_icc(icc.clone()),
-        (None, Some(cicp)) => ColorOrigin::from_cicp(cicp),
-        (None, None) => ColorOrigin::assumed(),
-    }
-    .with_color_authority(c.color_authority)
-}
 fn output_metadata(
     info: &ImageInfo,
-    plan: &OutputPlan,
+    output_format: &PixelFormat,
+    signaling: &ResolvedSignaling,
     policy: MetadataTransfer,
     format: ImageFormat,
 ) -> Result<Metadata, Cause> {
+    let dst_is_hdr = matches!(
+        output_format.color,
+        zenpixels::ColorSpace::Rgb { transfer, .. }
+            | zenpixels::ColorSpace::Gray { transfer, .. }
+            if transfer.is_hdr()
+    );
     if info.source_color.content_light_level.is_some()
         || info.source_color.mastering_display.is_some()
-        || matches!(
-            plan.output_descriptor().transfer(),
-            zenpixels::TransferFunction::Pq | zenpixels::TransferFunction::Hlg
-        )
+        || dst_is_hdr
     {
         return Err(Refusal::HdrRendering.into());
     }
@@ -431,8 +430,8 @@ fn output_metadata(
         MetadataTransfer::DiscardDescriptive => Metadata::none().with_orientation(info.orientation),
         _ => return Err(Refusal::UnknownMetadataRule.into()),
     };
-    metadata.icc_profile = plan.metadata().icc.clone();
-    metadata.cicp = plan.metadata().cicp;
+    metadata.icc_profile = signaling.icc.as_ref().map(|b| Arc::from(b.as_ref()));
+    metadata.cicp = signaling.cicp;
     metadata.content_light_level = None;
     metadata.mastering_display = None;
     let reconciled = zenmeta::metadata::filter(&metadata, &zencodec::MetadataPolicy::PreserveExact);
@@ -443,10 +442,10 @@ fn output_metadata(
         reconciled, format,
     ))
 }
-fn requires_alpha(descriptor: PixelDescriptor) -> bool {
+fn requires_alpha(format: &PixelFormat) -> bool {
     matches!(
-        descriptor.alpha(),
-        Some(zenpixels::AlphaMode::Straight | zenpixels::AlphaMode::Premultiplied)
+        format.color.alpha(),
+        zenpixels::AlphaMode::Straight | zenpixels::AlphaMode::Premultiplied
     )
 }
 fn verify_output(
@@ -454,7 +453,7 @@ fn verify_output(
     decoded: &zencodec::decode::OutputInfo,
     expected: &ExpectedOutput,
 ) -> Result<(), Cause> {
-    let (width, height, descriptor) = (expected.width, expected.height, expected.descriptor);
+    let (width, height, format) = (expected.width, expected.height, &expected.format);
     if expected.resolution.is_some_and(|required| {
         actual
             .resolution
@@ -469,21 +468,21 @@ fn verify_output(
     {
         return Err(Refusal::GeometryOrOrientation.into());
     }
-    if requires_alpha(descriptor) && !actual.has_alpha {
+    if requires_alpha(format) && !actual.has_alpha {
         return Err(Refusal::AlphaRetention.into());
     }
     // Packed indices are not color-channel precision. For example, a one-bit
     // PNG palette can preserve arbitrary eight-bit RGB values exactly. Inspect
     // the decoder's native sample representation, without format preferences
     // that could hide a precision loss by requesting an upconversion.
-    if decoded.native_format.channel_type() != descriptor.channel_type() {
+    if decoded.native_format.layout.sample != format.layout.sample {
         return Err(Refusal::OutputPrecision.into());
     }
     let meta = actual.metadata();
     if meta.exif != expected.exif || meta.xmp != expected.xmp {
         return Err(Refusal::DescriptiveMetadata.into());
     }
-    let authority = actual.source_color.to_color_context();
+    let authority = actual.source_color.authoritative_origin();
     if let Some(icc) = &expected.icc_profile {
         if authority.icc.as_ref() != Some(icc) {
             return Err(Refusal::OutputColor.into());
@@ -495,8 +494,8 @@ fn verify_output(
             && meta.icc_profile.is_none()
             && meta.cicp.is_none();
         if !(authority.cicp == Some(cicp) && meta.icc_profile.is_none()) && !implicit_srgb {
-            use zenpixels_convert::icc_profiles::{SynthesizedIcc, synthesize_icc_for_cicp};
-            let equivalent = match synthesize_icc_for_cicp(cicp) {
+            use zenpixels_convert::icc_profiles::SynthesizedIcc;
+            let equivalent = match SynthesizedIcc::for_cicp(cicp) {
                 SynthesizedIcc::Profile(bytes) => {
                     meta.icc_profile.as_deref() == Some(bytes.as_ref())
                         && (authority.icc.is_some() || authority.cicp == Some(cicp))
