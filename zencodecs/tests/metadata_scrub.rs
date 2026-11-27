@@ -538,7 +538,7 @@ mod gain_map_scrub {
                 gain_map: &gain,
                 metadata: &params,
             })
-            .encode(view, false)
+            .encode(view)
             .unwrap()
             .into_vec()
     }
@@ -743,7 +743,7 @@ fn native_jxl_pixels_survive_container_scrubbing() {
     .unwrap();
     let encoded = zencodecs::EncodeRequest::new(zencodecs::ImageFormat::Jxl)
         .with_metadata(zencodec::Metadata::none().with_xmp(b"SECRET".to_vec()))
-        .encode(pixels.as_view(), false)
+        .encode(pixels.as_view())
         .unwrap()
         .into_vec();
     let output = ScrubRequest::new(&encoded)

@@ -17,7 +17,7 @@ use zencodec::storage::StorageBudget;
 use zencodec::{CodecSet, ImageFormat, NoPulse};
 use zencodec_io::row_encode::{self, Options, Stage};
 use zencodec_io::{DriveOptions, FileReadAt};
-use zenpipe::io::{DecodeOptions, DecodeSource, PipelineRows};
+use zenpipe::io::{DecodeSource, PipelineRows, SourceOptions};
 use zenpipe::{PipeResult, Source, Strip};
 use zenpixels::{PixelFormat, PixelView};
 
@@ -63,10 +63,10 @@ fn codecs() -> CodecSet {
         .with_encoder(zenpng::PngEncoderConfig::new().with_generic_effort(0))
 }
 
-fn options() -> DecodeOptions {
+fn options() -> SourceOptions {
     // Queue bounds have their own test; elsewhere the native batch height is
     // not what is under test.
-    DecodeOptions::new(StorageBudget::new(64 << 20, 64)).with_queue_slots(256)
+    SourceOptions::new(StorageBudget::new(64 << 20, 64)).with_queue_slots(256)
 }
 
 fn encode_options() -> Options {

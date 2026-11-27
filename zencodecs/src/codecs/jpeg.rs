@@ -506,7 +506,7 @@ mod metadata_retention_tests {
                     gain_map: &gain_map,
                     metadata: &params,
                 })
-                .encode(view, false)
+                .encode(view)
                 .unwrap()
                 .into_vec();
             assert!(!output.windows(11).any(|w| w == b"PRIVATE-XMP"));

@@ -69,13 +69,13 @@ pub(crate) const fn aligned_stride(format: &PixelFormat, width: u32) -> usize {
     (width as usize).saturating_mul(format.layout.bytes_per_pixel())
 }
 
-/// Whether `format` carries an active alpha channel (`Straight`, `Premultiplied`,
-/// or `Opaque` — false for `None` and padding `Undefined`).
+/// Whether `format` carries an active alpha channel (`Straight` or
+/// `Premultiplied` — false for `None`, `Opaque`, and padding `Undefined`).
 #[inline]
 pub(crate) const fn format_has_alpha(format: &PixelFormat) -> bool {
     matches!(
         format.color.alpha(),
-        AlphaMode::Straight | AlphaMode::Premultiplied | AlphaMode::Opaque
+        AlphaMode::Straight | AlphaMode::Premultiplied
     )
 }
 
@@ -96,4 +96,19 @@ pub(crate) const fn format_transfer(format: &PixelFormat) -> Transfer {
 #[inline]
 pub(crate) const fn format_is_linear(format: &PixelFormat) -> bool {
     matches!(format_transfer(format), Transfer::Linear)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_has_alpha_excludes_opaque_alpha_channel() {
+        assert!(!format_has_alpha(&RGB8_SRGB));
+        assert!(format_has_alpha(&RGBA8_SRGB));
+        assert!(format_has_alpha(
+            &RGBA8_SRGB.with_alpha(AlphaMode::Premultiplied)
+        ));
+        assert!(!format_has_alpha(&RGBA8_SRGB.with_alpha(AlphaMode::Opaque)));
+    }
 }

@@ -14,7 +14,7 @@ use zencodec::operation::{OutputSchedule, PolicyRequirement, PolicySet};
 use zencodec::storage::StorageBudget;
 use zencodec::{CodecSet, NoPulse};
 use zencodec_io::row_encode::{self, Options, Refusal, Stage};
-use zenpipe::io::{DecodeOptions, DecodeSource, PipelineRows};
+use zenpipe::io::{DecodeSource, PipelineRows, SourceOptions};
 use zenpipe::{PipeResult, Source, Strip};
 use zenpixels::PixelView;
 
@@ -89,7 +89,7 @@ fn rows(
     let decode = DecodeSource::from_slice(
         &codecs(),
         file,
-        DecodeOptions::new(StorageBudget::new(64 << 20, 64))
+        SourceOptions::new(StorageBudget::new(64 << 20, 64))
             .with_strip_rows(8)
             .with_queue_slots(256),
     )

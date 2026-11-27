@@ -272,7 +272,7 @@ fn image_job_surfaces_its_finished_trace() {
     let slice = zenpixels::PixelView::new(&pixels, 48, 40, 48 * 4, &zenpixels::formats::RGBA8_SRGB)
         .unwrap();
     let png = zencodecs::EncodeRequest::new(zencodec::ImageFormat::Png)
-        .encode(slice, true)
+        .encode(slice)
         .expect("fixture png")
         .data()
         .to_vec();

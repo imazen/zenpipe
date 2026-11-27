@@ -5,19 +5,30 @@ use core::fmt;
 /// Result type with `whereat::At<PipeError>` as the error.
 pub type PipeResult<T> = Result<T, whereat::At<PipeError>>;
 
-/// A codec failure that is the operation's own stop (zencodec's
-/// [`ErrorCategory::Stopped`](zencodec::ErrorCategory::Stopped) anywhere in its
-/// cause chain), which zenpipe reports as [`PipeError::Cancelled`] like every
-/// other stop.
-pub(crate) fn is_codec_stop(error: &(dyn core::error::Error + 'static)) -> bool {
-    matches!(
-        zencodec::find_cause::<zencodec::CodecError>(error).map(zencodec::CodecError::category),
-        Some(zencodec::ErrorCategory::Stopped(_))
-    )
+/// Extract the [`enough::StopReason`] from a codec failure that represents
+/// cooperative cancellation or a deadline timeout (either
+/// [`zencodec::ErrorCategory::Stopped`] or a lifted `zencodecs::CodecError::Stopped`
+/// anywhere in its cause chain), which zenpipe reports as [`PipeError::Stopped`].
+pub(crate) fn codec_stop_reason(
+    error: &(dyn core::error::Error + 'static),
+) -> Option<enough::StopReason> {
+    #[cfg(feature = "zennode")]
+    if let Some(zencodecs::CodecError::Stopped(reason)) =
+        zencodec::find_cause::<zencodecs::CodecError>(error)
+    {
+        return Some(*reason);
+    }
+    if let Some(ce) = zencodec::find_cause::<zencodec::CodecError>(error)
+        && let zencodec::ErrorCategory::Stopped(reason) = ce.category()
+    {
+        return Some(reason);
+    }
+    None
 }
 
 /// Pipeline execution error.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum PipeError {
     /// Upstream source produced data in an unexpected format.
     FormatMismatch {
@@ -30,8 +41,8 @@ pub enum PipeError {
     DimensionMismatch(String),
     /// Resource limit exceeded (dimensions, pixel count, or memory).
     LimitExceeded(String),
-    /// Operation cancelled via `enough::Stop`.
-    Cancelled,
+    /// Operation stopped via cancellation or deadline (`enough::StopReason`).
+    Stopped(enough::StopReason),
     /// Generic operation error.
     Op(String),
     /// Error from a codec or downstream crate, with preserved error type.
@@ -47,7 +58,7 @@ impl fmt::Display for PipeError {
             Self::Resize(msg) => write!(f, "resize: {msg}"),
             Self::DimensionMismatch(msg) => write!(f, "dimension mismatch: {msg}"),
             Self::LimitExceeded(msg) => write!(f, "limit exceeded: {msg}"),
-            Self::Cancelled => write!(f, "cancelled"),
+            Self::Stopped(reason) => write!(f, "operation stopped: {reason}"),
             Self::Op(msg) => write!(f, "operation: {msg}"),
             Self::Codec(e) => write!(f, "codec: {e}"),
         }
@@ -64,7 +75,7 @@ impl core::error::Error for PipeError {
 }
 
 impl From<enough::StopReason> for PipeError {
-    fn from(_: enough::StopReason) -> Self {
-        Self::Cancelled
+    fn from(reason: enough::StopReason) -> Self {
+        Self::Stopped(reason)
     }
 }

@@ -545,7 +545,7 @@ fn exhaustive_registered_still_routes_and_fidelity_targets() {
                 EncodeRequest::new(source.format)
                     .with_lossless(source.exact_rgb8)
                     .with_effort(0)
-                    .encode(input(), false)
+                    .encode(input())
                     .map(|out| out.data().to_vec())
                     .map_err(|e| e.to_string())
             };
@@ -651,12 +651,10 @@ fn exhaustive_registered_still_routes_and_fidelity_targets() {
                 decision.quality.effort = Some(0);
                 // Explicit sRGB conversion makes the conversion part of the
                 // request. Preserve and HDR/carrier scenarios have separate tests.
-                let opts = TranscodeOptions {
-                    color: TranscodeColor::Srgb8,
-                    metadata_policy: MetadataPolicy::ColorAndRotation,
-                    supplements: SupplementPolicy::Strip,
-                    ..Default::default()
-                };
+                let opts = TranscodeOptions::new()
+                    .with_color(TranscodeColor::Srgb8)
+                    .with_metadata_policy(MetadataPolicy::ColorAndRotation)
+                    .with_supplements(SupplementPolicy::Strip);
                 let result = if destination.native_backend {
                     let samples: Vec<_> =
                         source_pixels.iter().flat_map(|p| [p.r, p.g, p.b]).collect();

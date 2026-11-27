@@ -43,7 +43,7 @@ fn jpeg_preference_reaches_both_paths_and_native_settings_win() {
                     request
                 }
             };
-            let whole = make().encode(pixels.clone(), false).unwrap();
+            let whole = make().encode(pixels.clone()).unwrap();
             let mut encoder = make().build_streaming_encoder(w, h).unwrap().encoder;
             let timing = encoder.begin(w, h, pixels.format().clone()).unwrap();
             assert_eq!(timing.streams(), prefer && !has_override);

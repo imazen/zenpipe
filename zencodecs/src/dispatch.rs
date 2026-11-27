@@ -313,8 +313,10 @@ where
         encoder: Box::new(move |pixels| {
             use zencodec::encode::{EncodeJob as _, Encoder as _};
             let format = C::format();
-            // Re-encodes write upright pixels and orientation 1.
-            let (orientation, upright) = crate::orient_fit::upright(params.metadata.as_ref());
+            // Re-encodes write upright pixels and orientation 1 unless the
+            // caller requested `EncodeOrientation::PreserveStored`.
+            let (orientation, upright) =
+                crate::orient_fit::plan(params.metadata.as_ref(), params.orientation_mode);
             let strict = params
                 .encode_policy
                 .is_some_and(|p| p.resolve_strict(false));
@@ -476,15 +478,15 @@ where
 /// Enables fully codec-agnostic code with no generic parameters:
 ///
 /// ```rust,ignore
-/// fn save(enc: &dyn AnyEncoder, img: ImgRef<Rgba<u8>>) -> Result<Vec<u8>, At<CodecError>> {
-///     let output = enc.encode_srgba8_imgref(img, true)?;
-///     Ok(output.into_data())
+/// fn save(enc: &dyn AnyEncoder, pixels: PixelView<'_>) -> Result<Vec<u8>, At<CodecError>> {
+///     let output = enc.encode_pixels(pixels, None, None, SharedPulse::default())?;
+///     Ok(output.into_vec())
 /// }
 ///
 /// let jpeg = JpegEncoderConfig::new().with_generic_quality(85.0);
 /// let webp = WebpEncoderConfig::lossy();
-/// save(&jpeg, img.as_ref())?;
-/// save(&webp, img.as_ref())?;
+/// save(&jpeg, pixels.clone())?;
+/// save(&webp, pixels)?;
 /// ```
 pub trait AnyEncoder: Send + Sync {
     /// The image format this encoder produces.
@@ -501,25 +503,6 @@ pub trait AnyEncoder: Send + Sync {
         limits: Option<&Limits>,
         pulse: SharedPulse,
     ) -> Result<EncodeOutput>;
-
-    /// Encode sRGB RGBA8 pixels from an `ImgRef`.
-    ///
-    /// `ignore_alpha = true` treats alpha as padding (codecs may use RGB paths).
-    /// `ignore_alpha = false` preserves straight alpha.
-    fn encode_srgba8_imgref(
-        &self,
-        img: imgref::ImgRef<'_, rgb::Rgba<u8>>,
-        ignore_alpha: bool,
-    ) -> Result<EncodeOutput> {
-        let color = if ignore_alpha {
-            zenpixels::ColorSpace::SRGB_ALPHA.with_alpha(zenpixels::AlphaMode::Opaque)
-        } else {
-            zenpixels::ColorSpace::SRGB_ALPHA
-        };
-        let pixels = PixelView::from_imgref(img, color)
-            .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
-        self.encode_pixels(pixels, None, None, SharedPulse::default())
-    }
 }
 
 impl<C> AnyEncoder for C
@@ -690,9 +673,11 @@ where
     if let Some(lim) = params.limits {
         job = job.with_limits(crate::limits::to_resource_limits(lim));
     }
-    // Re-encodes write upright pixels and orientation 1; rows are collected
-    // and oriented at `finish` when a rotation or flip is needed.
-    let (orientation, upright) = crate::orient_fit::upright(params.metadata.as_ref());
+    // Re-encodes write upright pixels and orientation 1 unless the caller
+    // requested `EncodeOrientation::PreserveStored`; rows are collected and
+    // oriented at `finish` when a rotation or flip is needed.
+    let (orientation, upright) =
+        crate::orient_fit::plan(params.metadata.as_ref(), params.orientation_mode);
     let strict = params
         .encode_policy
         .is_some_and(|p| p.resolve_strict(false));
@@ -767,7 +752,7 @@ where
     }
     let encoder = job
         .dyn_encoder()
-        .map_err(|e| at!(CodecError::Codec { format, source: e }))?;
+        .map_err(|e| at!(CodecError::from_codec_boxed(format, e)))?;
     let encoder: Box<dyn zencodec::encode::DynEncoder + Send> =
         if format == ImageFormat::Png && has_color_meta {
             Box::new(PngMetadataUntagEncoder { inner: encoder })
@@ -873,11 +858,11 @@ where
     }
     if let Some(mode) = params.orientation_mode {
         job.try_set_orientation_mode(mode)
-            .map_err(|source| at!(CodecError::Codec { format, source }))?;
+            .map_err(|source| at!(CodecError::from_codec_boxed(format, source)))?;
     }
     if let Some(policy) = params.encode_policy {
         job.try_set_policy(policy)
-            .map_err(|source| at!(CodecError::Codec { format, source }))?;
+            .map_err(|source| at!(CodecError::from_codec_boxed(format, source)))?;
     }
     Ok(ConfiguredJob {
         job,

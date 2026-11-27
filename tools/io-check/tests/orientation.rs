@@ -12,7 +12,7 @@ use zencodec::operation::{DecodeOptions as CodecDecodeOptions, PolicySet};
 use zencodec::storage::{StorageBudget, StorageError};
 use zencodec::{CodecSet, Metadata, MetadataPolicy, NoPulse, Orientation};
 use zencodec_io::row_encode::{self, Options};
-use zenpipe::io::{DecodeOptions, DecodeSource, OrientationCost, PipelineRows, render_orientation};
+use zenpipe::io::{DecodeSource, OrientationCost, PipelineRows, SourceOptions, render_orientation};
 use zenpipe::sources::MaterializedSource;
 use zenpipe::{PipeResult, Source, Strip};
 use zenpixels::{PixelFormat, PixelView};
@@ -73,15 +73,48 @@ fn codecs() -> CodecSet {
     CodecSet::new().with_decoder(zenpng::PngDecoderConfig::new())
 }
 
-fn options() -> DecodeOptions {
-    DecodeOptions::new(StorageBudget::new(64 << 20, 64))
+fn options() -> SourceOptions {
+    SourceOptions::new(StorageBudget::new(64 << 20, 64))
         .with_strip_rows(16)
         .with_queue_slots(256)
 }
 
+fn orient_rgb8(
+    input: &[u8],
+    width: u32,
+    height: u32,
+    o: zenlayout::Orientation,
+) -> (Vec<u8>, u32, u32) {
+    if o.is_identity() {
+        return (input.to_vec(), width, height);
+    }
+    let out_size = o.transform_dimensions(width, height);
+    let (ow, oh) = (out_size.width, out_size.height);
+    let mut output = vec![0u8; ow as usize * oh as usize * 3];
+    for sy in 0..height {
+        for sx in 0..width {
+            let (dx, dy) = match o {
+                zenlayout::Orientation::Identity => (sx, sy),
+                zenlayout::Orientation::FlipH => (width - 1 - sx, sy),
+                zenlayout::Orientation::Rotate90 => (height - 1 - sy, sx),
+                zenlayout::Orientation::Transpose => (sy, sx),
+                zenlayout::Orientation::Rotate180 => (width - 1 - sx, height - 1 - sy),
+                zenlayout::Orientation::FlipV => (sx, height - 1 - sy),
+                zenlayout::Orientation::Rotate270 => (sy, width - 1 - sx),
+                zenlayout::Orientation::Transverse => (height - 1 - sy, width - 1 - sx),
+                _ => (sx, sy),
+            };
+            let src_off = (sy as usize * width as usize + sx as usize) * 3;
+            let dst_off = (dy as usize * ow as usize + dx as usize) * 3;
+            output[dst_off..dst_off + 3].copy_from_slice(&input[src_off..src_off + 3]);
+        }
+    }
+    (output, ow, oh)
+}
+
 fn upright_reference(samples: &[u8], o: Orientation) -> (Vec<u8>, u32, u32) {
     let o = zenlayout::Orientation::from_exif(o.to_exif()).unwrap();
-    zenpipe::execute_layout::orient_image(samples, W, H, o, 3)
+    orient_rgb8(samples, W, H, o)
 }
 
 fn collect(source: &mut dyn Source) -> Vec<u8> {

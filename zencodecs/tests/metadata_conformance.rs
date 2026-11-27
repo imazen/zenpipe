@@ -383,10 +383,10 @@ fn encode_with(c: &Support, meta: Metadata, strict: bool) -> Result<Vec<u8>, Str
     }
     let out = if c.needs_rgba {
         let s = PixelView::from_imgref(rgba.as_ref(), ColorSpace::SRGB_ALPHA).expect("from_imgref");
-        req.encode(s, false)
+        req.encode(s)
     } else {
         let s = PixelView::from_imgref(rgb.as_ref(), ColorSpace::SRGB).expect("from_imgref");
-        req.encode(s, false)
+        req.encode(s)
     };
     out.map(|o| o.into_vec()).map_err(|e| format!("{e}"))
 }
@@ -687,7 +687,7 @@ fn transcode_forward(
     let bytes = EncodeRequest::new(dst.fmt)
         .with_quality(90.0)
         .with_metadata(fwd)
-        .encode(decoded.pixels(), decoded.has_alpha())
+        .encode(decoded.pixels())
         .ok()?
         .into_vec();
     decode(&bytes).ok()

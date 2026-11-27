@@ -8,7 +8,6 @@
 //! - [`orientation`] — EXIF orientation, D4 dihedral group, coordinate transforms
 //! - [`plan`] — Command pipeline, decoder negotiation, two-phase layout planning
 //! - [`svg`] — SVG visualization of layout pipeline steps (requires `svg` feature)
-//! - [`riapi`] — RIAPI query string parsing (`?w=800&h=600&mode=crop`) (requires `riapi` feature)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unsafe_code)]
@@ -24,8 +23,6 @@ pub mod deskew;
 pub mod dimension;
 pub mod orientation;
 pub mod plan;
-#[cfg(feature = "riapi")]
-pub mod riapi;
 #[cfg(feature = "smart-crop")]
 pub mod smart_crop;
 #[cfg(feature = "svg")]

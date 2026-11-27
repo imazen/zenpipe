@@ -228,9 +228,6 @@ raw-decode-gainmap = ["raw-decode", "zenraw/apple", "jpeg-ultrahdr"]
 # Opt-in — hayro is a heavy dependency, so it stays out of `default` and `all`.
 pdf-decode = ["dep:zenpdf"]
 
-# RIAPI codec key parsing
-riapi = []
-
 # zennode node definitions
 zennode = ["dep:zennode"]
 

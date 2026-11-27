@@ -6,7 +6,7 @@ use zenpixels::{PixelFormat, PixelView, PixelViewMut};
 
 fn encoder(limits: &Limits) -> Box<dyn zencodec::encode::DynEncoder> {
     EncodeRequest::new(ImageFormat::Bmp)
-        .with_limits(limits)
+        .with_limits(*limits)
         .build_streaming_encoder(2, 2)
         .unwrap()
         .encoder
@@ -61,14 +61,14 @@ fn rotated_fallback_applies_limits_to_the_output_canvas() {
             .with_metadata(
                 zencodec::Metadata::none().with_orientation(zencodec::Orientation::Rotate90),
             )
-            .with_limits(&limits)
+            .with_limits(limits)
     };
     let data = [
         1, 2, 3, 4, 5, 6, 0xCD, 0xCD, 0xCD, 7, 8, 9, 10, 11, 12, 0xCD, 0xCD, 0xCD, 13, 14, 15, 16,
         17, 18,
     ];
     let pixels = PixelView::new(&data, 2, 3, 9, &zenpixels::formats::RGB8_SRGB).unwrap();
-    let whole = make().encode(pixels, false).unwrap();
+    let whole = make().encode(pixels).unwrap();
     let mut encoder = make().build_streaming_encoder(2, 3).unwrap().encoder;
     assert_eq!(
         encoder.begin(2, 3, PixelFormat::RGB8_SRGB).unwrap(),
@@ -83,7 +83,7 @@ fn rotated_fallback_applies_limits_to_the_output_canvas() {
     let wrong_limits = Limits::none().with_max_width(2).with_max_height(3);
     let mut encoder = EncodeRequest::new(ImageFormat::Bmp)
         .with_metadata(zencodec::Metadata::none().with_orientation(zencodec::Orientation::Rotate90))
-        .with_limits(&wrong_limits)
+        .with_limits(wrong_limits)
         .build_streaming_encoder(2, 3)
         .unwrap()
         .encoder;

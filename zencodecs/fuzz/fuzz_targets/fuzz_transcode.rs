@@ -27,11 +27,7 @@ fuzz_target!(|input: TranscodeInput| {
     };
     let quality = (input.quality as f32).clamp(1.0, 100.0);
 
-    let decision = FormatDecision {
-        format: target_format,
-        quality: QualityIntent::from_quality(quality),
-        ..Default::default()
-    };
+    let decision = FormatDecision::for_format_quality(target_format, quality);
 
     let _ = transcode(&input.data, &decision, &TranscodeOptions::default(), &AllowedFormats::all());
 });

@@ -84,7 +84,7 @@ fuzz_target!(|data: &[u8]| {
         format: PixelFormat::RGBA8_SRGB,
     };
     let _ = DecodeRequest::new(data)
-        .with_limits(&limits)
-        .with_registry(&AllowedFormats::all())
+        .with_limits(limits)
+        .with_registry(AllowedFormats::all())
         .push_decode(&mut sink);
 });

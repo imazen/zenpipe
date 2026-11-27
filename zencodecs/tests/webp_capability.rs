@@ -59,7 +59,7 @@ fn encode_webp_with_meta(img: ImgRef<'_, Rgb<u8>>, meta: Metadata, quality: f32)
     EncodeRequest::new(ImageFormat::WebP)
         .with_quality(quality)
         .with_metadata(meta)
-        .encode(view, false)
+        .encode(view)
         .expect("encode WebP with metadata")
         .into_vec()
 }
@@ -135,7 +135,7 @@ fn webp_lossless_round_trip_is_lossless() {
 
     let bytes = EncodeRequest::new(ImageFormat::WebP)
         .with_lossless(true)
-        .encode(view, true)
+        .encode(view)
         .expect("encode WebP lossless")
         .into_vec();
 

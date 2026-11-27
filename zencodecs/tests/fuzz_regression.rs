@@ -73,8 +73,8 @@ fn seeds() -> Vec<(String, PathBuf)> {
 fn run_decode_full_frame(data: &[u8]) {
     let limits = fuzz_limits();
     let _ = DecodeRequest::new(data)
-        .with_limits(&limits)
-        .with_registry(&AllowedFormats::all())
+        .with_limits(limits)
+        .with_registry(AllowedFormats::all())
         .decode_full_frame();
 }
 
@@ -82,8 +82,8 @@ fn run_decode_full_frame(data: &[u8]) {
 fn run_animation(data: &[u8]) {
     let limits = fuzz_limits();
     let decoder = DecodeRequest::new(data)
-        .with_limits(&limits)
-        .with_registry(&AllowedFormats::all())
+        .with_limits(limits)
+        .with_registry(AllowedFormats::all())
         .animation_frame_decoder();
 
     if let Ok(mut dec) = decoder {
@@ -101,8 +101,8 @@ fn run_animation(data: &[u8]) {
 fn run_gain_map(data: &[u8]) {
     let limits = fuzz_limits();
     let _ = DecodeRequest::new(data)
-        .with_limits(&limits)
-        .with_registry(&AllowedFormats::all())
+        .with_limits(limits)
+        .with_registry(AllowedFormats::all())
         .decode_gain_map();
 }
 
@@ -178,8 +178,8 @@ fn run_push_decode(data: &[u8]) {
         pending_format: None,
     };
     let _ = DecodeRequest::new(data)
-        .with_limits(&limits)
-        .with_registry(&AllowedFormats::all())
+        .with_limits(limits)
+        .with_registry(AllowedFormats::all())
         .push_decode(&mut sink);
 }
 

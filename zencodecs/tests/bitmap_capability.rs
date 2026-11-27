@@ -123,7 +123,7 @@ fn bmp_metadata_with_icc_input_silently_drops() {
     let view = PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB).expect("from_imgref");
     let result = EncodeRequest::new(ImageFormat::Bmp)
         .with_metadata(meta)
-        .encode(view, false);
+        .encode(view);
     assert!(
         result.is_ok(),
         "BMP encoder must accept (and silently drop) unsupported metadata"
@@ -217,7 +217,7 @@ fn farbfeld_rgba16_round_trip_is_lossless_pixel_byte_equal() {
     let view = PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB_ALPHA).expect("from_imgref");
 
     let bytes = EncodeRequest::new(ImageFormat::Farbfeld)
-        .encode(view, false)
+        .encode(view)
         .expect("encode Farbfeld rgba16")
         .into_vec();
 

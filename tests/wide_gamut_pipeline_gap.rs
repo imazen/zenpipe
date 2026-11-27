@@ -61,7 +61,7 @@ fn gainmap_preserve_mode_round_trips_through_pipeline_unchanged() {
     let output = &result.encode_results[0].bytes;
 
     let (_, gm) = zencodecs::DecodeRequest::new(output)
-        .with_registry(&zencodecs::AllowedFormats::all())
+        .with_registry(zencodecs::AllowedFormats::all())
         .decode_gain_map()
         .expect("output decode");
     assert!(
@@ -108,7 +108,7 @@ fn jpeg_icc_preserve_round_trips_icc_bytes_verbatim() {
     let input = zencodecs::EncodeRequest::new(zencodec::ImageFormat::Jpeg)
         .with_quality(95.0)
         .with_metadata(meta)
-        .encode(view, false)
+        .encode(view)
         .expect("encode JPEG with ICC")
         .into_vec();
 

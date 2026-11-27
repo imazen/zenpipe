@@ -75,9 +75,9 @@ Core codec policy/intent types. Used by zenpipe bridge and imageflow_compat.
 
 `CicsValues`, `CmsMode`, `PngColorInfo`. Feature-gated; adds 135 items. Deliberate color management API.
 
-### zencodecs::riapi_parse (riapi feature) — KEEP
+### zencodecs::riapi_parse (riapi feature) — REMOVED
 
-`parse_codec_keys`, `CodecEngine`. Feature-gated (`riapi`); not in default snapshot. Used by imageflow_compat.
+`parse_codec_keys`, `CodecEngine`, and the `riapi` feature were unwired dead code and have been removed.
 
 ### zencodecs::zennode_defs (zennode feature) — KEEP
 

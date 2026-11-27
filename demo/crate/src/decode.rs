@@ -50,7 +50,8 @@ mod tests {
 
     #[test]
     fn detect_avif() {
-        let mut bytes = vec![0u8; 12];
+        let mut bytes = vec![0u8; 16];
+        bytes[0..4].copy_from_slice(&16u32.to_be_bytes());
         bytes[4..8].copy_from_slice(b"ftyp");
         bytes[8..12].copy_from_slice(b"avif");
         assert_eq!(
@@ -61,7 +62,8 @@ mod tests {
 
     #[test]
     fn detect_heic() {
-        let mut bytes = vec![0u8; 12];
+        let mut bytes = vec![0u8; 16];
+        bytes[0..4].copy_from_slice(&16u32.to_be_bytes());
         bytes[4..8].copy_from_slice(b"ftyp");
         bytes[8..12].copy_from_slice(b"heic");
         assert_eq!(

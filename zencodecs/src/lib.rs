@@ -40,7 +40,7 @@
 //! let buf = PixelBuf::from_bytes(vec![0u8; 100 * 100 * 4], 100, 100, PixelFormat::RGBA8_SRGB).unwrap();
 //! let webp = EncodeRequest::new(ImageFormat::WebP)
 //!     .with_quality(85.0)
-//!     .encode(buf.as_view(), false)?;
+//!     .encode(buf.as_view())?;
 //! println!("Encoded {} bytes", webp.data().len());
 //! # Ok::<(), whereat::At<zencodecs::CodecError>>(())
 //! ```
@@ -67,7 +67,7 @@
 //!
 //! let data: &[u8] = &[]; // your image bytes
 //! let decoded = DecodeRequest::new(data)
-//!     .with_registry(&registry)
+//!     .with_registry(registry)
 //!     .decode_full_frame()?;
 //! # Ok::<(), whereat::At<zencodecs::CodecError>>(())
 //! ```
@@ -150,8 +150,6 @@ pub mod policy;
 pub mod quality;
 pub(crate) mod quality_calibration;
 mod registry;
-#[cfg(feature = "riapi")]
-pub mod riapi_parse;
 #[cfg(any(
     feature = "jpeg",
     feature = "webp",
@@ -205,14 +203,12 @@ pub use speed::EncodeSpeed;
 // internal until the public quality-conversion surface is finalized. Reach them
 // via `crate::quality_calibration::...` inside the crate.
 pub use registry::AllowedFormats;
-#[cfg(feature = "riapi")]
-pub use riapi_parse::{CodecEngine, parse_codec_keys};
 pub use select::ImageFacts;
 pub use select::{FormatPicker, select_format_from_intent, select_format_from_intent_with_picker};
 pub use trace::SelectionTrace;
 pub use transcode::{
-    SupplementPolicy, SupplementSet, TranscodeColor, TranscodeOptions, TranscodeOutput,
-    TranscodeSink, TranscodeWriter,
+    AnimationPolicy, SupplementPolicy, SupplementSet, TranscodeColor, TranscodeOptions,
+    TranscodeOutput, TranscodeSink, TranscodeWriter,
 };
 pub use zencodec::ImageFormat;
 pub use zencodec::Metadata;
@@ -327,7 +323,7 @@ pub fn push_decode(
     registry: &AllowedFormats,
 ) -> error::Result<zencodec::decode::OutputInfo> {
     DecodeRequest::new(data)
-        .with_registry(registry)
+        .with_registry(*registry)
         .push_decode(sink)
 }
 
@@ -344,13 +340,8 @@ pub fn push_decode(
 ///
 /// ```rust,ignore
 /// use zencodecs::{streaming_encoder, AllowedFormats, FormatDecision, ImageFormat};
-/// use zencodecs::quality::QualityIntent;
 ///
-/// let decision = FormatDecision {
-///     format: ImageFormat::Jpeg,
-///     quality: QualityIntent::from_quality(85.0),
-///     ..Default::default()
-/// };
+/// let decision = FormatDecision::for_format_quality(ImageFormat::Jpeg, 85.0);
 ///
 /// let se = zencodecs::streaming_encoder(
 ///     ImageFormat::Jpeg,
@@ -372,7 +363,7 @@ pub fn streaming_encoder(
 ) -> error::Result<StreamingEncoder> {
     let mut request = EncodeRequest::new(format)
         .with_quality(decision.quality.quality)
-        .with_registry(registry);
+        .with_registry(*registry);
 
     if decision.lossless {
         request = request.with_lossless(true);
@@ -426,7 +417,7 @@ pub fn probe(data: &[u8], registry: &AllowedFormats) -> error::Result<zencodec::
 /// ```
 pub fn decode_full_frame(data: &[u8], registry: &AllowedFormats) -> error::Result<DecodeOutput> {
     DecodeRequest::new(data)
-        .with_registry(registry)
+        .with_registry(*registry)
         .decode_full_frame()
 }
 
@@ -451,7 +442,7 @@ pub fn decode_gain_map(
     registry: &AllowedFormats,
 ) -> error::Result<(DecodeOutput, Option<gainmap::DecodedGainMap>)> {
     DecodeRequest::new(data)
-        .with_registry(registry)
+        .with_registry(*registry)
         .decode_gain_map()
 }
 

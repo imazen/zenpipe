@@ -163,7 +163,10 @@ fn execute_with_stop_cancels() {
         Some(&zencodec::how_far::StopOnly::borrowed(&stop)),
     );
 
-    assert!(result.is_err_and(|e| matches!(e.error(), PipeError::Cancelled)));
+    assert!(
+        result
+            .is_err_and(|e| matches!(e.error(), PipeError::Stopped(enough::StopReason::Cancelled)))
+    );
     // Should have processed some but not all data.
     assert!(sink.bytes < 4 * 100 * 4);
 }
@@ -193,7 +196,10 @@ fn optional_materialization_stop_keeps_rows_and_cancellation() {
         solid_source(4, 100),
         Some(&zencodec::how_far::StopOnly::borrowed(&stop)),
     );
-    assert!(result.is_err_and(|e| matches!(e.error(), PipeError::Cancelled)));
+    assert!(
+        result
+            .is_err_and(|e| matches!(e.error(), PipeError::Stopped(enough::StopReason::Cancelled)))
+    );
 }
 
 struct CollectSink {
@@ -261,175 +267,6 @@ fn check_frames_no_limit() {
     assert!(limits.check_frames(u32::MAX).is_ok());
 }
 
-// =========================================================================
-// AllocationTracker
-// =========================================================================
-
-use std::sync::Arc;
-use zenpipe::AllocationTracker;
-
-#[test]
-fn tracker_allocate_and_track() {
-    let tracker = Arc::new(AllocationTracker::new(1024));
-
-    let g1 = tracker.allocate(400).unwrap();
-    assert_eq!(tracker.current_bytes(), 400);
-    assert_eq!(tracker.peak_bytes(), 400);
-    assert_eq!(tracker.allocation_count(), 1);
-
-    let g2 = tracker.allocate(300).unwrap();
-    assert_eq!(tracker.current_bytes(), 700);
-    assert_eq!(tracker.peak_bytes(), 700);
-    assert_eq!(tracker.allocation_count(), 2);
-
-    drop(g1);
-    assert_eq!(tracker.current_bytes(), 300);
-    // Peak should remain at 700
-    assert_eq!(tracker.peak_bytes(), 700);
-
-    drop(g2);
-    assert_eq!(tracker.current_bytes(), 0);
-    assert_eq!(tracker.peak_bytes(), 700);
-}
-
-#[test]
-fn tracker_exceeds_limit() {
-    let tracker = Arc::new(AllocationTracker::new(1000));
-    let _g = tracker.allocate(600).unwrap();
-
-    // 600 + 500 = 1100 > 1000
-    let err = tracker.allocate(500);
-    assert!(err.is_err());
-    assert!(matches!(
-        err.unwrap_err().decompose().0,
-        PipeError::LimitExceeded(_)
-    ));
-
-    // Current should be unchanged (allocation was rejected)
-    assert_eq!(tracker.current_bytes(), 600);
-}
-
-#[test]
-fn tracker_guard_drops_decrement() {
-    let tracker = Arc::new(AllocationTracker::new(0)); // unlimited
-    {
-        let _g1 = tracker.allocate(100).unwrap();
-        let _g2 = tracker.allocate(200).unwrap();
-        assert_eq!(tracker.current_bytes(), 300);
-    }
-    // Both guards dropped
-    assert_eq!(tracker.current_bytes(), 0);
-    assert_eq!(tracker.peak_bytes(), 300);
-}
-
-#[test]
-fn tracker_unlimited_allows_large() {
-    let tracker = Arc::new(AllocationTracker::unlimited());
-    let _g = tracker.allocate(u64::MAX / 2).unwrap();
-    assert_eq!(tracker.current_bytes(), u64::MAX / 2);
-}
-
-#[test]
-fn tracker_try_allocate_returns_none() {
-    let tracker = Arc::new(AllocationTracker::new(100));
-    let _g = tracker.allocate(80).unwrap();
-
-    assert!(tracker.try_allocate(30).is_none());
-    assert!(tracker.try_allocate(20).is_some());
-}
-
-#[test]
-fn tracker_check_without_allocating() {
-    let tracker = Arc::new(AllocationTracker::new(1000));
-    let _g = tracker.allocate(800).unwrap();
-
-    // check does not actually allocate
-    assert!(tracker.check(100).is_ok());
-    assert!(tracker.check(300).is_err());
-    assert_eq!(tracker.current_bytes(), 800); // unchanged
-}
-
-#[test]
-fn tracker_remaining_capacity() {
-    let tracker = Arc::new(AllocationTracker::new(1000));
-    assert_eq!(tracker.remaining(), Some(1000));
-
-    let _g = tracker.allocate(400).unwrap();
-    assert_eq!(tracker.remaining(), Some(600));
-
-    let unlimited = Arc::new(AllocationTracker::unlimited());
-    assert_eq!(unlimited.remaining(), None);
-}
-
-#[test]
-fn tracker_from_limits() {
-    let limits = Limits::default().with_max_memory_bytes(2048);
-    let tracker = limits.to_allocation_tracker();
-    assert_eq!(tracker.limit_bytes(), 2048);
-
-    let no_limit = Limits::NONE.to_allocation_tracker();
-    assert_eq!(no_limit.limit_bytes(), 0);
-}
-
-// =========================================================================
-// Deadline (std-only: Deadline and with_max_duration require std)
-// =========================================================================
-
-#[cfg(feature = "std")]
-use std::time::Duration;
-#[cfg(feature = "std")]
-use zenpipe::Deadline;
-
-#[cfg(feature = "std")]
-#[test]
-fn deadline_fresh_passes_check() {
-    let deadline = Deadline::new(Duration::from_secs(60));
-    assert!(deadline.check().is_ok());
-    assert!(!deadline.is_expired());
-    assert!(deadline.remaining() > Duration::ZERO);
-}
-
-#[cfg(feature = "std")]
-#[test]
-fn deadline_expired_fails_check() {
-    let deadline = Deadline::new(Duration::from_nanos(1));
-    // Burn through the nanosecond
-    std::thread::sleep(Duration::from_millis(1));
-    assert!(deadline.is_expired());
-    assert!(deadline.check().is_err());
-    assert_eq!(deadline.remaining(), Duration::ZERO);
-}
-
-#[cfg(feature = "std")]
-#[test]
-fn deadline_from_limits() {
-    let limits = Limits::default().with_max_duration(Duration::from_secs(5));
-    let deadline = limits.to_deadline();
-    assert!(deadline.is_some());
-    let d = deadline.unwrap();
-    assert!(d.check().is_ok());
-
-    let no_deadline = Limits::NONE.to_deadline();
-    assert!(no_deadline.is_none());
-}
-
-#[cfg(feature = "std")]
-#[test]
-fn deadline_compose_with_execute() {
-    // A deadline that has already expired should cancel execute_with_stop
-    let deadline = Deadline::new(Duration::from_nanos(1));
-    std::thread::sleep(Duration::from_millis(1));
-
-    let mut src = solid_source(4, 100);
-    let mut sink = CollectSink::new();
-    let result = zenpipe::execute_with_pulse(
-        &mut *src,
-        &mut sink,
-        Some(&zencodec::how_far::StopOnly::borrowed(&deadline)),
-    );
-    assert!(result.is_err_and(|e| matches!(e.error(), PipeError::Cancelled)));
-}
-
 /// Cancellation observed before a pull or during a pull must not reach the sink.
 #[test]
 fn pulse_guards_input_delivery_and_finish() {
@@ -476,7 +313,12 @@ fn pulse_guards_input_delivery_and_finish() {
         let pulse = zencodec::how_far::StopOnly::new(Flag(cancelled));
         let mut sink = Effects::default();
         let result = zenpipe::execute_with_pulse(&mut source, &mut sink, Some(&pulse));
-        assert!(result.is_err_and(|e| matches!(e.error(), PipeError::Cancelled)));
+        assert!(
+            result.is_err_and(|e| matches!(
+                e.error(),
+                PipeError::Stopped(enough::StopReason::TimedOut)
+            ))
+        );
         assert_eq!(pulls.load(Ordering::Relaxed), u32::from(!pre_cancelled));
         assert_eq!(sink.consumed, 0);
         assert_eq!(sink.finished, 0);
@@ -503,19 +345,8 @@ fn materialization_checks_pulse_before_source_geometry() {
     let stop = CountdownStop::new(1);
     let pulse = zencodec::how_far::StopOnly::borrowed(&stop);
     let result = MaterializedSource::from_source_with_pulse(Box::new(Untouched), Some(&pulse));
-    assert!(result.is_err_and(|e| matches!(e.error(), PipeError::Cancelled)));
-}
-
-#[test]
-#[allow(deprecated)] // Keep the original required-Stop signatures source compatible.
-fn legacy_stop_entries_preserve_cancellation() {
-    let stop = CountdownStop::new(1);
-    let mut sink = CollectSink::new();
-    let result = zenpipe::execute_with_stop(&mut *solid_source(1, 1), &mut sink, &stop);
-    assert!(result.is_err_and(|e| matches!(e.error(), PipeError::Cancelled)));
-    assert_eq!(sink.bytes, 0);
-
-    let stop = CountdownStop::new(1);
-    let result = MaterializedSource::from_source_stoppable(solid_source(1, 1), &stop);
-    assert!(result.is_err_and(|e| matches!(e.error(), PipeError::Cancelled)));
+    assert!(
+        result
+            .is_err_and(|e| matches!(e.error(), PipeError::Stopped(enough::StopReason::Cancelled)))
+    );
 }

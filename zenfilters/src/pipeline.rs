@@ -96,6 +96,39 @@ pub struct PipelineConfig {
 }
 
 impl PipelineConfig {
+    /// Create a pipeline configuration for the given working color space.
+    pub fn new(working_space: WorkingSpace) -> Self {
+        Self {
+            working_space,
+            ..Default::default()
+        }
+    }
+
+    /// Set the working color primaries (determines RGB↔LMS matrices).
+    pub fn with_primaries(mut self, primaries: Primaries) -> Self {
+        self.primaries = primaries;
+        self
+    }
+
+    /// Set the reference white luminance for HDR normalization (1.0 for SDR,
+    /// 203.0 for PQ per ITU-R BT.2408).
+    pub fn with_reference_white(mut self, reference_white: f32) -> Self {
+        self.reference_white = reference_white;
+        self
+    }
+
+    /// Set the gamut mapping strategy applied after filters, before gather.
+    pub fn with_gamut_mapping(mut self, gamut_mapping: GamutMapping) -> Self {
+        self.gamut_mapping = gamut_mapping;
+        self
+    }
+
+    /// Set the reference width for resolution-independent neighborhood parameters.
+    pub fn with_reference_width(mut self, reference_width: Option<u32>) -> Self {
+        self.reference_width = reference_width;
+        self
+    }
+
     /// sRGB working space — matches ImageMagick's default behavior.
     ///
     /// Filters operate on gamma-encoded sRGB values directly. This is
@@ -419,30 +452,6 @@ impl Pipeline {
         self.apply_with_pulse(src, dst, width, height, channels, ctx, None)
     }
 
-    /// Compatibility entry point for cancellation-only callers.
-    #[deprecated(note = "use apply_with_pulse; adapt Stop with how_far::StopOnly::borrowed")]
-    #[track_caller]
-    pub fn apply_with_stop(
-        &self,
-        src: &[f32],
-        dst: &mut [f32],
-        width: u32,
-        height: u32,
-        channels: u32,
-        ctx: &mut FilterContext,
-        stop: &dyn enough::Stop,
-    ) -> Result<(), At<PipelineError>> {
-        self.apply_with_pulse(
-            src,
-            dst,
-            width,
-            height,
-            channels,
-            ctx,
-            Some(&how_far::StopOnly::borrowed(stop)),
-        )
-    }
-
     /// Apply the full pipeline with optional cooperative control.
     ///
     /// Checks before processing, between scatter/gather strips and between
@@ -713,17 +722,6 @@ impl Pipeline {
         let _ = self.apply_planar_with_pulse(planes, ctx, None);
     }
 
-    /// Compatibility entry point for cancellation-only callers.
-    #[deprecated(note = "use apply_planar_with_pulse; adapt Stop with how_far::StopOnly::borrowed")]
-    pub fn apply_planar_with_stop(
-        &self,
-        planes: &mut OklabPlanes,
-        ctx: &mut FilterContext,
-        stop: &dyn enough::Stop,
-    ) -> Result<(), At<PipelineError>> {
-        self.apply_planar_with_pulse(planes, ctx, Some(&how_far::StopOnly::borrowed(stop)))
-    }
-
     /// Apply planar filters with optional cooperative control.
     ///
     /// Checks before each filter and before final gamut mapping. Cancellation
@@ -896,12 +894,11 @@ mod tests {
         assert_eq!(pipeline.total_halo(64, 64), clarity_radius + sharpen_radius);
     }
 
-    /// `apply_with_stop` runs to completion under an unstoppable token and
+    /// `apply_with_pulse` runs to completion under an unstoppable token and
     /// returns `Err(PipelineError::Cancelled)` under a cancelled token, on
     /// both the per-pixel (stripped) and neighborhood (full-frame) paths.
     #[test]
-    #[allow(deprecated)] // Original cancellation compatibility contract.
-    fn apply_with_stop_cancellation() {
+    fn apply_with_pulse_cancellation() {
         use crate::filters;
 
         let (w, h) = (64u32, 64u32);
@@ -916,14 +913,30 @@ mod tests {
 
         // Unstoppable token: must succeed.
         per_pixel
-            .apply_with_stop(&src, &mut dst, w, h, 3, &mut ctx, &enough::Unstoppable)
+            .apply_with_pulse(
+                &src,
+                &mut dst,
+                w,
+                h,
+                3,
+                &mut ctx,
+                Some(&how_far::StopOnly::borrowed(&enough::Unstoppable)),
+            )
             .expect("unstoppable per-pixel apply should succeed");
 
         // Cancelled token: must report Cancelled.
         let s = almost_enough::Stopper::new();
         s.cancel();
         let err = per_pixel
-            .apply_with_stop(&src, &mut dst, w, h, 3, &mut ctx, &s)
+            .apply_with_pulse(
+                &src,
+                &mut dst,
+                w,
+                h,
+                3,
+                &mut ctx,
+                Some(&how_far::StopOnly::borrowed(&s)),
+            )
             .expect_err("cancelled per-pixel apply should fail");
         assert!(
             matches!(err.error(), PipelineError::Cancelled(_)),
@@ -941,13 +954,29 @@ mod tests {
 
         // Unstoppable token: must succeed.
         neighborhood
-            .apply_with_stop(&src, &mut dst, w, h, 3, &mut ctx, &enough::Unstoppable)
+            .apply_with_pulse(
+                &src,
+                &mut dst,
+                w,
+                h,
+                3,
+                &mut ctx,
+                Some(&how_far::StopOnly::borrowed(&enough::Unstoppable)),
+            )
             .expect("unstoppable neighborhood apply should succeed");
 
         // Pre-cancelled token: must report Cancelled (fires at first scatter strip).
         let s2 = almost_enough::Stopper::cancelled();
         let err2 = neighborhood
-            .apply_with_stop(&src, &mut dst, w, h, 3, &mut ctx, &s2)
+            .apply_with_pulse(
+                &src,
+                &mut dst,
+                w,
+                h,
+                3,
+                &mut ctx,
+                Some(&how_far::StopOnly::borrowed(&s2)),
+            )
             .expect_err("cancelled neighborhood apply should fail");
         assert!(
             matches!(err2.error(), PipelineError::Cancelled(_)),
@@ -961,11 +990,10 @@ mod tests {
             .expect("plain apply should still succeed");
     }
 
-    /// `apply_planar_with_stop` checks between filters and `apply_planar`
+    /// `apply_planar_with_pulse` checks between filters and `apply_planar`
     /// delegates with a no-op token (stays infallible).
     #[test]
-    #[allow(deprecated)] // Original cancellation compatibility contract.
-    fn apply_planar_with_stop_cancellation() {
+    fn apply_planar_with_pulse_cancellation() {
         use crate::filters;
 
         let (w, h) = (32u32, 32u32);
@@ -983,13 +1011,21 @@ mod tests {
         // Cancelled token: between-filters check trips → Cancelled.
         let s = almost_enough::Stopper::cancelled();
         let err = pipeline
-            .apply_planar_with_stop(&mut planes, &mut ctx, &s)
+            .apply_planar_with_pulse(
+                &mut planes,
+                &mut ctx,
+                Some(&how_far::StopOnly::borrowed(&s)),
+            )
             .expect_err("cancelled apply_planar should fail");
         assert!(matches!(err.error(), PipelineError::Cancelled(_)));
 
         // Unstoppable: succeeds.
         pipeline
-            .apply_planar_with_stop(&mut planes, &mut ctx, &enough::Unstoppable)
+            .apply_planar_with_pulse(
+                &mut planes,
+                &mut ctx,
+                Some(&how_far::StopOnly::borrowed(&enough::Unstoppable)),
+            )
             .expect("unstoppable apply_planar should succeed");
 
         // Plain apply_planar still compiles + runs (infallible delegation).

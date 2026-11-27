@@ -39,7 +39,7 @@ fn jpeg_ultrahdr_roundtrip_preserves_gainmap() {
 
     // Verify the input has a gain map.
     let (_, gm) = zencodecs::DecodeRequest::new(&input)
-        .with_registry(&zencodecs::AllowedFormats::all())
+        .with_registry(zencodecs::AllowedFormats::all())
         .decode_gain_map()
         .expect("decode should succeed");
     assert!(gm.is_some(), "input should contain a gain map");
@@ -58,7 +58,7 @@ fn jpeg_ultrahdr_roundtrip_preserves_gainmap() {
 
     // Decode the output and check for gain map.
     let (decoded, output_gm) = zencodecs::DecodeRequest::new(output_bytes)
-        .with_registry(&zencodecs::AllowedFormats::all())
+        .with_registry(zencodecs::AllowedFormats::all())
         .decode_gain_map()
         .expect("output decode should succeed");
 
@@ -93,7 +93,7 @@ fn discard_mode_strips_gainmap() {
 
     // Decode the output — should NOT have a gain map.
     let (_, output_gm) = zencodecs::DecodeRequest::new(output_bytes)
-        .with_registry(&zencodecs::AllowedFormats::all())
+        .with_registry(zencodecs::AllowedFormats::all())
         .decode_gain_map()
         .expect("output decode should succeed");
 
@@ -142,10 +142,8 @@ fn transcode_with_gainmap(
     output_format: zencodec::ImageFormat,
     nodes: &[Box<dyn zennode::NodeInstance>],
 ) -> (Vec<u8>, Option<zencodecs::DecodedGainMap>) {
-    let intent = zencodecs::CodecIntent {
-        format: Some(zencodecs::FormatChoice::Specific(output_format)),
-        ..Default::default()
-    };
+    let intent =
+        zencodecs::CodecIntent::new().with_format(zencodecs::FormatChoice::Specific(output_format));
 
     let result = ImageJob::new()
         .add_input(0, input)
@@ -159,7 +157,7 @@ fn transcode_with_gainmap(
     let output_bytes = result.encode_results[0].bytes.clone();
 
     let gm_result = zencodecs::DecodeRequest::new(&output_bytes)
-        .with_registry(&zencodecs::AllowedFormats::all())
+        .with_registry(zencodecs::AllowedFormats::all())
         .with_gain_map_extraction(true)
         .decode_gain_map();
 
@@ -259,7 +257,7 @@ fn riapi_hdr_strip_removes_gainmap() {
     let input = make_ultrahdr_jpeg_16x16();
     // Sanity: input carries a gain map.
     let (_, gm_in) = zencodecs::DecodeRequest::new(&input)
-        .with_registry(&zencodecs::AllowedFormats::all())
+        .with_registry(zencodecs::AllowedFormats::all())
         .with_gain_map_extraction(true)
         .decode_gain_map()
         .expect("decode input");

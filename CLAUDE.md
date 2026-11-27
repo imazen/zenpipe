@@ -13,14 +13,13 @@ own `zencodecs/CLAUDE.md`.
   workstreams W1–W10. Provenance: zenpipe @ da8d8da, imageflow @ 0ba1c9ea.
 - `ORDERING-DESIGN.md` — node ordering/coalescing/fusion semantics.
 
-**Architectural hazard:** there are FOUR RIAPI parser implementations in this
-repo. Wired: the zennode registry (`#[kv]`/`from_kv` via
+**Architectural note (RIAPI parsers):** there are TWO RIAPI parser
+implementations in this repo: the zennode registry (`#[kv]`/`from_kv` via
 `full_registry().from_querystring` — CLI `--qs`, `expand_zen`) and the legacy
-`imageflow_riapi` engine (`imageflow-compat` feature). Dead/unwired:
-`zenlayout::riapi`, `zencodecs::riapi_parse`, and `src/srcset.rs`
-(`expand_srcset`). Do not add a fifth; parity workstream W2 deletes or wires
-the dead ones. The doc comments in `src/imageflow_compat/riapi.rs:9,112`
-claiming `zenlayout::riapi` is used are wrong.
+`imageflow_riapi` engine (`imageflow-compat` feature, which also wires
+`src/srcset.rs` via `src/imageflow_compat/riapi.rs`). The previously dead
+`zenlayout::riapi` and `zencodecs::riapi_parse` modules have been deleted. Do
+not add another RIAPI parser.
 
 **Decoder pin:** this repo decodes AVIF through `zenavif → rav1d-safe`, and the
 rev that decides *which decoder* is the **zenavif** one — rav1d-safe hangs off
@@ -145,10 +144,8 @@ threading, hdr directives, compat security. Verified remaining:
   (progressive, subsampling, quant tables, sharp_yuv, …) need per-codec
   `CodecConfig` boxes wired from encode nodes (zencodecs `config.rs` has
   jpeg/webp/gif/png/avif boxes; JXL/TIFF boxes don't exist yet).
-- **`AllocationTracker` is API-only by decision**: superseded by the
-  orchestrate estimate gate + codec-level `ResourceLimits`; scheduled for
-  removal in the pre-0.1 public-API sweep rather than wiring a duplicate
-  accounting path.
+- **`AllocationTracker` removed**: superseded by the orchestrate estimate gate
+  + codec-level `ResourceLimits` and deleted from the public API.
 - **compat `ExecutionSecurity` partial**: `max_threads` (zencodec
   `ThreadingPolicy` can only express sequential-vs-parallel),
   `max_json_bytes` (compat takes pre-parsed types — enforce where JSON

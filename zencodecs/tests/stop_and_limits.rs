@@ -30,7 +30,7 @@ impl enough::Stop for AlreadyStopped {
 /// Check if a CodecError indicates cancellation (either directly or wrapped).
 fn is_cancelled(err: &whereat::At<CodecError>) -> bool {
     match err.error() {
-        CodecError::Cancelled => true,
+        CodecError::Stopped(_) => true,
         CodecError::Codec { source, .. } => {
             let msg = format!("{source}");
             msg.contains("cancel") || msg.contains("Cancel") || msg.contains("stop")
@@ -277,7 +277,7 @@ fn limits_decode_jpeg_width() {
     let data = encode_test_data(ImageFormat::Jpeg, 256, 256);
     let limits = Limits::none().with_max_width(10);
     let result = DecodeRequest::new(&data)
-        .with_limits(&limits)
+        .with_limits(limits)
         .decode_full_frame();
     assert!(
         result.is_err(),
@@ -296,7 +296,7 @@ fn limits_decode_memory_admission() {
     // must be rejected pre-flight by the calibrated decode estimate (gated on est).
     let tight = Limits::none().with_max_memory(1024);
     let result = DecodeRequest::new(&data)
-        .with_limits(&tight)
+        .with_limits(tight)
         .decode_full_frame();
     assert!(
         result.is_err() && is_limit_error(&result.unwrap_err()),
@@ -306,7 +306,7 @@ fn limits_decode_memory_admission() {
     let generous = Limits::none().with_max_memory(64 << 20);
     assert!(
         DecodeRequest::new(&data)
-            .with_limits(&generous)
+            .with_limits(generous)
             .decode_full_frame()
             .is_ok(),
         "decode must admit when the estimate fits max_memory_bytes"
@@ -321,7 +321,7 @@ fn limits_decode_png_pixels() {
     let data = encode_test_data(ImageFormat::Png, 256, 256);
     let limits = Limits::none().with_max_pixels(100);
     let result = DecodeRequest::new(&data)
-        .with_limits(&limits)
+        .with_limits(limits)
         .decode_full_frame();
     assert!(
         result.is_err(),
@@ -338,7 +338,7 @@ fn limits_decode_gif_width() {
     let data = encode_rgba_test_data(ImageFormat::Gif, 128, 128);
     let limits = Limits::none().with_max_width(10);
     let result = DecodeRequest::new(&data)
-        .with_limits(&limits)
+        .with_limits(limits)
         .decode_full_frame();
     assert!(
         result.is_err(),
@@ -355,7 +355,7 @@ fn limits_decode_webp_width() {
     let data = encode_test_data(ImageFormat::WebP, 256, 256);
     let limits = Limits::none().with_max_width(10);
     let result = DecodeRequest::new(&data)
-        .with_limits(&limits)
+        .with_limits(limits)
         .decode_full_frame();
     assert!(
         result.is_err(),
@@ -374,7 +374,7 @@ fn limits_decode_avif_pixels() {
     let data = encode_test_data(ImageFormat::Avif, 64, 64);
     let limits = Limits::none().with_max_pixels(100);
     let result = DecodeRequest::new(&data)
-        .with_limits(&limits)
+        .with_limits(limits)
         .decode_full_frame();
     assert!(
         result.is_err(),
@@ -397,7 +397,7 @@ fn limits_encode_gif_dimensions() {
     let img = rgba8_image(128, 128);
     let limits = Limits::none().with_max_width(10);
     let result = EncodeRequest::new(ImageFormat::Gif)
-        .with_limits(&limits)
+        .with_limits(limits)
         .encode_full_frame_rgba8(img.as_ref());
     assert!(
         result.is_err(),
@@ -415,7 +415,7 @@ fn limits_encode_jpeg_memory() {
     let limits = Limits::none().with_max_memory(1);
     let result = EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(50.0)
-        .with_limits(&limits)
+        .with_limits(limits)
         .encode_full_frame_rgb8(img.as_ref());
     assert!(
         result.is_err(),
@@ -435,7 +435,7 @@ fn limits_encode_memory_admission() {
     let generous = Limits::none().with_max_memory(256 << 20);
     let result = EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(50.0)
-        .with_limits(&generous)
+        .with_limits(generous)
         .encode_full_frame_rgb8(img.as_ref());
     assert!(
         result.is_ok(),
@@ -449,7 +449,7 @@ fn limits_encode_jpeg_dimensions() {
     let limits = Limits::none().with_max_width(10);
     let result = EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(50.0)
-        .with_limits(&limits)
+        .with_limits(limits)
         .encode_full_frame_rgb8(img.as_ref());
     assert!(
         result.is_err(),
@@ -467,7 +467,7 @@ fn limits_encode_webp_memory() {
     let limits = Limits::none().with_max_memory(1);
     let result = EncodeRequest::new(ImageFormat::WebP)
         .with_quality(50.0)
-        .with_limits(&limits)
+        .with_limits(limits)
         .encode_full_frame_rgb8(img.as_ref());
     assert!(
         result.is_err(),
@@ -485,7 +485,7 @@ fn limits_encode_webp_dimensions() {
     let limits = Limits::none().with_max_width(10);
     let result = EncodeRequest::new(ImageFormat::WebP)
         .with_quality(50.0)
-        .with_limits(&limits)
+        .with_limits(limits)
         .encode_full_frame_rgb8(img.as_ref());
     assert!(
         result.is_err(),
@@ -503,7 +503,7 @@ fn limits_encode_png_memory() {
     let img = rgb8_image(256, 256);
     let limits = Limits::none().with_max_memory(1);
     let result = EncodeRequest::new(ImageFormat::Png)
-        .with_limits(&limits)
+        .with_limits(limits)
         .encode_full_frame_rgb8(img.as_ref());
     assert!(
         result.is_err(),
@@ -520,7 +520,7 @@ fn limits_encode_gif_memory() {
     let img = rgba8_image(128, 128);
     let limits = Limits::none().with_max_memory(1);
     let result = EncodeRequest::new(ImageFormat::Gif)
-        .with_limits(&limits)
+        .with_limits(limits)
         .encode_full_frame_rgba8(img.as_ref());
     assert!(
         result.is_err(),
@@ -539,7 +539,7 @@ fn limits_encode_avif_memory() {
     let limits = Limits::none().with_max_memory(1);
     let result = EncodeRequest::new(ImageFormat::Avif)
         .with_quality(50.0)
-        .with_limits(&limits)
+        .with_limits(limits)
         .encode_full_frame_rgb8(img.as_ref());
     assert!(
         result.is_err(),
@@ -583,7 +583,7 @@ fn generous_limits_still_work() {
         .with_max_pixels(100_000_000)
         .with_max_memory(1_000_000_000);
     let result = DecodeRequest::new(&data)
-        .with_limits(&limits)
+        .with_limits(limits)
         .decode_full_frame();
     assert!(
         result.is_ok(),
@@ -675,7 +675,7 @@ fn limits_animation_total_pixels_cuts_off_mid_stream() {
     // Budget admits exactly two full frames; the third crosses it.
     let limits = Limits::none().with_max_total_pixels(per_frame * 2);
     let mut dec = DecodeRequest::new(&data)
-        .with_limits(&limits)
+        .with_limits(limits)
         .animation_frame_decoder()
         .expect("animation decoder");
     assert!(
@@ -699,7 +699,7 @@ fn limits_animation_total_pixels_cuts_off_mid_stream() {
     // A budget that covers every frame decodes the whole animation.
     let limits = Limits::none().with_max_total_pixels(per_frame * frames as u64);
     let mut dec = DecodeRequest::new(&data)
-        .with_limits(&limits)
+        .with_limits(limits)
         .animation_frame_decoder()
         .expect("animation decoder");
     let mut n = 0;
@@ -737,7 +737,7 @@ fn limits_animation_total_pixels_to_sink_path() {
     let data = encode_animated_gif(w, h, 3);
     let limits = Limits::none().with_max_total_pixels(w as u64 * h as u64);
     let mut dec = DecodeRequest::new(&data)
-        .with_limits(&limits)
+        .with_limits(limits)
         .animation_frame_decoder()
         .expect("animation decoder");
     let mut sink = CollectSink {

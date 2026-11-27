@@ -166,7 +166,7 @@ fn compare_bare_vs_zencodecs_exif_byte_search() {
     let zen = EncodeRequest::new(ImageFormat::Avif)
         .with_quality(80.0)
         .with_metadata(Metadata::none().with_exif(exif.clone()))
-        .encode(view, false)
+        .encode(view)
         .expect("zencodecs encode");
     let zen_bytes = zen.into_vec();
 
@@ -234,7 +234,7 @@ fn zencodecs_with_metadata_exif_actually_writes_exif_item() {
     let avif_bytes = EncodeRequest::new(ImageFormat::Avif)
         .with_quality(80.0)
         .with_metadata(meta)
-        .encode(view, false)
+        .encode(view)
         .expect("zencodecs encode AVIF with EXIF metadata")
         .into_vec();
 
@@ -298,7 +298,7 @@ fn zencodecs_encode_with_precomputed_gainmap_actually_embeds_tmap() {
             gain_map: &gain_map,
             metadata: &metadata,
         })
-        .encode(view, false)
+        .encode(view)
         .expect("zencodecs encode with gain map")
         .into_vec();
 

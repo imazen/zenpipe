@@ -223,7 +223,7 @@ fn a_converted_encode_describes_the_written_pixels() {
             }
             let bpp = case.desc.layout.bytes_per_pixel();
             let slice = PixelView::new(&case.bytes, W, H, W as usize * bpp, &case.desc).unwrap();
-            let bytes = match req.with_metadata(case.meta.clone()).encode(slice, false) {
+            let bytes = match req.with_metadata(case.meta.clone()).encode(slice) {
                 Ok(o) => o.into_vec(),
                 Err(e) => {
                     bad.push(format!("{} -> {f:?}: encode failed: {e}", case.name));

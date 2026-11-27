@@ -38,7 +38,7 @@ fn slice(px: &[u8]) -> PixelView<'_> {
 fn encode(format: ImageFormat, px: &[u8], meta: Metadata) -> Vec<u8> {
     EncodeRequest::new(format)
         .with_metadata(meta)
-        .encode(slice(px), false)
+        .encode(slice(px))
         .unwrap()
         .into_vec()
 }
@@ -179,7 +179,7 @@ fn strict_refuses_a_fit_that_loses_colour() {
         let err = EncodeRequest::new(ImageFormat::Pnm)
             .with_metadata(meta.clone())
             .with_encode_policy(strict())
-            .encode(slice(&px), false)
+            .encode(slice(&px))
             .expect_err("strict must refuse");
         assert!(format!("{err}").contains("strict"), "{err}");
         let err = EncodeRequest::new(ImageFormat::Pnm)
@@ -199,7 +199,7 @@ fn strict_allows_fits_that_lose_nothing() {
     let bytes = EncodeRequest::new(ImageFormat::Pnm)
         .with_metadata(Metadata::none().with_cicp(Cicp::SRGB))
         .with_encode_policy(strict())
-        .encode(slice(&px), false)
+        .encode(slice(&px))
         .unwrap()
         .into_vec();
     assert_eq!(decoded_rgb(&bytes), px);
@@ -217,7 +217,7 @@ fn strict_allows_fits_that_lose_nothing() {
     EncodeRequest::new(ImageFormat::Png)
         .with_metadata(Metadata::none().with_cicp(Cicp::DISPLAY_P3))
         .with_encode_policy(strict())
-        .encode(slice(&px), false)
+        .encode(slice(&px))
         .unwrap();
 }
 
@@ -232,7 +232,7 @@ fn strict_refuses_conversion_when_descriptor_matches_source_color() {
             .with_encode_policy(strict())
     };
     let err = make()
-        .encode(source, false)
+        .encode(source)
         .expect_err("strict must refuse before pixel-format conversion");
     assert!(format!("{err}").contains("strict"), "{err}");
     let err = make()
@@ -255,7 +255,7 @@ fn discharging_strict_color_fit_keeps_native_emission_requirements() {
                 .with_metadata(Metadata::none().with_cicp(Cicp::SRGB))
                 .with_encode_policy(policy)
         };
-        assert!(request().encode(slice(&px), false).is_err());
+        assert!(request().encode(slice(&px)).is_err());
         assert!(request().build_streaming_encoder(W, H).is_err());
     }
 }

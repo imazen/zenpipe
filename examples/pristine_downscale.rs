@@ -125,7 +125,6 @@ fn render(src: &Path, ratio: u32, filter: Filter) -> Result<Rendered, String> {
 
     let info_cicp = decoded.info().source_color.cicp;
     let transfer = decoded.info().source_color.transfer_function();
-    let has_alpha = decoded.has_alpha();
     let pixels = decoded.pixels();
     let (src_w, src_h) = (pixels.width(), pixels.height());
 
@@ -269,9 +268,7 @@ fn render(src: &Path, ratio: u32, filter: Filter) -> Result<Rendered, String> {
     if let Some(c) = info_cicp {
         req = req.with_cicp(Some(c));
     }
-    let png = req
-        .encode(out_slice, has_alpha)
-        .map_err(|e| format!("encode: {e}"))?;
+    let png = req.encode(out_slice).map_err(|e| format!("encode: {e}"))?;
 
     // Verify what was actually written. The encoder negotiates the pixel format
     // against the codec's supported-descriptor list, and if that list does not

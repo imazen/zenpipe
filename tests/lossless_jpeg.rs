@@ -555,5 +555,8 @@ fn cancelled_identity_transform_does_not_return_success() {
     let pulse = zencodec::how_far::StopOnly::new(Stopped);
     let result =
         try_lossless_jpeg_with_pulse(&jpeg, &[], &EncodeConfig::default(), 1, Some(&pulse));
-    assert!(matches!(result, Err(zenpipe::PipeError::Cancelled)));
+    assert!(matches!(
+        result,
+        Err(zenpipe::PipeError::Stopped(enough::StopReason::Cancelled))
+    ));
 }

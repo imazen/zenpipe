@@ -96,7 +96,7 @@ fn one_shot_and_streaming_encodes_write_every_orientation_upright() {
         ] {
             let one_shot = EncodeRequest::new(ImageFormat::Png)
                 .with_metadata(meta.clone())
-                .encode(slice(&px), false)
+                .encode(slice(&px))
                 .unwrap()
                 .into_vec();
             check_upright(&one_shot, &want, &format!("{o:?} {how} one-shot"));
@@ -171,7 +171,7 @@ fn xmp_orientation_is_rewritten_with_the_exif_tag() {
         .with_xmp(xmp.to_vec());
     let bytes = EncodeRequest::new(ImageFormat::Png)
         .with_metadata(meta)
-        .encode(slice(&px), false)
+        .encode(slice(&px))
         .unwrap()
         .into_vec();
     let d = DecodeRequest::new(&bytes).decode_full_frame().unwrap();

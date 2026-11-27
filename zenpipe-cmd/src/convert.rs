@@ -645,17 +645,17 @@ pub fn apply_output_opts<'a>(
 
 fn metadata_policy(opts: &OutputOptions) -> zenpipe::job::MetadataPolicy {
     if opts.preserve {
-        return zenpipe::job::MetadataPolicy::PreserveAll;
+        return zenpipe::job::MetadataPolicy::PreserveExact;
     }
     if let Some(ref what) = opts.strip {
         match what.as_deref() {
-            None | Some("all") => return zenpipe::job::MetadataPolicy::StripAll,
-            Some("exif") => return zenpipe::job::MetadataPolicy::WebDefault,
-            Some("icc") => return zenpipe::job::MetadataPolicy::StripAll,
+            None | Some("all") => return zenpipe::job::MetadataPolicy::ColorAndRotation,
+            Some("exif") => return zenpipe::job::MetadataPolicy::Web,
+            Some("icc") => return zenpipe::job::MetadataPolicy::ColorAndRotation,
             _ => {}
         }
     }
-    zenpipe::job::MetadataPolicy::WebDefault
+    zenpipe::job::MetadataPolicy::Web
 }
 
 fn gain_map_mode(opts: &OutputOptions) -> zenpipe::job::GainMapMode {

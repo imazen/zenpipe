@@ -43,21 +43,12 @@ impl MaterializedSource {
         Self::from_source_with_pulse(upstream, None)
     }
 
-    /// Compatibility entry point for cancellation-only callers.
-    #[deprecated(note = "use from_source_with_pulse; adapt Stop with how_far::StopOnly::borrowed")]
-    pub fn from_source_stoppable(
-        upstream: Box<dyn Source>,
-        stop: &dyn enough::Stop,
-    ) -> crate::PipeResult<Self> {
-        Self::from_source_with_pulse(upstream, Some(&zencodec::how_far::StopOnly::borrowed(stop)))
-    }
-
     /// Drain upstream with optional cooperative control.
     ///
     /// Checks before allocating the raster, before each pull, and before copying
     /// returned rows. `None` adds no per-call control; upstream retained control
     /// remains active. No progress phases are planned by this barrier.
-    /// Returns `PipeError::Cancelled` on cancellation and `LimitExceeded` on
+    /// Returns `PipeError::Stopped` on cancellation/timeout and `LimitExceeded` on
     /// dimension arithmetic overflow.
     pub fn from_source_with_pulse(
         mut upstream: Box<dyn Source>,
@@ -66,7 +57,7 @@ impl MaterializedSource {
         let control = pulse.unwrap_or(&zencodec::NoPulse);
         control
             .check()
-            .map_err(|_| at!(crate::error::PipeError::Cancelled))?;
+            .map_err(|r| at!(crate::error::PipeError::Stopped(r)))?;
         let width = upstream.width();
         let height = upstream.height();
         let format = upstream.format();
@@ -78,11 +69,11 @@ impl MaterializedSource {
         loop {
             control
                 .check()
-                .map_err(|_| at!(crate::error::PipeError::Cancelled))?;
+                .map_err(|r| at!(crate::error::PipeError::Stopped(r)))?;
             let strip = upstream.next()?;
             control
                 .check()
-                .map_err(|_| at!(crate::error::PipeError::Cancelled))?;
+                .map_err(|r| at!(crate::error::PipeError::Stopped(r)))?;
             let Some(strip) = strip else { break };
             for r in 0..strip.height() {
                 let dst_start = (y as usize)

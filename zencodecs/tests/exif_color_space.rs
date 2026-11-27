@@ -28,7 +28,7 @@ fn color_space_after_encode(meta: Metadata) -> u16 {
     let slice = PixelView::new(&px, 8, 8, 24, &zenpixels::formats::RGB8_SRGB).unwrap();
     let bytes = EncodeRequest::new(ImageFormat::Jpeg)
         .with_metadata(meta)
-        .encode(slice, false)
+        .encode(slice)
         .unwrap()
         .into_vec();
     let exif = DecodeRequest::new(&bytes)

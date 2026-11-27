@@ -136,7 +136,7 @@ fn ultrahdr_encode_disabled_registry() {
     let registry = zencodecs::AllowedFormats::none();
 
     let result = EncodeRequest::new(ImageFormat::Jpeg)
-        .with_registry(&registry)
+        .with_registry(registry)
         .encode_ultrahdr_rgb_f32(img.as_ref());
 
     assert!(
@@ -481,7 +481,7 @@ fn reconstruct_hdr_returns_hdr_pixels() {
 
     // Registry-driven reconstruction at the gain map's encoded maximum.
     let hdr = DecodeRequest::new(encoded.data())
-        .reconstruct_hdr(None)
+        .reconstruct_gain_map_hdr(None)
         .decode_full_frame()
         .expect("HDR reconstruction failed");
 
@@ -522,7 +522,7 @@ fn reconstruct_hdr_unsupported_for_non_jpeg() {
         .expect("png encode failed");
 
     let result = DecodeRequest::new(encoded.data())
-        .reconstruct_hdr(None)
+        .reconstruct_gain_map_hdr(None)
         .decode_full_frame();
     assert!(
         matches!(

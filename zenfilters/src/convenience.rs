@@ -157,14 +157,16 @@ pub fn apply_to_buffer(
         other => return Err(at!(ConvenienceError::UnsupportedLayout(other))),
     }
 
-    let primaries = working_primaries(&desc).at()?;
+    let input_primaries = working_primaries(&desc).at()?;
+    let primaries = pipeline.config().primaries;
     let has_alpha = desc.layout.order.has_alpha_slot();
     let channels = if has_alpha { 4u32 } else { 3u32 };
 
-    // Step 1-3: Convert to linear f32 (normalized to diffuse white = 1.0),
-    // then scatter to planar Oklab.
+    // Step 1-3: Convert to linear f32 in the pipeline's configured working
+    // primaries, then scatter to planar Oklab using the pipeline's configured
+    // reference white.
     let linear_desc = linear_f32_format(has_alpha, primaries, desc.color.white());
-    let reference_white = 1.0f32;
+    let reference_white = pipeline.config().reference_white;
     let space = OklabSpace::for_primaries(primaries)
         .ok_or_else(|| at!(ConvenienceError::UnsupportedPrimaries(primaries)))?;
     let m1 = *space.rgb_to_lms();
@@ -180,8 +182,12 @@ pub fn apply_to_buffer(
     let is_srgb_passthrough = false;
 
     // Detect if we can use the fused sRGB u8 path (eliminates intermediate
-    // linear f32 buffer — ~48MB savings at 2048² RGB).
+    // linear f32 buffer — ~48MB savings at 2048² RGB). Only valid when the
+    // pipeline's working primaries match the input primaries and reference_white
+    // is the SDR default (1.0).
     let use_fused = !is_srgb_passthrough
+        && (reference_white - 1.0).abs() < f32::EPSILON
+        && input_primaries == primaries
         && desc.layout.sample == SampleType::U8
         && format_transfer(&desc) == Transfer::Srgb
         && desc.color.range() == Some(SignalRange::Full)
@@ -830,6 +836,52 @@ mod tests {
             err.frame_count() >= 1,
             "expected a preserved whereat trace (frame_count >= 1), got {}",
             err.frame_count()
+        );
+    }
+
+    #[test]
+    fn apply_to_buffer_honors_config_primaries_and_reference_white() {
+        let input = make_srgb_u8_buffer(16, 16);
+
+        // 1. Custom working primaries must be honored when converting to linear
+        //    (and must bypass the sRGB-only fused fast path).
+        let bt2020_cfg = PipelineConfig::new(crate::pipeline::WorkingSpace::Oklab)
+            .with_primaries(Primaries::Bt2020);
+        let bt2020_pipe = Pipeline::new(bt2020_cfg).unwrap();
+        let linear_out =
+            apply_to_buffer(&bt2020_pipe, &input, false, &mut FilterContext::new()).unwrap();
+        assert!(
+            matches!(
+                linear_out.format().color,
+                ColorSpace::Rgb {
+                    primaries: Primaries::Bt2020,
+                    ..
+                }
+            ),
+            "apply_to_buffer must honor PipelineConfig::primaries, got {:?}",
+            linear_out.format().color
+        );
+
+        // 2. Custom reference_white must bypass the SDR fused fast path and
+        //    scale the Oklab working domain for non-identity filters.
+        let mut sdr_pipe = Pipeline::new(
+            PipelineConfig::new(crate::pipeline::WorkingSpace::Oklab).with_reference_white(1.0),
+        )
+        .unwrap();
+        sdr_pipe.push(Box::new(filters::Contrast { amount: 0.8 }));
+
+        let mut hdr_pipe = Pipeline::new(
+            PipelineConfig::new(crate::pipeline::WorkingSpace::Oklab).with_reference_white(4.0),
+        )
+        .unwrap();
+        hdr_pipe.push(Box::new(filters::Contrast { amount: 0.8 }));
+
+        let sdr_out = apply_to_buffer(&sdr_pipe, &input, true, &mut FilterContext::new()).unwrap();
+        let hdr_out = apply_to_buffer(&hdr_pipe, &input, true, &mut FilterContext::new()).unwrap();
+        assert_ne!(
+            sdr_out.as_view().to_contiguous_bytes().unwrap(),
+            hdr_out.as_view().to_contiguous_bytes().unwrap(),
+            "apply_to_buffer must honor PipelineConfig::reference_white instead of hardcoding 1.0"
         );
     }
 }

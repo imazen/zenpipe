@@ -51,12 +51,24 @@ pub struct RowConverterOp {
 }
 
 impl RowConverterOp {
-    /// Create a conversion op between any two formats.
+    /// Create a conversion op between any two formats using the BT.2408
+    /// diffuse-white anchor (203 nits).
     ///
     /// Returns `None` if no conversion path exists.
     pub fn new(from: PixelFormat, to: PixelFormat) -> Option<Self> {
-        let policy = zenpixels_convert::ConvertPolicy::permissive()
-            .with_sdr_white(zenpixels::DiffuseWhite::BT2408);
+        Self::with_diffuse_white(from, to, zenpixels::DiffuseWhite::BT2408)
+    }
+
+    /// Create a conversion op between any two formats with an explicit
+    /// HDR/SDR diffuse-white luminance anchor.
+    ///
+    /// Returns `None` if no conversion path exists.
+    pub fn with_diffuse_white(
+        from: PixelFormat,
+        to: PixelFormat,
+        white: zenpixels::DiffuseWhite,
+    ) -> Option<Self> {
+        let policy = zenpixels_convert::ConvertPolicy::permissive().with_sdr_white(white);
         let plan = zenpixels_convert::RowPlan::build(&from, &to, &policy, None).ok()?;
         Some(Self { plan, from, to })
     }

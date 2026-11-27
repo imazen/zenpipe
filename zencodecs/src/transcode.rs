@@ -22,6 +22,7 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
+use enough::Stop as _;
 use zencodec::MetadataPolicy;
 use zencodec::decode::{DecodeRowSink, RowStrip, SinkError};
 use zencodec::encode::{DynEncoder, EncodeOutput};
@@ -36,10 +37,25 @@ use whereat::at;
 // TranscodeOptions, SupplementPolicy, SupplementSet
 // ═══════════════════════════════════════════════════════════════════════
 
+/// Policy for animated inputs passed to [`transcode()`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum AnimationPolicy {
+    /// Refuse animated inputs with [`CodecError::UnsupportedOperation`] rather
+    /// than silently dropping frames (default).
+    #[default]
+    Refuse,
+    /// Decode and transcode only the first frame of an animated input.
+    FirstFrame,
+}
+
 /// Options controlling a transcode operation.
 ///
-/// Controls metadata roundtrip, supplement handling, and alpha compositing.
+/// Controls metadata roundtrip, supplement handling, resource limits,
+/// cancellation/progress pulse, animation policy, tone mapping, and alpha
+/// compositing.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct TranscodeOptions {
     /// Metadata to embed in the output (EXIF, ICC, XMP).
     ///
@@ -65,7 +81,8 @@ pub struct TranscodeOptions {
     /// Matte color for alpha compositing when encoding to a format without
     /// alpha (e.g., RGBA source → JPEG output).
     ///
-    /// `None` defaults to white `[255, 255, 255]`.
+    /// Overrides [`FormatDecision::matte`]. When both are `None`, no explicit
+    /// matte compositing is forced.
     pub matte: Option<[u8; 3]>,
 
     /// Whether to bake EXIF/container orientation into the output pixels.
@@ -76,6 +93,26 @@ pub struct TranscodeOptions {
     /// choice for display-ready output. Only affects the pixel-decode path
     /// (JPEG sources); coefficient-domain transcodes are unaffected.
     pub orientation: zencodec::OrientationHint,
+
+    /// Resource limits forwarded to both decode and encode requests.
+    pub limits: Option<crate::Limits>,
+
+    /// Cancellation/progress pulse forwarded to decode and encode requests.
+    pub pulse: Option<crate::SharedPulse>,
+
+    /// Policy for animated inputs (default: [`AnimationPolicy::Refuse`]).
+    pub animation: AnimationPolicy,
+
+    /// Explicit HDR→SDR tone-mapping policy.
+    ///
+    /// When [`TranscodeColor::Srgb8`] encounters an HDR source:
+    /// - `None` or `Some(ToneMapPolicy::Preserve)` refuses the conversion.
+    /// - `Some(ToneMapPolicy::Bt2408)` tone-maps HDR to sRGB8 via BT.2408.
+    ///
+    /// Also forwarded to the internal [`EncodeRequest`](crate::EncodeRequest)
+    /// when `Some`.
+    #[cfg(feature = "tonemap")]
+    pub tone_map: Option<crate::ToneMapPolicy>,
 }
 
 impl Default for TranscodeOptions {
@@ -91,7 +128,80 @@ impl Default for TranscodeOptions {
             // No implicit pixel rewrite: preserve the tag by default. Callers
             // targeting PNG or wanting display-ready output set `Correct`.
             orientation: zencodec::OrientationHint::Preserve,
+            limits: None,
+            pulse: None,
+            animation: AnimationPolicy::Refuse,
+            #[cfg(feature = "tonemap")]
+            tone_map: None,
         }
+    }
+}
+
+impl TranscodeOptions {
+    /// Create default transcode options.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Override output metadata instead of roundtripping source metadata.
+    pub fn with_metadata(mut self, metadata: zencodec::Metadata) -> Self {
+        self.metadata = Some(metadata);
+        self
+    }
+
+    /// Set pixel color policy (`Preserve` or `Srgb8`).
+    pub fn with_color(mut self, color: TranscodeColor) -> Self {
+        self.color = color;
+        self
+    }
+
+    /// Set metadata retention policy.
+    pub fn with_metadata_policy(mut self, policy: MetadataPolicy) -> Self {
+        self.metadata_policy = policy;
+        self
+    }
+
+    /// Set container supplement handling policy.
+    pub fn with_supplements(mut self, supplements: SupplementPolicy) -> Self {
+        self.supplements = supplements;
+        self
+    }
+
+    /// Set matte color for compositing alpha onto opaque target formats.
+    pub fn with_matte(mut self, matte: [u8; 3]) -> Self {
+        self.matte = Some(matte);
+        self
+    }
+
+    /// Set decode orientation handling hint.
+    pub fn with_orientation(mut self, orientation: zencodec::OrientationHint) -> Self {
+        self.orientation = orientation;
+        self
+    }
+
+    /// Set resource limits for decode and encode.
+    pub fn with_limits(mut self, limits: crate::Limits) -> Self {
+        self.limits = Some(limits);
+        self
+    }
+
+    /// Set cancellation/progress pulse for decode and encode.
+    pub fn with_pulse(mut self, pulse: crate::SharedPulse) -> Self {
+        self.pulse = Some(pulse);
+        self
+    }
+
+    /// Set animation handling policy (default: [`AnimationPolicy::Refuse`]).
+    pub fn with_animation(mut self, animation: AnimationPolicy) -> Self {
+        self.animation = animation;
+        self
+    }
+
+    /// Set explicit HDR→SDR tone-mapping policy.
+    #[cfg(feature = "tonemap")]
+    pub fn with_tone_map_policy(mut self, policy: crate::ToneMapPolicy) -> Self {
+        self.tone_map = Some(policy);
+        self
     }
 }
 
@@ -172,6 +282,7 @@ impl core::ops::BitOr for SupplementSet {
 
 /// The result of a [`transcode()`] operation.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct TranscodeOutput {
     /// The encoded image bytes.
     pub data: Vec<u8>,
@@ -179,6 +290,59 @@ pub struct TranscodeOutput {
     pub format: ImageFormat,
     /// The MIME type of the output format.
     pub mime_type: &'static str,
+}
+
+/// Composite an alpha-bearing buffer onto an opaque RGB8 matte color, returning
+/// an opaque `RGB8_SRGB` buffer.
+fn composite_matte(buffer: zenpixels::PixelBuf, matte: [u8; 3]) -> Result<zenpixels::PixelBuf> {
+    let rgba = if *buffer.format() == PixelFormat::RGBA8_SRGB {
+        buffer
+    } else {
+        zenpixels_convert::convert_to_buf(
+            &buffer.as_view(),
+            &PixelFormat::RGBA8_SRGB,
+            &zenpixels_convert::ConvertPolicy::permissive(),
+        )
+        .map_err(|e| {
+            at!(CodecError::InvalidInput(alloc::format!(
+                "matte composite: {e}"
+            )))
+        })?
+    };
+    let width = rgba.width();
+    let height = rgba.height();
+    let view = rgba.as_view();
+    let out_len = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|n| n.checked_mul(3))
+        .ok_or_else(|| {
+            at!(CodecError::InvalidInput(
+                "matte output size overflows".into()
+            ))
+        })?;
+    let mut out = Vec::new();
+    out.try_reserve_exact(out_len)
+        .map_err(|_| at!(CodecError::Oom))?;
+    let [mr, mg, mb] = [
+        u16::from(matte[0]),
+        u16::from(matte[1]),
+        u16::from(matte[2]),
+    ];
+    for y in 0..height {
+        let row = view.row(y);
+        for px in row.as_chunks::<4>().0 {
+            let a = u16::from(px[3]);
+            let inv = 255 - a;
+            out.push(((u16::from(px[0]) * a + mr * inv + 127) / 255) as u8);
+            out.push(((u16::from(px[1]) * a + mg * inv + 127) / 255) as u8);
+            out.push(((u16::from(px[2]) * a + mb * inv + 127) / 255) as u8);
+        }
+    }
+    zenpixels::PixelBuf::from_bytes(out, width, height, PixelFormat::RGB8_SRGB).map_err(|e| {
+        at!(CodecError::InvalidInput(alloc::format!(
+            "matte buffer: {e}"
+        )))
+    })
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -191,31 +355,18 @@ pub struct TranscodeOutput {
 /// This is the primary transcode entry point. Metadata (EXIF, ICC, XMP)
 /// is roundtripped from the source unless overridden in `opts`.
 ///
-/// # Current implementation
-///
-/// Uses the one-shot decode + encode path internally: decodes the full
-/// image, then re-encodes it. This materializes the entire image in memory.
-///
-/// # TODO
-///
-/// Wire through [`TranscodeSink`] for true zero-materialization streaming.
-/// The API shape is stable; only the internals will change.
+/// Animated inputs are refused by default ([`AnimationPolicy::Refuse`]) so
+/// frames are never silently dropped; opt in with [`AnimationPolicy::FirstFrame`]
+/// to transcode frame 0, or use [`EncodeRequest::animation_frame_encoder`](crate::EncodeRequest::animation_frame_encoder)
+/// to preserve animation.
 ///
 /// # Example
 ///
 /// ```rust,ignore
 /// use zencodecs::{transcode, TranscodeOptions, FormatDecision, AllowedFormats};
-/// use zencodecs::quality::QualityIntent;
 /// use zencodecs::ImageFormat;
 ///
-/// let decision = FormatDecision {
-///     format: ImageFormat::WebP,
-///     quality: QualityIntent::from_quality(80.0),
-///     lossless: false,
-///     hints: Default::default(),
-///     matte: None,
-///     trace: Vec::new(),
-/// };
+/// let decision = FormatDecision::for_format_quality(ImageFormat::WebP, 80.0);
 ///
 /// let output = zencodecs::transcode(
 ///     &jpeg_bytes,
@@ -231,6 +382,37 @@ pub fn transcode(
     opts: &TranscodeOptions,
     registry: &AllowedFormats,
 ) -> Result<TranscodeOutput> {
+    if let Some(ref pulse) = opts.pulse {
+        pulse.check().map_err(|r| at!(CodecError::Stopped(r)))?;
+    }
+
+    // Probe unconditionally before decode so animated inputs are caught up front
+    // under `AnimationPolicy::Refuse` (issue #111) and metadata is reused without
+    // probing twice.
+    let probed = match crate::info::from_bytes_with_registry(data, registry) {
+        Ok(info) => {
+            if opts.animation == AnimationPolicy::Refuse && info.is_animation() {
+                return Err(at!(CodecError::UnsupportedOperation {
+                    format: info.format,
+                    detail: "animated input refused by AnimationPolicy::Refuse; \
+                             use AnimationPolicy::FirstFrame or an animation encoder",
+                }));
+            }
+            Some(info)
+        }
+        Err(e)
+            if matches!(
+                e.error(),
+                CodecError::DisabledFormat(_)
+                    | CodecError::UnrecognizedFormat
+                    | CodecError::UnsupportedFormat(_)
+            ) =>
+        {
+            return Err(e);
+        }
+        Err(_) => None,
+    };
+
     // Determine whether we need gain map data from the decode side.
     let wants_gain_map = match opts.supplements {
         SupplementPolicy::Preserve => true,
@@ -238,32 +420,43 @@ pub fn transcode(
         SupplementPolicy::Strip => false,
     };
 
+    let build_decode = || {
+        let mut req = crate::DecodeRequest::new(data)
+            .with_registry(*registry)
+            .with_orientation(opts.orientation);
+        if let Some(limits) = opts.limits {
+            req = req.with_limits(limits);
+        }
+        if let Some(ref pulse) = opts.pulse {
+            req = req.with_pulse(pulse.clone());
+        }
+        req
+    };
+
     // Step 1: Decode the source image (full materialization for now). When the
     // caller preserves supplements and the build has gain-map support, also
     // recover the decoded gain map so it can be re-embedded (passthrough) below.
     #[cfg(feature = "jpeg-ultrahdr")]
     let (decoded, gain_map) = if wants_gain_map {
-        crate::DecodeRequest::new(data)
-            .with_registry(registry)
-            .with_orientation(opts.orientation)
-            .decode_gain_map()?
+        build_decode().decode_gain_map()?
     } else {
-        (
-            crate::DecodeRequest::new(data)
-                .with_registry(registry)
-                .with_orientation(opts.orientation)
-                .decode_full_frame()?,
-            None,
-        )
+        (build_decode().decode_full_frame()?, None)
     };
     #[cfg(not(feature = "jpeg-ultrahdr"))]
     let decoded = {
         let _ = wants_gain_map;
-        crate::DecodeRequest::new(data)
-            .with_registry(registry)
-            .with_orientation(opts.orientation)
-            .decode_full_frame()?
+        build_decode().decode_full_frame()?
     };
+
+    // Second animation check against the decoded ImageInfo (catches formats
+    // whose header probe cannot determine frame count until decoding).
+    if opts.animation == AnimationPolicy::Refuse && decoded.info().is_animation() {
+        return Err(at!(CodecError::UnsupportedOperation {
+            format: decoded.info().format,
+            detail: "animated input refused by AnimationPolicy::Refuse; \
+                     use AnimationPolicy::FirstFrame or an animation encoder",
+        }));
+    }
 
     // Carry the resolved source color through to the encoder so it emits the right
     // cICP. Unspecified-nclx + ICC ⇒ Display P3 resolves into
@@ -281,13 +474,9 @@ pub fn transcode(
     let mut metadata = match opts.metadata.clone() {
         Some(m) => m,
         None => {
-            // Roundtrip metadata from source via probe
-            let mut m = match crate::info::from_bytes_with_registry(data, registry) {
-                Ok(info) => info.metadata(),
-                Err(_) => {
-                    // No metadata to roundtrip — proceed without it
-                    zencodec::Metadata::none()
-                }
+            let mut m = match probed {
+                Some(info) => info.metadata(),
+                None => zencodec::Metadata::none(),
             };
             // The probe reports the source's orientation, but the decode may
             // already have applied it (`OrientationHint::Correct`). What the
@@ -299,7 +488,7 @@ pub fn transcode(
     };
 
     let buffer = decoded.into_buffer();
-    let buffer = match opts.color {
+    let mut buffer = match opts.color {
         TranscodeColor::Preserve => buffer,
         TranscodeColor::Srgb8 => {
             #[cfg(not(feature = "cms"))]
@@ -326,56 +515,102 @@ pub fn transcode(
                         | zenpixels::ColorSpace::Gray { transfer, .. }
                         if transfer.is_hdr()
                 );
-                if is_hdr || src_cicp.is_some_and(|c| matches!(c.transfer_characteristics, 16 | 18))
-                {
-                    return Err(at!(CodecError::ColorManagement(
-                        "HDR-to-SDR requires an explicit display and tone-map policy".into()
-                    )));
-                }
+                let hdr_input = is_hdr
+                    || src_cicp.is_some_and(|c| matches!(c.transfer_characteristics, 16 | 18));
                 #[cfg(feature = "jpeg-ultrahdr")]
                 if gain_map.is_some() {
                     return Err(at!(CodecError::ColorManagement(
                         "sRGB conversion cannot preserve an unchanged gain map; select SupplementPolicy::Strip".into()
                     )));
                 }
-                // Relabel the decoded buffer with the authoritative source color
-                // (ICC or CICP per `color_authority`) so the CMS converts e.g.
-                // embedded Adobe RGB instead of assuming sRGB, and so malformed
-                // ICC bytes fail here instead of being silently dropped.
-                // Only normalize Unknown transfer/primaries for genuinely untagged
-                // sources (no ICC and no CICP), never when an attached ICC failed
-                // header identification.
-                let src_fmt = if source_color.icc_profile.is_none() && source_color.cicp.is_none() {
-                    crate::dispatch::normalize_unknown_format(&src_fmt).unwrap_or(src_fmt)
+                if hdr_input {
+                    #[cfg(feature = "tonemap")]
+                    if let Some(crate::ToneMapPolicy::Bt2408) = opts.tone_map {
+                        let relabeled = buffer
+                            .relabel_format(src_fmt)
+                            .map_err(|e| at!(CodecError::ColorManagement(alloc::format!("{e}"))))?;
+                        let toned = crate::tonemap::one_shot(
+                            &relabeled.as_view(),
+                            Some(&metadata),
+                            &zencodec::encode::EncodeCapabilities::new(),
+                            crate::ToneMapPolicy::Bt2408,
+                            false,
+                        )
+                        .map_err(|e| at!(CodecError::ColorManagement(e)))?
+                        .ok_or_else(|| {
+                            at!(CodecError::ColorManagement(
+                                "HDR-to-SDR tone mapping could not determine an HDR source color"
+                                    .into()
+                            ))
+                        })?
+                        .0;
+                        let rgba = if *toned.format() == PixelFormat::RGBA8_SRGB {
+                            toned
+                        } else {
+                            zenpixels_convert::convert_to_buf(
+                                &toned.as_view(),
+                                &PixelFormat::RGBA8_SRGB,
+                                &zenpixels_convert::ConvertPolicy::permissive(),
+                            )
+                            .map_err(|e| at!(CodecError::ColorManagement(alloc::format!("{e}"))))?
+                        };
+                        metadata.icc_profile = None;
+                        metadata.cicp = Some(zencodec::Cicp::SRGB);
+                        metadata.content_light_level = None;
+                        metadata.mastering_display = None;
+                        metadata.diffuse_white = None;
+                        src_cicp = metadata.cicp;
+                        rgba
+                    } else {
+                        return Err(at!(CodecError::ColorManagement(
+                            "HDR-to-SDR requires an explicit display and tone-map policy".into()
+                        )));
+                    }
+                    #[cfg(not(feature = "tonemap"))]
+                    return Err(at!(CodecError::ColorManagement(
+                        "HDR-to-SDR requires an explicit display and tone-map policy".into()
+                    )));
                 } else {
-                    src_fmt
-                };
-                let buffer = buffer
-                    .relabel_format(src_fmt.clone())
+                    // Relabel the decoded buffer with the authoritative source color
+                    // (ICC or CICP per `color_authority`) so the CMS converts e.g.
+                    // embedded Adobe RGB instead of assuming sRGB, and so malformed
+                    // ICC bytes fail here instead of being silently dropped.
+                    // Only normalize Unknown transfer/primaries for genuinely untagged
+                    // sources (no ICC and no CICP), never when an attached ICC failed
+                    // header identification.
+                    let src_fmt =
+                        if source_color.icc_profile.is_none() && source_color.cicp.is_none() {
+                            crate::dispatch::normalize_unknown_format(&src_fmt).unwrap_or(src_fmt)
+                        } else {
+                            src_fmt
+                        };
+                    let buffer = buffer
+                        .relabel_format(src_fmt.clone())
+                        .map_err(|e| at!(CodecError::ColorManagement(alloc::format!("{e}"))))?;
+                    let policy = zenpixels_convert::ConvertPolicy::permissive()
+                        .with_cms(alloc::sync::Arc::new(zenpixels_convert::cms::MoxCms));
+                    let plan = zenpixels_convert::OutputPlan::build(
+                        &src_fmt,
+                        &PixelFormat::RGBA8_SRGB,
+                        &policy,
+                        zenpixels::PeakSource::Declared,
+                        zenpixels_convert::OutputSignaling::Strip,
+                    )
                     .map_err(|e| at!(CodecError::ColorManagement(alloc::format!("{e}"))))?;
-                let policy = zenpixels_convert::ConvertPolicy::permissive()
-                    .with_cms(alloc::sync::Arc::new(zenpixels_convert::cms::MoxCms));
-                let plan = zenpixels_convert::OutputPlan::build(
-                    &src_fmt,
-                    &PixelFormat::RGBA8_SRGB,
-                    &policy,
-                    zenpixels::PeakSource::Declared,
-                    zenpixels_convert::OutputSignaling::Strip,
-                )
-                .map_err(|e| at!(CodecError::ColorManagement(alloc::format!("{e}"))))?;
-                let ready = plan
-                    .execute_buf(buffer)
-                    .map_err(|e| at!(CodecError::ColorManagement(alloc::format!("{e}"))))?;
-                metadata.icc_profile = None;
-                metadata.cicp = Some(zencodec::Cicp::SRGB);
-                metadata.content_light_level = None;
-                metadata.mastering_display = None;
-                metadata.diffuse_white = None;
-                src_cicp = metadata.cicp;
-                ready
-                    .pixels
-                    .into_owned()
-                    .map_err(|e| at!(CodecError::ColorManagement(alloc::format!("{e}"))))?
+                    let ready = plan
+                        .execute_buf(buffer)
+                        .map_err(|e| at!(CodecError::ColorManagement(alloc::format!("{e}"))))?;
+                    metadata.icc_profile = None;
+                    metadata.cicp = Some(zencodec::Cicp::SRGB);
+                    metadata.content_light_level = None;
+                    metadata.mastering_display = None;
+                    metadata.diffuse_white = None;
+                    src_cicp = metadata.cicp;
+                    ready
+                        .pixels
+                        .into_owned()
+                        .map_err(|e| at!(CodecError::ColorManagement(alloc::format!("{e}"))))?
+                }
             }
         }
     };
@@ -386,19 +621,73 @@ pub fn transcode(
         return Err(at!(CodecError::DisabledFormat(format)));
     }
 
-    // Build the encode request from the decision
+    // Apply explicit matte compositing when targeting an opaque format with alpha pixels.
+    let has_alpha = matches!(
+        buffer.format().color.alpha(),
+        zenpixels::AlphaMode::Straight | zenpixels::AlphaMode::Premultiplied
+    );
+    if has_alpha
+        && !format.supports_alpha()
+        && let Some(matte) = opts.matte.or(decision.matte)
+    {
+        buffer = composite_matte(buffer, matte)?;
+    }
+
+    // Resolve per-codec hint overrides from `decision.hints`.
+    let quality = decision
+        .hints
+        .get("quality")
+        .and_then(|s| s.parse::<f32>().ok())
+        .unwrap_or(decision.quality.quality);
+    let effort = decision
+        .hints
+        .get("effort")
+        .and_then(|s| s.parse::<u32>().ok())
+        .or_else(|| {
+            if format == ImageFormat::Avif {
+                decision
+                    .hints
+                    .get("speed")
+                    .and_then(|s| s.parse::<u32>().ok())
+                    .map(|s| 10u32.saturating_sub(s))
+            } else {
+                None
+            }
+        })
+        .or(decision.quality.effort);
+    let lossless = decision
+        .hints
+        .get("lossless")
+        .and_then(|s| match s.as_str() {
+            "true" | "1" => Some(true),
+            "false" | "0" => Some(false),
+            _ => None,
+        })
+        .unwrap_or(decision.lossless);
+
+    // Build the encode request from the decision + options
     let mut request = crate::EncodeRequest::new(format)
-        .with_quality(decision.quality.quality)
+        .with_quality(quality)
         .with_metadata(metadata)
         .with_metadata_policy(opts.metadata_policy)
         .with_cicp(src_cicp)
-        .with_registry(registry);
+        .with_registry(*registry);
 
-    if decision.lossless {
+    if lossless {
         request = request.with_lossless(true);
     }
-    if let Some(effort) = decision.quality.effort {
+    if let Some(effort) = effort {
         request = request.with_effort(effort);
+    }
+    if let Some(limits) = opts.limits {
+        request = request.with_limits(limits);
+    }
+    if let Some(ref pulse) = opts.pulse {
+        request = request.with_pulse(pulse.clone());
+    }
+    #[cfg(feature = "tonemap")]
+    if let Some(policy) = opts.tone_map {
+        request = request.with_tone_map_policy(policy);
     }
 
     // Passthrough re-embed: carry the source gain map into the target container
@@ -414,11 +703,7 @@ pub fn transcode(
         });
     }
 
-    let has_alpha = matches!(
-        buffer.format().color.alpha(),
-        zenpixels::AlphaMode::Straight | zenpixels::AlphaMode::Premultiplied
-    );
-    let encode_output = request.encode(buffer.as_view(), has_alpha)?;
+    let encode_output = request.encode(buffer.as_view())?;
 
     Ok(TranscodeOutput {
         data: encode_output.into_vec(),
@@ -480,6 +765,9 @@ pub fn transcode_to_quality(
     opts: &TranscodeOptions,
     registry: &AllowedFormats,
 ) -> Result<TranscodeOutput> {
+    if let Some(ref pulse) = opts.pulse {
+        pulse.check().map_err(|r| at!(CodecError::Stopped(r)))?;
+    }
     let source =
         crate::info::detect_format(data).ok_or_else(|| at!(CodecError::UnrecognizedFormat))?;
 
@@ -1132,10 +1420,7 @@ mod tests {
         // Encode to JPEG first
         let jpeg_output = crate::EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality(75.0)
-            .encode(
-                PixelView::from_imgref(img.as_ref(), zenpixels::ColorSpace::SRGB).unwrap(),
-                false,
-            )
+            .encode(PixelView::from_imgref(img.as_ref(), zenpixels::ColorSpace::SRGB).unwrap())
             .unwrap();
         assert!(!jpeg_output.data().is_empty());
 
@@ -1191,10 +1476,7 @@ mod tests {
         let img = imgref::ImgVec::new(px, w, h);
         let jpeg = crate::EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality(90.0)
-            .encode(
-                PixelView::from_imgref(img.as_ref(), zenpixels::ColorSpace::SRGB).unwrap(),
-                false,
-            )
+            .encode(PixelView::from_imgref(img.as_ref(), zenpixels::ColorSpace::SRGB).unwrap())
             .unwrap();
 
         let out = transcode_to_quality(
@@ -1237,10 +1519,7 @@ mod tests {
         );
         let jpeg = crate::EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality(90.0)
-            .encode(
-                PixelView::from_imgref(img.as_ref(), zenpixels::ColorSpace::SRGB).unwrap(),
-                false,
-            )
+            .encode(PixelView::from_imgref(img.as_ref(), zenpixels::ColorSpace::SRGB).unwrap())
             .unwrap();
 
         let result = transcode_to_quality(
@@ -1282,10 +1561,7 @@ mod tests {
 
         let jpeg_output = crate::EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality(90.0)
-            .encode(
-                PixelView::from_imgref(img.as_ref(), zenpixels::ColorSpace::SRGB).unwrap(),
-                false,
-            )
+            .encode(PixelView::from_imgref(img.as_ref(), zenpixels::ColorSpace::SRGB).unwrap())
             .unwrap();
 
         let decision = FormatDecision {
@@ -1336,10 +1612,7 @@ mod tests {
         );
         let jpeg_output = crate::EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality(80.0)
-            .encode(
-                PixelView::from_imgref(img.as_ref(), zenpixels::ColorSpace::SRGB).unwrap(),
-                false,
-            )
+            .encode(PixelView::from_imgref(img.as_ref(), zenpixels::ColorSpace::SRGB).unwrap())
             .unwrap();
 
         let info = crate::probe(jpeg_output.data(), &AllowedFormats::all()).unwrap();

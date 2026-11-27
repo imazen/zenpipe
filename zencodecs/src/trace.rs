@@ -124,6 +124,12 @@ impl SelectionTrace {
     }
 }
 
+impl From<Vec<SelectionStep>> for SelectionTrace {
+    fn from(steps: Vec<SelectionStep>) -> Self {
+        Self { steps }
+    }
+}
+
 impl core::fmt::Display for SelectionStep {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {

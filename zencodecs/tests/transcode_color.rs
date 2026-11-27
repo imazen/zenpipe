@@ -30,7 +30,7 @@ fn source_png(icc: &[u8]) -> Vec<u8> {
     EncodeRequest::new(ImageFormat::Png)
         .with_lossless(true)
         .with_metadata(Metadata::none().with_icc(icc.to_vec()))
-        .encode(buffer.as_view(), false)
+        .encode(buffer.as_view())
         .unwrap()
         .into_vec()
 }
@@ -66,10 +66,7 @@ fn explicit_srgb_transcode_converts_adobe_rgb_before_png_and_gif() {
     ] {
         let mut decision = FormatDecision::for_format_quality(format, 100.0);
         decision.lossless = true;
-        let opts = TranscodeOptions {
-            color,
-            ..Default::default()
-        };
+        let opts = TranscodeOptions::new().with_color(color);
         let output = transcode(&source, &decision, &opts, &all).unwrap();
         let decoded = DecodeRequest::new(&output.data)
             .decode_full_frame()
@@ -137,10 +134,7 @@ fn raw_png_with_iccp(icc: &[u8]) -> Vec<u8> {
 
 #[test]
 fn sdr_conversion_rejects_hdr_and_invalid_icc() {
-    let options = TranscodeOptions {
-        color: TranscodeColor::Srgb8,
-        ..Default::default()
-    };
+    let options = TranscodeOptions::new().with_color(TranscodeColor::Srgb8);
     let target = FormatDecision::for_format(ImageFormat::Png);
     for transfer in [Transfer::Pq, Transfer::Hlg(HlgMode::Scene)] {
         let pixels = PixelBuf::from_bytes(
@@ -154,7 +148,7 @@ fn sdr_conversion_rejects_hdr_and_invalid_icc() {
         .unwrap();
         let source = EncodeRequest::new(ImageFormat::Png)
             .with_lossless(true)
-            .encode(pixels.as_view(), false)
+            .encode(pixels.as_view())
             .unwrap()
             .into_vec();
         let err = transcode(&source, &target, &options, &AllowedFormats::all()).unwrap_err();
@@ -162,4 +156,68 @@ fn sdr_conversion_rejects_hdr_and_invalid_icc() {
     }
     let source = raw_png_with_iccp(b"not an ICC profile");
     assert!(transcode(&source, &target, &options, &AllowedFormats::all()).is_err());
+}
+
+#[cfg(feature = "tonemap")]
+#[test]
+fn sdr_conversion_with_bt2408_tone_map_policy_succeeds_for_hdr() {
+    let pixels = PixelBuf::from_bytes(
+        38_000_u16.to_ne_bytes().repeat(3 * 4 * 4),
+        4,
+        4,
+        PixelFormat::RGB16_SRGB
+            .with_transfer(Transfer::Pq)
+            .with_primaries(Primaries::Bt2020),
+    )
+    .unwrap();
+    let source = EncodeRequest::new(ImageFormat::Png)
+        .with_lossless(true)
+        .encode(pixels.as_view())
+        .unwrap()
+        .into_vec();
+    let options = TranscodeOptions::new()
+        .with_color(TranscodeColor::Srgb8)
+        .with_tone_map_policy(zencodecs::ToneMapPolicy::Bt2408);
+    let target = FormatDecision::for_format(ImageFormat::Png);
+    let out = transcode(&source, &target, &options, &AllowedFormats::all())
+        .expect("explicit Bt2408 tone-map policy should allow HDR -> Srgb8 transcode");
+    let decoded = DecodeRequest::new(&out.data).decode_full_frame().unwrap();
+    assert_eq!((decoded.width(), decoded.height()), (4, 4));
+}
+
+#[test]
+fn transcode_refuses_animation_by_default_and_allows_first_frame() {
+    // Build a 2-frame animated GIF via EncodeRequest::animation_frame_encoder.
+    let mut anim = EncodeRequest::new(ImageFormat::Gif)
+        .with_loop_count(Some(2))
+        .animation_frame_encoder(4, 4)
+        .expect("gif animation encoder");
+    let f0 = [255u8, 0, 0, 255].repeat(16);
+    let f1 = [0u8, 0, 255, 255].repeat(16);
+    let v0 = zenpixels::PixelView::new(&f0, 4, 4, 16, &zenpixels::formats::RGBA8_SRGB).unwrap();
+    let v1 = zenpixels::PixelView::new(&f1, 4, 4, 16, &zenpixels::formats::RGBA8_SRGB).unwrap();
+    anim.push_frame(v0, 100, None).unwrap();
+    anim.push_frame(v1, 100, None).unwrap();
+    let gif_bytes = anim.finish(None).unwrap().into_vec();
+
+    let decision = FormatDecision::for_format(ImageFormat::Png);
+    let all = AllowedFormats::all();
+
+    // Default AnimationPolicy::Refuse must reject multi-frame input cleanly.
+    let err = transcode(&gif_bytes, &decision, &TranscodeOptions::default(), &all)
+        .expect_err("default transcode must refuse animated input");
+    assert!(
+        matches!(
+            err.error(),
+            zencodecs::CodecError::UnsupportedOperation { .. }
+        ),
+        "expected UnsupportedOperation, got {err:?}"
+    );
+
+    // Explicit AnimationPolicy::FirstFrame must succeed and output frame 0.
+    let opts = TranscodeOptions::new().with_animation(zencodecs::AnimationPolicy::FirstFrame);
+    let out = transcode(&gif_bytes, &decision, &opts, &all)
+        .expect("FirstFrame animation policy must succeed");
+    let decoded = DecodeRequest::new(&out.data).decode_full_frame().unwrap();
+    assert_eq!((decoded.width(), decoded.height()), (4, 4));
 }

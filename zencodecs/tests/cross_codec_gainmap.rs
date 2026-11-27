@@ -82,7 +82,7 @@ fn jpeg_ultrahdr_gainmap_re_embeds_into_jpeg_ultrahdr() {
             gain_map: &donor.gain_map,
             metadata: &donor.metadata,
         })
-        .encode(pixels, false)
+        .encode(pixels)
         .expect("JPEG encode with precomputed gain map")
         .into_vec();
 
@@ -129,7 +129,7 @@ fn jpeg_ultrahdr_gainmap_re_embeds_into_avif_tmap() {
             gain_map: &donor.gain_map,
             metadata: &donor.metadata,
         })
-        .encode(view, false)
+        .encode(view)
         .expect("AVIF encode with precomputed gain map");
 
     // Decode back and verify a gain map appears.
@@ -168,7 +168,7 @@ fn avif_tmap_gainmap_re_embeds_into_jpeg_ultrahdr() {
             gain_map: &jpeg_donor.gain_map,
             metadata: &jpeg_donor.metadata,
         })
-        .encode(view, false)
+        .encode(view)
         .expect("AVIF re-encode")
         .into_vec();
 
@@ -200,7 +200,7 @@ fn avif_tmap_gainmap_re_embeds_into_jpeg_ultrahdr() {
             gain_map: &avif_donor.gain_map,
             metadata: &avif_donor.metadata,
         })
-        .encode(view_sdr, false)
+        .encode(view_sdr)
         .expect("JPEG re-encode with AVIF-derived gain map")
         .into_vec();
 
@@ -242,7 +242,7 @@ fn jpeg_ultrahdr_gainmap_re_embeds_into_jxl_jhgm() {
             gain_map: &donor.gain_map,
             metadata: &donor.metadata,
         })
-        .encode(view, false)
+        .encode(view)
         .expect("JXL encode with precomputed gain map")
         .into_vec();
 
@@ -272,7 +272,7 @@ fn avif_encode_without_with_gain_map_produces_plain_avif() {
         .expect("from_imgref");
     let bytes = EncodeRequest::new(ImageFormat::Avif)
         .with_quality(85.0)
-        .encode(view, false)
+        .encode(view)
         .expect("plain AVIF encode")
         .into_vec();
 

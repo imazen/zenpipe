@@ -16,7 +16,7 @@ use zencodec::storage::StorageBudget;
 use zencodec::{CodecSet, SharedPulse};
 use zencodec_io::DriveOptions;
 use zenpipe::Source;
-use zenpipe::io::{DecodeOptions, DecodeSource};
+use zenpipe::io::{DecodeSource, SourceOptions};
 use zenpixels::PixelView;
 
 const W: u32 = 200;
@@ -52,8 +52,8 @@ fn codecs() -> CodecSet {
     CodecSet::new().with_decoder(zenpng::PngDecoderConfig::new())
 }
 
-fn options(read_size: usize) -> DecodeOptions {
-    DecodeOptions::new(StorageBudget::new(64 << 20, 64))
+fn options(read_size: usize) -> SourceOptions {
+    SourceOptions::new(StorageBudget::new(64 << 20, 64))
         .with_queue_slots(256)
         .with_drive(DriveOptions::new(0, read_size))
 }

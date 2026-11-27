@@ -28,20 +28,17 @@ use crate::quality::QualityProfile;
 /// use zencodecs::ImageFormat;
 ///
 /// // High-quality WebP encode
-/// let intent = CodecIntent {
-///     format: Some(FormatChoice::Specific(ImageFormat::WebP)),
-///     quality_profile: Some(QualityProfile::High),
-///     ..Default::default()
-/// };
+/// let intent = CodecIntent::new()
+///     .with_format(FormatChoice::Specific(ImageFormat::WebP))
+///     .with_quality_profile(QualityProfile::High);
 ///
 /// // Auto-select format, preserve source losslessness
-/// let intent = CodecIntent {
-///     format: Some(FormatChoice::Auto),
-///     lossless: Some(BoolKeep::Keep),
-///     ..Default::default()
-/// };
+/// let intent = CodecIntent::new()
+///     .with_format(FormatChoice::Auto)
+///     .with_lossless(BoolKeep::Keep);
 /// ```
 #[derive(Debug, Clone, Default)]
+#[non_exhaustive]
 pub struct CodecIntent {
     /// Explicit format choice. `None` = context-dependent default.
     pub format: Option<FormatChoice>,
@@ -93,6 +90,7 @@ pub enum BoolKeep {
 /// Keys are the suffix after the codec prefix. For example, `jpeg.quality=75`
 /// becomes `jpeg["quality"] = "75"`.
 #[derive(Debug, Clone, Default)]
+#[non_exhaustive]
 pub struct PerCodecHints {
     /// JPEG hints (quality, progressive, li).
     pub jpeg: BTreeMap<String, String>,
@@ -109,16 +107,38 @@ pub struct PerCodecHints {
 }
 
 impl PerCodecHints {
-    /// Get the hints map for a specific format.
-    pub fn for_format(&self, format: crate::ImageFormat) -> &BTreeMap<String, String> {
+    /// Create an empty set of per-codec hints.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Get the hints map for a specific format, or `None` if this format
+    /// does not have a dedicated per-codec hint map.
+    pub fn for_format(&self, format: crate::ImageFormat) -> Option<&BTreeMap<String, String>> {
         match format {
-            crate::ImageFormat::Jpeg => &self.jpeg,
-            crate::ImageFormat::Png => &self.png,
-            crate::ImageFormat::WebP => &self.webp,
-            crate::ImageFormat::Avif => &self.avif,
-            crate::ImageFormat::Jxl => &self.jxl,
-            crate::ImageFormat::Gif => &self.gif,
-            _ => &self.jpeg, // fallback to empty-ish map; callers check format first
+            crate::ImageFormat::Jpeg => Some(&self.jpeg),
+            crate::ImageFormat::Png => Some(&self.png),
+            crate::ImageFormat::WebP => Some(&self.webp),
+            crate::ImageFormat::Avif => Some(&self.avif),
+            crate::ImageFormat::Jxl => Some(&self.jxl),
+            crate::ImageFormat::Gif => Some(&self.gif),
+            _ => None,
+        }
+    }
+
+    /// Get a mutable reference to the hints map for a specific format, if supported.
+    pub fn for_format_mut(
+        &mut self,
+        format: crate::ImageFormat,
+    ) -> Option<&mut BTreeMap<String, String>> {
+        match format {
+            crate::ImageFormat::Jpeg => Some(&mut self.jpeg),
+            crate::ImageFormat::Png => Some(&mut self.png),
+            crate::ImageFormat::WebP => Some(&mut self.webp),
+            crate::ImageFormat::Avif => Some(&mut self.avif),
+            crate::ImageFormat::Jxl => Some(&mut self.jxl),
+            crate::ImageFormat::Gif => Some(&mut self.gif),
+            _ => None,
         }
     }
 
@@ -136,6 +156,59 @@ impl PerCodecHints {
 use crate::ImageFormat;
 
 impl CodecIntent {
+    /// Create a default [`CodecIntent`].
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the explicit format choice.
+    pub fn with_format(mut self, format: FormatChoice) -> Self {
+        self.format = Some(format);
+        self
+    }
+
+    /// Set the quality profile (`qp=`).
+    pub fn with_quality_profile(mut self, profile: QualityProfile) -> Self {
+        self.quality_profile = Some(profile);
+        self
+    }
+
+    /// Set the fallback numeric quality (0–100, used when `quality_profile` is absent).
+    pub fn with_quality_fallback(mut self, quality: f32) -> Self {
+        self.quality_fallback = Some(quality);
+        self
+    }
+
+    /// Set the device pixel ratio quality adjustment (`qp.dpr=`).
+    pub fn with_quality_dpr(mut self, dpr: f32) -> Self {
+        self.quality_dpr = Some(dpr);
+        self
+    }
+
+    /// Set the lossless preference.
+    pub fn with_lossless(mut self, lossless: BoolKeep) -> Self {
+        self.lossless = Some(lossless);
+        self
+    }
+
+    /// Restrict the allowed output formats.
+    pub fn with_allowed(mut self, allowed: FormatSet) -> Self {
+        self.allowed = allowed;
+        self
+    }
+
+    /// Set per-codec encoder hints.
+    pub fn with_hints(mut self, hints: PerCodecHints) -> Self {
+        self.hints = hints;
+        self
+    }
+
+    /// Set the matte color for alpha compositing onto opaque formats.
+    pub fn with_matte(mut self, matte: [u8; 3]) -> Self {
+        self.matte = Some(matte);
+        self
+    }
+
     /// Resolve the effective quality as a generic 0-100 value.
     ///
     /// Priority: quality_profile (with DPR) > quality_fallback > default (73.0).
@@ -287,14 +360,22 @@ mod tests {
         hints.webp.insert("lossless".into(), "true".into());
 
         assert_eq!(
-            hints.for_format(ImageFormat::Jpeg).get("quality"),
+            hints
+                .for_format(ImageFormat::Jpeg)
+                .and_then(|m| m.get("quality")),
             Some(&"75".to_string())
         );
         assert_eq!(
-            hints.for_format(ImageFormat::WebP).get("lossless"),
+            hints
+                .for_format(ImageFormat::WebP)
+                .and_then(|m| m.get("lossless")),
             Some(&"true".to_string())
         );
-        assert!(hints.for_format(ImageFormat::Png).is_empty());
+        assert!(hints.for_format(ImageFormat::Png).unwrap().is_empty());
+        assert!(
+            hints.for_format(ImageFormat::Bmp).is_none(),
+            "formats without dedicated hint maps must return None rather than falling back to JPEG"
+        );
     }
 
     #[test]
@@ -432,11 +513,17 @@ mod tests {
         intent.hints.avif.insert("quality".into(), "70".into());
 
         assert_eq!(
-            intent.hints.for_format(ImageFormat::Avif).get("speed"),
+            intent
+                .hints
+                .for_format(ImageFormat::Avif)
+                .and_then(|m| m.get("speed")),
             Some(&"4".to_string())
         );
         assert_eq!(
-            intent.hints.for_format(ImageFormat::Avif).get("quality"),
+            intent
+                .hints
+                .for_format(ImageFormat::Avif)
+                .and_then(|m| m.get("quality")),
             Some(&"70".to_string())
         );
         assert!(!intent.hints.is_empty());

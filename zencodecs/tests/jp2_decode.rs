@@ -32,14 +32,14 @@ fn jp2_obeys_decode_allowlist_and_never_advertises_encode() {
     let denied = AllowedFormats::none();
     assert!(
         DecodeRequest::new(bytes)
-            .with_registry(&denied)
+            .with_registry(denied)
             .decode_full_frame()
             .is_err()
     );
     let allowed = denied.with_decode(ImageFormat::Jp2, true);
     assert!(
         DecodeRequest::new(bytes)
-            .with_registry(&allowed)
+            .with_registry(allowed)
             .decode_full_frame()
             .is_ok()
     );

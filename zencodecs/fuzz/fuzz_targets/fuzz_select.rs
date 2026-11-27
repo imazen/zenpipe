@@ -34,14 +34,15 @@ fuzz_target!(|input: SelectInput| {
         _ => None,
     };
 
-    let facts = ImageFacts {
-        has_alpha: input.has_alpha,
-        has_animation: input.has_animation,
-        is_lossless_source: input.is_lossless_source,
-        pixel_count: input.pixel_count as u64,
-        is_hdr: input.is_hdr,
-        source_format,
-    };
+    let mut facts = ImageFacts::new()
+        .with_alpha(input.has_alpha)
+        .with_animation(input.has_animation)
+        .with_lossless_source(input.is_lossless_source)
+        .with_pixel_count(input.pixel_count as u64)
+        .with_hdr(input.is_hdr);
+    if let Some(fmt) = source_format {
+        facts = facts.with_source_format(fmt);
+    }
 
     let quality = (input.quality as f32).clamp(1.0, 100.0);
     let intent = QualityIntent::from_quality(quality).with_lossless(input.lossless);

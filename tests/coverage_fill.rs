@@ -501,9 +501,9 @@ fn pipe_error_display_limit_exceeded() {
 
 #[test]
 fn pipe_error_display_cancelled() {
-    let err = PipeError::Cancelled;
+    let err = PipeError::Stopped(enough::StopReason::Cancelled);
     let msg = format!("{err}");
-    assert_eq!(msg, "cancelled");
+    assert!(msg.contains("stopped"), "got: {msg}");
 }
 
 #[test]
@@ -517,8 +517,9 @@ fn pipe_error_display_op() {
 #[test]
 fn pipe_error_is_std_error() {
     // Verify PipeError implements std::error::Error
-    let err: Box<dyn std::error::Error> = Box::new(PipeError::Cancelled);
-    assert_eq!(format!("{err}"), "cancelled");
+    let err: Box<dyn std::error::Error> =
+        Box::new(PipeError::Stopped(enough::StopReason::TimedOut));
+    assert!(format!("{err}").contains("stopped"));
 }
 
 #[test]
@@ -531,10 +532,13 @@ fn pipe_error_debug_impl() {
 
 #[test]
 fn pipe_error_from_stop_reason() {
-    // Test From<StopReason> → PipeError::Cancelled
-    let stop_reason = enough::StopReason::Cancelled;
+    // Test From<StopReason> → PipeError::Stopped(reason)
+    let stop_reason = enough::StopReason::TimedOut;
     let err: PipeError = stop_reason.into();
-    assert_eq!(format!("{err}"), "cancelled");
+    assert!(matches!(
+        err,
+        PipeError::Stopped(enough::StopReason::TimedOut)
+    ));
 }
 
 // =============================================================================

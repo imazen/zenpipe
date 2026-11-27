@@ -19,7 +19,7 @@ use zencodec::storage::StorageBudget;
 use zencodec::{CodecSet, ImageFormat};
 use zencodec_io::DriveOptions;
 use zenpipe::Source;
-use zenpipe::io::{DecodeOptions, DecodeSource};
+use zenpipe::io::{DecodeSource, SourceOptions};
 use zenpixels::PixelView;
 
 const W: u32 = 320;
@@ -123,7 +123,7 @@ fn decode_through(
         &CodecDecodeOptions::new(),
         transport,
         PolicySet::new(),
-        DecodeOptions::new(StorageBudget::new(64 << 20, 64))
+        SourceOptions::new(StorageBudget::new(64 << 20, 64))
             .with_queue_slots(256)
             .with_drive(DriveOptions::new(0, read_size)),
     )
@@ -139,7 +139,7 @@ fn sequential_rounds(name: &str) {
         &mut DecodeSource::from_slice(
             &codecs,
             &file,
-            DecodeOptions::new(StorageBudget::new(64 << 20, 64)).with_queue_slots(256),
+            SourceOptions::new(StorageBudget::new(64 << 20, 64)).with_queue_slots(256),
         )
         .unwrap(),
     );

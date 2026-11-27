@@ -25,21 +25,21 @@ fn pq_png() -> Vec<u8> {
     EncodeRequest::new(ImageFormat::Png)
         .with_lossless(true)
         .with_metadata(Metadata::none().with_cicp(Cicp::new(9, 16, 0, true)))
-        .encode(buffer.as_view(), false)
+        .encode(buffer.as_view())
         .unwrap()
         .into_vec()
 }
 
 fn job(input: Vec<u8>, format: ImageFormat, lossless: bool) -> ImageJob<'static> {
+    let mut intent = CodecIntent::new().with_format(FormatChoice::Specific(format));
+    if lossless {
+        intent = intent.with_lossless(BoolKeep::True);
+    }
     ImageJob::new()
         .add_input(0, input)
         .add_output(1)
         .with_cms(CmsMode::Preserve)
-        .with_intent(CodecIntent {
-            format: Some(FormatChoice::Specific(format)),
-            lossless: lossless.then_some(BoolKeep::True),
-            ..Default::default()
-        })
+        .with_intent(intent)
 }
 
 fn run(format: ImageFormat, lossless: bool) -> Vec<u8> {

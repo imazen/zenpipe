@@ -31,8 +31,8 @@ fuzz_target!(|input: FuzzInput| {
         .with_max_frames(max_frames);
 
     let result = DecodeRequest::new(&input.data)
-        .with_limits(&limits)
-        .with_registry(&AllowedFormats::all())
+        .with_limits(limits)
+        .with_registry(AllowedFormats::all())
         .decode_full_frame();
 
     if let Ok(output) = result {

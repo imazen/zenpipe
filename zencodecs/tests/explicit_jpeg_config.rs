@@ -28,7 +28,7 @@ fn native_scan_and_entropy_settings_are_preserved() {
     let pixels = PixelView::new(&data, W, H, stride, &zenpixels::formats::RGB8_SRGB).unwrap();
     let output = EncodeRequest::new(ImageFormat::Jpeg)
         .with_codec_config(&overrides)
-        .encode(pixels, false)
+        .encode(pixels)
         .unwrap();
     assert!(
         output.data() == native,
@@ -55,7 +55,7 @@ fn short_fixed_table_canvas_keeps_the_complete_file_until_finish() {
             &zenpixels::formats::RGB8_SRGB,
         )
         .unwrap();
-        let whole = make().encode(pixels.clone(), false).unwrap();
+        let whole = make().encode(pixels.clone()).unwrap();
         let mut encoder = make()
             .build_streaming_encoder(width, height)
             .unwrap()

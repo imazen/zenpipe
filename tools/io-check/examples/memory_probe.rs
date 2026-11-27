@@ -17,7 +17,7 @@ use zencodec::storage::StorageBudget;
 use zencodec_io::destination::Forward;
 use zencodec_io::row_encode::{self, Options};
 use zencodec_io::{DriveOptions, FileReadAt};
-use zenpipe::io::{DecodeOptions, DecodeSource, PipelineRows};
+use zenpipe::io::{DecodeSource, PipelineRows, SourceOptions};
 use zenpixels::PixelView;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -78,7 +78,7 @@ fn run(
         &CodecDecodeOptions::new(),
         FileReadAt::open(input)?,
         PolicySet::new(),
-        DecodeOptions::new(decode_budget.clone()).with_drive(DriveOptions::new(0, 1 << 20)),
+        SourceOptions::new(decode_budget.clone()).with_drive(DriveOptions::new(0, 1 << 20)),
     )?;
     let rows = PipelineRows::from_source(source)?;
     let encode_budget = StorageBudget::new(1 << 30, 1 << 16);

@@ -58,7 +58,6 @@ zencodec = { git = "https://github.com/imazen/zencodec", rev = "5d4f6c473404c09c
 zencodec-testkit = { git = "https://github.com/imazen/zencodec", rev = "5d4f6c473404c09c95f404543f8a16a1e3cb8477" }
 zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "5d4f6c473404c09c95f404543f8a16a1e3cb8477" }
 zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "5d4f6c473404c09c95f404543f8a16a1e3cb8477" }
-zencodec-media = { git = "https://github.com/imazen/zencodec", rev = "5d4f6c473404c09c95f404543f8a16a1e3cb8477" }
 zenmeta = { git = "https://github.com/imazen/zencodec", rev = "5d4f6c473404c09c95f404543f8a16a1e3cb8477" }
 zenresize = { git = "https://github.com/imazen/zenresize", rev = "e6c077561dcb426b23d8e7c3da1ca0e12cc13c5f" }
 zenflate = { git = "https://github.com/imazen/zenflate", rev = "7270e38faca9cdbae793938fa229d40ac4fe4c39" }

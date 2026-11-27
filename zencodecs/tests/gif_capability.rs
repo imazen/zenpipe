@@ -106,7 +106,7 @@ fn gif_icc_input_is_dropped_by_default_and_refused_when_strict() {
     let bytes = EncodeRequest::new(ImageFormat::Gif)
         .with_quality(75.0)
         .with_metadata(meta.clone())
-        .encode(view, true)
+        .encode(view)
         .expect("default policy drops an unusable profile")
         .into_vec();
     assert!(
@@ -123,7 +123,7 @@ fn gif_icc_input_is_dropped_by_default_and_refused_when_strict() {
         .with_quality(75.0)
         .with_metadata(meta)
         .with_encode_policy(zencodec::encode::EncodePolicy::none().with_strict(true))
-        .encode(view, true);
+        .encode(view);
     assert!(
         strict.is_err(),
         "strict encode must refuse to drop a profile GIF cannot carry"

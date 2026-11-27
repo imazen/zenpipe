@@ -1,19 +1,8 @@
 //! Resource limits for pipeline operations.
 //!
 //! [`Limits`] prevents memory-bomb attacks by rejecting images that exceed
-//! configured dimension or pixel count thresholds before allocating.
-//!
-//! # Runtime enforcement
-//!
-//! [`AllocationTracker`] provides runtime memory tracking with RAII guards.
-//! Wrap each buffer allocation in [`allocate()`](AllocationTracker::allocate)
-//! and hold the returned [`AllocationGuard`] for the buffer's lifetime.
-//!
-//! [`Deadline`] (requires `std`) implements [`enough::Stop`] so it composes
-//! with the existing cancellation path in [`execute_with_pulse`](crate::execute_with_pulse).
-
-use alloc::sync::Arc;
-use core::sync::atomic::{AtomicU64, Ordering};
+//! configured dimension, pixel count, memory, frame, output-size, or duration
+//! thresholds before allocating or during execution.
 
 #[allow(unused_imports)]
 use whereat::at;
@@ -32,13 +21,14 @@ use crate::format::PixelFormat;
 /// ```
 /// use zenpipe::Limits;
 ///
-/// let limits = Limits::default()
+/// let limits = Limits::SERVER
 ///     .with_max_pixels(120_000_000)   // 120 megapixels
 ///     .with_max_width(16384)
 ///     .with_max_height(16384)
 ///     .with_max_frames(10000);
 /// ```
 #[derive(Debug, Clone, Copy, Default)]
+#[non_exhaustive]
 pub struct Limits {
     /// Maximum total pixel count (width × height).
     pub max_pixels: Option<u64>,
@@ -57,10 +47,8 @@ pub struct Limits {
     /// Maximum encoded output size in bytes. Enforced by the codec layer
     /// during encoding (zencodec `ResourceLimits::max_output_bytes`).
     pub max_output_bytes: Option<u64>,
-    /// Maximum job duration.
-    ///
-    /// Use [`to_deadline()`](Limits::to_deadline) to create a [`Deadline`]
-    /// that implements [`enough::Stop`].
+    /// Maximum job duration (enforced automatically by `ImageJob` via
+    /// cooperative cancellation returning `PipeError::Stopped(StopReason::TimedOut)`).
     #[cfg(feature = "std")]
     pub max_duration: Option<core::time::Duration>,
 }
@@ -272,18 +260,9 @@ impl Limits {
     ///
     /// The deadline starts from the moment this method is called.
     #[cfg(feature = "std")]
-    pub fn to_deadline(&self) -> Option<Deadline> {
+    #[allow(dead_code)] // Used by job/imageflow-compat features and unit tests.
+    pub(crate) fn to_deadline(self) -> Option<Deadline> {
         self.max_duration.map(Deadline::new)
-    }
-
-    /// Create an [`AllocationTracker`] from `max_memory_bytes`, if set.
-    ///
-    /// Returns an unlimited tracker when no memory limit is configured.
-    pub fn to_allocation_tracker(self) -> Arc<AllocationTracker> {
-        Arc::new(match self.max_memory_bytes {
-            Some(limit) => AllocationTracker::new(limit),
-            None => AllocationTracker::unlimited(),
-        })
     }
 }
 
@@ -335,283 +314,26 @@ pub fn checked_dim_add(a: u32, b: u32) -> crate::PipeResult<u32> {
 }
 
 // =========================================================================
-// AllocationTracker — runtime memory accounting
-// =========================================================================
-
-/// Thread-safe runtime memory tracker with RAII guards.
-///
-/// Tracks current and peak memory usage across all allocations.
-/// Each [`allocate()`](Self::allocate) call returns an [`AllocationGuard`]
-/// that decrements the counter on drop.
-///
-/// # `no_std` compatible
-///
-/// Uses only `core::sync::atomic` — works in `no_std + alloc` environments.
-///
-/// # Example
-///
-/// ```
-/// use std::sync::Arc;
-/// use zenpipe::limits::AllocationTracker;
-///
-/// let tracker = Arc::new(AllocationTracker::new(1024 * 1024)); // 1 MB limit
-///
-/// // Allocate 512 KB — succeeds
-/// let guard = tracker.allocate(512 * 1024).unwrap();
-/// assert_eq!(tracker.current_bytes(), 512 * 1024);
-///
-/// // Try another 512 KB + 1 — fails (would exceed 1 MB)
-/// assert!(tracker.allocate(512 * 1024 + 1).is_err());
-///
-/// // Drop the first guard — frees the 512 KB
-/// drop(guard);
-/// assert_eq!(tracker.current_bytes(), 0);
-/// ```
-pub struct AllocationTracker {
-    current_bytes: AtomicU64,
-    peak_bytes: AtomicU64,
-    allocation_count: AtomicU64,
-    /// Memory limit in bytes. 0 = unlimited.
-    limit_bytes: u64,
-}
-
-impl core::fmt::Debug for AllocationTracker {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("AllocationTracker")
-            .field("current_bytes", &self.current_bytes())
-            .field("peak_bytes", &self.peak_bytes())
-            .field("allocation_count", &self.allocation_count())
-            .field("limit_bytes", &self.limit_bytes)
-            .finish()
-    }
-}
-
-impl AllocationTracker {
-    /// Create a tracker with the given byte limit.
-    ///
-    /// Pass `0` for unlimited (equivalent to [`unlimited()`](Self::unlimited)).
-    pub fn new(limit_bytes: u64) -> Self {
-        Self {
-            current_bytes: AtomicU64::new(0),
-            peak_bytes: AtomicU64::new(0),
-            allocation_count: AtomicU64::new(0),
-            limit_bytes,
-        }
-    }
-
-    /// Create a tracker with no memory limit.
-    pub fn unlimited() -> Self {
-        Self::new(0)
-    }
-
-    /// Record an allocation of `bytes` and return an RAII guard.
-    ///
-    /// Returns `Err(at!(PipeError::LimitExceeded))` if the allocation would
-    /// push `current_bytes` past the configured limit.
-    ///
-    /// The returned [`AllocationGuard`] decrements `current_bytes` on drop.
-    ///
-    /// Atomic check-and-add via `compare_exchange`: when multiple threads
-    /// race, at most one wins for any given budget; losers retry against
-    /// the updated current total or surface a limit error.
-    pub fn allocate(self: &Arc<Self>, bytes: u64) -> crate::PipeResult<AllocationGuard> {
-        let new_total = if self.limit_bytes > 0 {
-            let mut current = self.current_bytes.load(Ordering::Acquire);
-            loop {
-                let candidate = current.checked_add(bytes).ok_or_else(|| {
-                    at!(PipeError::LimitExceeded(alloc::format!(
-                        "memory: requested {bytes} bytes overflows u64 (current {current})"
-                    )))
-                })?;
-                if candidate > self.limit_bytes {
-                    return Err(at!(PipeError::LimitExceeded(alloc::format!(
-                        "memory: {} + {} = {} bytes exceeds limit {}",
-                        current,
-                        bytes,
-                        candidate,
-                        self.limit_bytes,
-                    ))));
-                }
-                match self.current_bytes.compare_exchange_weak(
-                    current,
-                    candidate,
-                    Ordering::AcqRel,
-                    Ordering::Acquire,
-                ) {
-                    Ok(_) => break candidate,
-                    Err(actual) => current = actual,
-                }
-            }
-        } else {
-            // Unlimited: still need overflow protection on the running total.
-            let mut current = self.current_bytes.load(Ordering::Acquire);
-            loop {
-                let candidate = current.checked_add(bytes).ok_or_else(|| {
-                    at!(PipeError::LimitExceeded(alloc::format!(
-                        "memory: requested {bytes} bytes overflows u64 (current {current})"
-                    )))
-                })?;
-                match self.current_bytes.compare_exchange_weak(
-                    current,
-                    candidate,
-                    Ordering::AcqRel,
-                    Ordering::Acquire,
-                ) {
-                    Ok(_) => break candidate,
-                    Err(actual) => current = actual,
-                }
-            }
-        };
-
-        self.peak_bytes.fetch_max(new_total, Ordering::SeqCst);
-        self.allocation_count.fetch_add(1, Ordering::SeqCst);
-
-        Ok(AllocationGuard {
-            tracker: Arc::clone(self),
-            bytes,
-        })
-    }
-
-    /// Try to record an allocation, returning `None` on limit violation
-    /// instead of an error.
-    pub fn try_allocate(self: &Arc<Self>, bytes: u64) -> Option<AllocationGuard> {
-        self.allocate(bytes).ok()
-    }
-
-    /// Check whether `requested` bytes can be allocated without exceeding
-    /// the limit. Does **not** actually allocate, and is therefore subject
-    /// to TOCTOU under concurrency — prefer [`allocate()`](Self::allocate)
-    /// when you intend to acquire the bytes.
-    pub fn check(&self, requested: u64) -> crate::PipeResult<()> {
-        if self.limit_bytes > 0 {
-            let current = self.current_bytes.load(Ordering::SeqCst);
-            let candidate = current.checked_add(requested).ok_or_else(|| {
-                at!(PipeError::LimitExceeded(alloc::format!(
-                    "memory: requested {requested} bytes overflows u64 (current {current})"
-                )))
-            })?;
-            if candidate > self.limit_bytes {
-                return Err(at!(PipeError::LimitExceeded(alloc::format!(
-                    "memory: {} + {} = {} bytes exceeds limit {}",
-                    current,
-                    requested,
-                    candidate,
-                    self.limit_bytes,
-                ))));
-            }
-        }
-        Ok(())
-    }
-
-    /// Current allocated bytes.
-    pub fn current_bytes(&self) -> u64 {
-        self.current_bytes.load(Ordering::SeqCst)
-    }
-
-    /// Peak allocated bytes (high-water mark).
-    pub fn peak_bytes(&self) -> u64 {
-        self.peak_bytes.load(Ordering::SeqCst)
-    }
-
-    /// Total number of allocations made (including released ones).
-    pub fn allocation_count(&self) -> u64 {
-        self.allocation_count.load(Ordering::SeqCst)
-    }
-
-    /// Configured memory limit (0 = unlimited).
-    pub fn limit_bytes(&self) -> u64 {
-        self.limit_bytes
-    }
-
-    /// Remaining capacity before hitting the limit, or `None` if unlimited.
-    pub fn remaining(&self) -> Option<u64> {
-        if self.limit_bytes == 0 {
-            None
-        } else {
-            Some(
-                self.limit_bytes
-                    .saturating_sub(self.current_bytes.load(Ordering::SeqCst)),
-            )
-        }
-    }
-}
-
-impl Default for AllocationTracker {
-    fn default() -> Self {
-        Self::unlimited()
-    }
-}
-
-// =========================================================================
-// AllocationGuard — RAII decrement on drop
-// =========================================================================
-
-/// RAII guard that decrements an [`AllocationTracker`] on drop.
-///
-/// Returned by [`AllocationTracker::allocate()`]. Hold this for the
-/// lifetime of the associated buffer.
-pub struct AllocationGuard {
-    tracker: Arc<AllocationTracker>,
-    bytes: u64,
-}
-
-impl AllocationGuard {
-    /// Size of this allocation in bytes.
-    pub fn bytes(&self) -> u64 {
-        self.bytes
-    }
-}
-
-impl Drop for AllocationGuard {
-    fn drop(&mut self) {
-        self.tracker
-            .current_bytes
-            .fetch_sub(self.bytes, Ordering::SeqCst);
-    }
-}
-
-impl core::fmt::Debug for AllocationGuard {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("AllocationGuard")
-            .field("bytes", &self.bytes)
-            .finish()
-    }
-}
-
-// =========================================================================
-// Deadline — Stop implementation with a wall-clock timeout
+// Deadline — Stop implementation with a wall-clock timeout (crate-internal)
 // =========================================================================
 
 /// A [`Stop`](enough::Stop) implementation that expires after a fixed duration.
 ///
 /// Created from [`Limits::to_deadline()`] or directly via [`Deadline::new()`].
-/// Composes with [`execute_with_pulse`](crate::execute_with_pulse) — pass as
-/// `Some(&zencodec::how_far::StopOnly::borrowed(&deadline))` to enforce a timeout.
-///
-/// # Example
-///
-/// ```
-/// use std::time::Duration;
-/// use enough::Stop;
-/// use zenpipe::limits::Deadline;
-///
-/// let deadline = Deadline::new(Duration::from_secs(30));
-/// assert!(deadline.check().is_ok()); // fresh — hasn't expired yet
-/// ```
-///
-/// # Requires `std`
-///
-/// Uses `std::time::Instant` for monotonic time.
+/// Composes with [`execute_with_pulse`](crate::execute_with_pulse) via
+/// `zencodec::how_far::StopOnly`.
 #[cfg(feature = "std")]
-pub struct Deadline {
+#[allow(dead_code)]
+pub(crate) struct Deadline {
     start: std::time::Instant,
     max_duration: core::time::Duration,
 }
 
 #[cfg(feature = "std")]
+#[allow(dead_code)]
 impl Deadline {
     /// Create a deadline that expires `max_duration` from now.
-    pub fn new(max_duration: core::time::Duration) -> Self {
+    pub(crate) fn new(max_duration: core::time::Duration) -> Self {
         Self {
             start: std::time::Instant::now(),
             max_duration,
@@ -619,17 +341,17 @@ impl Deadline {
     }
 
     /// Elapsed time since the deadline was created.
-    pub fn elapsed(&self) -> core::time::Duration {
+    pub(crate) fn elapsed(&self) -> core::time::Duration {
         self.start.elapsed()
     }
 
     /// Remaining time before the deadline expires, or zero if already expired.
-    pub fn remaining(&self) -> core::time::Duration {
+    pub(crate) fn remaining(&self) -> core::time::Duration {
         self.max_duration.saturating_sub(self.start.elapsed())
     }
 
     /// Whether the deadline has expired.
-    pub fn is_expired(&self) -> bool {
+    pub(crate) fn is_expired(&self) -> bool {
         self.start.elapsed() >= self.max_duration
     }
 }
@@ -649,9 +371,42 @@ impl core::fmt::Debug for Deadline {
 impl enough::Stop for Deadline {
     fn check(&self) -> Result<(), enough::StopReason> {
         if self.is_expired() {
-            Err(enough::StopReason::Cancelled)
+            Err(enough::StopReason::TimedOut)
         } else {
             Ok(())
         }
+    }
+}
+
+#[cfg(all(test, feature = "std"))]
+mod deadline_tests {
+    use super::*;
+    use core::time::Duration;
+    use enough::Stop as _;
+
+    #[test]
+    fn deadline_fresh_not_expired() {
+        let d = Deadline::new(Duration::from_secs(60));
+        assert!(!d.is_expired());
+        assert!(d.check().is_ok());
+        assert!(d.remaining() > Duration::from_secs(50));
+    }
+
+    #[test]
+    fn deadline_zero_expired_returns_timed_out() {
+        let d = Deadline::new(Duration::ZERO);
+        assert!(d.is_expired());
+        assert_eq!(d.check(), Err(enough::StopReason::TimedOut));
+        assert_eq!(d.remaining(), Duration::ZERO);
+    }
+
+    #[test]
+    fn limits_to_deadline() {
+        assert!(Limits::NONE.to_deadline().is_none());
+        let d = Limits::NONE
+            .with_max_duration(Duration::from_secs(10))
+            .to_deadline()
+            .expect("max_duration should yield Deadline");
+        assert!(!d.is_expired());
     }
 }

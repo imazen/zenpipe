@@ -16,8 +16,8 @@ fuzz_target!(|data: &[u8]| {
         .with_max_memory(64 * 1024 * 1024)
         .with_max_frames(50);
     let decoder = DecodeRequest::new(data)
-        .with_limits(&limits)
-        .with_registry(&AllowedFormats::all())
+        .with_limits(limits)
+        .with_registry(AllowedFormats::all())
         .animation_frame_decoder();
 
     if let Ok(mut dec) = decoder {

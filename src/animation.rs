@@ -62,8 +62,18 @@ use crate::strip::Strip;
 pub struct FrameInfo {
     /// Frame index (0-based).
     pub index: u32,
-    /// Frame duration in milliseconds.
-    pub duration_ms: u32,
+    /// Exact frame duration (rational numerator/denominator in seconds).
+    pub duration: zencodec::animation::FrameDuration,
+}
+
+impl FrameInfo {
+    /// Frame duration in integer milliseconds (saturating).
+    pub fn duration_ms(&self) -> u32 {
+        self.duration
+            .ticks_at(1000)
+            .unwrap_or(u64::MAX)
+            .min(u32::MAX as u64) as u32
+    }
 }
 
 // =========================================================================
@@ -206,13 +216,9 @@ impl FrameSource {
                 }
 
                 self.y = 0;
-                // Legacy FrameInfo still represents integer milliseconds.
-                let dur = owned.duration();
-                let duration_ms =
-                    dur.ticks_at(1000).unwrap_or(u64::MAX).min(u32::MAX as u64) as u32;
                 self.frame_info = Some(FrameInfo {
                     index: owned.frame_index(),
-                    duration_ms,
+                    duration: owned.duration(),
                 });
             }
             None => {
@@ -325,15 +331,18 @@ impl FrameSink {
     ///
     /// Must be called after all strips for one frame have been consumed
     /// via the `Sink` trait.
-    pub fn finish_frame(&mut self, duration_ms: u32) -> crate::PipeResult<()> {
-        self.finish_frame_with_pulse(duration_ms, None)
+    pub fn finish_frame(
+        &mut self,
+        duration: zencodec::animation::FrameDuration,
+    ) -> crate::PipeResult<()> {
+        self.finish_frame_with_pulse(duration, None)
     }
 
     /// Encode the accumulated frame with an optional borrowed control.
     /// An error can follow native encoder effects; it is not a retry guarantee.
     pub fn finish_frame_with_pulse(
         &mut self,
-        duration_ms: u32,
+        duration: zencodec::animation::FrameDuration,
         pulse: Option<&dyn zencodec::Pulse>,
     ) -> crate::PipeResult<()> {
         check_pulse(pulse)?;
@@ -358,8 +367,8 @@ impl FrameSink {
             )))
         })?;
 
-        encoder
-            .push_frame(pixels, duration_ms, pulse)
+        let _ = encoder
+            .push_frame_timed(pixels, duration, pulse)
             .map_err(codec_failure)?;
 
         self.rows_accumulated = 0;
@@ -522,11 +531,11 @@ fn in_format(pipeline: Box<dyn Source>, format: PixelFormat) -> crate::PipeResul
     ))
 }
 
-/// A frame codec's failure: its stop as [`PipeError::Cancelled`], anything else
-/// as before.
+/// A frame codec's failure: its stop as [`PipeError::Stopped`], anything else
+/// as [`PipeError::Op`].
 fn codec_failure(e: zencodec::decode::BoxedError) -> whereat::At<PipeError> {
-    if crate::error::is_codec_stop(&*e) {
-        at!(PipeError::Cancelled)
+    if let Some(reason) = crate::error::codec_stop_reason(&*e) {
+        at!(PipeError::Stopped(reason))
     } else {
         at!(PipeError::Op(e.to_string()))
     }
@@ -583,7 +592,7 @@ pub fn transcode_with_pulse_and_limits(
         // Drain pipeline into frame sink.
         frame_sink.begin_frame();
         crate::execute_with_pulse(pipeline.as_mut(), &mut frame_sink, pulse)?;
-        frame_sink.finish_frame_with_pulse(info.duration_ms, pulse)?;
+        frame_sink.finish_frame_with_pulse(info.duration, pulse)?;
 
         // Advance to next frame.
         if !frame_source.advance_frame_with_pulse(pulse)? {
@@ -598,54 +607,5 @@ fn check_pulse(pulse: Option<&dyn zencodec::Pulse>) -> crate::PipeResult<()> {
     pulse
         .unwrap_or(&zencodec::NoPulse)
         .check()
-        .map_err(|_| at!(PipeError::Cancelled))
-}
-
-/// Compatibility entry point for cancellation-only animation callers.
-#[deprecated(note = "use transcode_with_pulse; adapt Stop with how_far::StopOnly::borrowed")]
-pub fn transcode_with_stop(
-    decoder: Box<dyn DynAnimationFrameDecoder>,
-    encoder: Box<dyn DynAnimationFrameEncoder>,
-    out_width: u32,
-    out_height: u32,
-    out_format: PixelFormat,
-    build_pipeline: impl FnMut(Box<dyn Source>, u32) -> crate::PipeResult<Box<dyn Source>>,
-    stop: &dyn enough::Stop,
-) -> crate::PipeResult<EncodeOutput> {
-    transcode_with_pulse(
-        decoder,
-        encoder,
-        out_width,
-        out_height,
-        out_format,
-        build_pipeline,
-        Some(&zencodec::how_far::StopOnly::borrowed(stop)),
-    )
-}
-
-/// Compatibility entry point with the original required cancellation token and frame limit.
-#[deprecated(
-    note = "use transcode_with_pulse_and_limits; adapt Stop with how_far::StopOnly::borrowed"
-)]
-#[allow(clippy::too_many_arguments)] // Retain the original compatibility signature.
-pub fn transcode_with_stop_and_limits(
-    decoder: Box<dyn DynAnimationFrameDecoder>,
-    encoder: Box<dyn DynAnimationFrameEncoder>,
-    out_width: u32,
-    out_height: u32,
-    out_format: PixelFormat,
-    build_pipeline: impl FnMut(Box<dyn Source>, u32) -> crate::PipeResult<Box<dyn Source>>,
-    stop: &dyn enough::Stop,
-    max_frames: Option<u32>,
-) -> crate::PipeResult<EncodeOutput> {
-    transcode_with_pulse_and_limits(
-        decoder,
-        encoder,
-        out_width,
-        out_height,
-        out_format,
-        build_pipeline,
-        Some(&zencodec::how_far::StopOnly::borrowed(stop)),
-        max_frames,
-    )
+        .map_err(|r| at!(PipeError::Stopped(r)))
 }

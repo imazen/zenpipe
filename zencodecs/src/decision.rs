@@ -22,21 +22,14 @@ use crate::trace::SelectionStep;
 ///
 /// ```
 /// use zencodecs::decision::FormatDecision;
-/// use zencodecs::quality::QualityIntent;
 /// use zencodecs::ImageFormat;
 ///
-/// let decision = FormatDecision {
-///     format: ImageFormat::WebP,
-///     quality: QualityIntent::from_quality(76.0),
-///     lossless: false,
-///     hints: Default::default(),
-///     matte: None,
-///     trace: Vec::new(),
-/// };
+/// let decision = FormatDecision::for_format_quality(ImageFormat::WebP, 76.0);
 /// assert_eq!(decision.format, ImageFormat::WebP);
 /// assert!(!decision.lossless);
 /// ```
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct FormatDecision {
     /// The selected output format.
     pub format: ImageFormat,
@@ -84,6 +77,36 @@ impl FormatDecision {
             quality: QualityIntent::from_quality(quality),
             ..Default::default()
         }
+    }
+
+    /// Set the resolved quality intent.
+    pub fn with_quality(mut self, quality: QualityIntent) -> Self {
+        self.quality = quality;
+        self
+    }
+
+    /// Set whether to encode losslessly.
+    pub fn with_lossless(mut self, lossless: bool) -> Self {
+        self.lossless = lossless;
+        self
+    }
+
+    /// Set per-codec hints for the selected format.
+    pub fn with_hints(mut self, hints: BTreeMap<String, String>) -> Self {
+        self.hints = hints;
+        self
+    }
+
+    /// Set the matte color for alpha compositing.
+    pub fn with_matte(mut self, matte: [u8; 3]) -> Self {
+        self.matte = Some(matte);
+        self
+    }
+
+    /// Set the selection trace steps.
+    pub fn with_trace(mut self, trace: Vec<SelectionStep>) -> Self {
+        self.trace = trace;
+        self
     }
 
     /// Per-codec hints for the selected format.

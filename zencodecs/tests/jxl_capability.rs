@@ -89,7 +89,7 @@ fn encode_jxl_with_meta(img: ImgRef<'_, Rgb<u8>>, meta: Metadata, quality: f32) 
     EncodeRequest::new(ImageFormat::Jxl)
         .with_quality(quality)
         .with_metadata(meta)
-        .encode(view, false)
+        .encode(view)
         .expect("encode JXL with metadata")
         .into_vec()
 }
@@ -147,7 +147,7 @@ fn jxl_rgb_f32_hdr_encode_decode_round_trip() {
     let view = PixelView::from_imgref(img.as_ref(), ColorSpace::LINEAR_SRGB).expect("from_imgref");
     let bytes = EncodeRequest::new(ImageFormat::Jxl)
         .with_quality(95.0)
-        .encode(view, false)
+        .encode(view)
         .expect("encode JXL HDR f32")
         .into_vec();
 
@@ -169,7 +169,7 @@ fn jxl_rgba_f32_hdr_encode_decode_round_trip() {
         PixelView::from_imgref(img.as_ref(), ColorSpace::LINEAR_SRGB_ALPHA).expect("from_imgref");
     let bytes = EncodeRequest::new(ImageFormat::Jxl)
         .with_quality(95.0)
-        .encode(view, true)
+        .encode(view)
         .expect("encode JXL HDR rgba f32")
         .into_vec();
 
@@ -204,7 +204,7 @@ fn jxl_rejects_malformed_icc_at_encode_or_decode() {
     let encode_result = EncodeRequest::new(ImageFormat::Jxl)
         .with_quality(80.0)
         .with_metadata(meta)
-        .encode(view, false);
+        .encode(view);
 
     match encode_result {
         Err(_) => {
@@ -368,7 +368,7 @@ fn jxl_gainmap_round_trip_inverse_direction() {
             gain_map: &gm_jpeg.gain_map,
             metadata: &gm_jpeg.metadata,
         })
-        .encode(pixels, false)
+        .encode(pixels)
         .expect("encode JXL with gain map");
 
     // Decode the JXL gain map back out.

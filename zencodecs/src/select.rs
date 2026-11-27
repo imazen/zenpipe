@@ -28,6 +28,7 @@ use crate::{CodecError, ImageFormat};
 /// Callers provide these facts from decode output, image info, or
 /// direct knowledge of the source image.
 #[derive(Clone, Debug, Default)]
+#[non_exhaustive]
 pub struct ImageFacts {
     /// Image has meaningful alpha (not all 255).
     pub has_alpha: bool,
@@ -44,6 +45,47 @@ pub struct ImageFacts {
 }
 
 impl ImageFacts {
+    /// Create default image facts (opaque, static, lossy, SDR, 0 pixels).
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set whether the image has meaningful alpha.
+    pub fn with_alpha(mut self, has_alpha: bool) -> Self {
+        self.has_alpha = has_alpha;
+        self
+    }
+
+    /// Set whether the image is animated.
+    pub fn with_animation(mut self, has_animation: bool) -> Self {
+        self.has_animation = has_animation;
+        self
+    }
+
+    /// Set whether the source was a lossless format.
+    pub fn with_lossless_source(mut self, is_lossless_source: bool) -> Self {
+        self.is_lossless_source = is_lossless_source;
+        self
+    }
+
+    /// Set total pixel count (`width * height`).
+    pub fn with_pixel_count(mut self, pixel_count: u64) -> Self {
+        self.pixel_count = pixel_count;
+        self
+    }
+
+    /// Set whether the image uses an HDR transfer function.
+    pub fn with_hdr(mut self, is_hdr: bool) -> Self {
+        self.is_hdr = is_hdr;
+        self
+    }
+
+    /// Set the known source format (used by [`FormatChoice::Keep`]).
+    pub fn with_source_format(mut self, source_format: ImageFormat) -> Self {
+        self.source_format = Some(source_format);
+        self
+    }
+
     /// Derive facts from [`ImageInfo`](crate::ImageInfo).
     pub fn from_image_info(info: &zencodec::ImageInfo) -> Self {
         Self {
@@ -413,7 +455,8 @@ pub fn select_format_from_intent_with_picker(
     };
 
     // Extract per-codec hints for the selected format
-    let hints: BTreeMap<String, String> = intent.hints.for_format(format).clone();
+    let hints: BTreeMap<String, String> =
+        intent.hints.for_format(format).cloned().unwrap_or_default();
 
     Ok(FormatDecision {
         format,

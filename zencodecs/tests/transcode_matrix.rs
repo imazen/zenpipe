@@ -73,7 +73,7 @@ fn encode_source(format: ImageFormat, alpha: bool) -> Result<Vec<u8>, String> {
         .map_err(|e| format!("{e:?}"))?;
     EncodeRequest::new(format)
         .with_quality(92.0)
-        .encode(slice, alpha)
+        .encode(slice)
         .map(|o| o.into_vec())
         .map_err(|e| format!("{e}"))
 }
@@ -112,7 +112,7 @@ fn one_shot(src: &[u8], target: ImageFormat, input_policy: InputPolicy) -> Resul
     let encode = |pixels| {
         EncodeRequest::new(target)
             .with_quality(85.0)
-            .encode(pixels, dec.has_alpha())
+            .encode(pixels)
             .map(|o| o.into_vec())
             .map_err(|e| format!("encode: {e}"))
     };
@@ -165,9 +165,7 @@ fn hdr_white_to_gif_requires_explicit_clipping_in_both_paths() {
     let white = vec![255; (W * H * 3) as usize];
     let pixels =
         PixelView::new(&white, W, H, W as usize * 3, &zenpixels::formats::RGB8_SRGB).unwrap();
-    let source = EncodeRequest::new(ImageFormat::Hdr)
-        .encode(pixels, false)
-        .unwrap();
+    let source = EncodeRequest::new(ImageFormat::Hdr).encode(pixels).unwrap();
     let decoded = DecodeRequest::new(source.data())
         .decode_full_frame()
         .unwrap();

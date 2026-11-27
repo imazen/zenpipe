@@ -1,11 +1,6 @@
-//! Resource limits — a thin lean on zencodec's [`ResourceLimits`].
+//! Resource limits and cooperative cancellation re-exports.
 //!
-//! zencodecs used to carry its own `Limits` struct: a field-for-field duplicate
-//! of [`zencodec::ResourceLimits`] plus a manual `to_resource_limits` converter
-//! and its tests. The crate now aliases the upstream type directly, so the
-//! converter is an identity and the duplicate builders/validators are gone.
-//!
-//! `zencodecs::Limits` references keep working. Construct with the builder
+//! [`Limits`] aliases [`zencodec::ResourceLimits`]. Construct with its builder
 //! methods — `ResourceLimits` is `#[non_exhaustive]`, so struct-literal syntax
 //! is unavailable; use `Limits::none().with_max_pixels(120_000_000)` etc.
 
@@ -18,16 +13,13 @@ pub use zencodec::ResourceLimits as Limits;
 
 /// Re-export `Stop` for cooperative cancellation.
 ///
-/// Codecs periodically call `stop.check()` and return `CodecError::Cancelled`
-/// if the operation should be cancelled. Use `enough::Unstoppable` when you
-/// don't need cancellation (zero-cost).
+/// Codecs periodically check the request's pulse / stop token and surface
+/// [`CodecError::Stopped`](crate::CodecError::Stopped) carrying the
+/// [`enough::StopReason`] when the operation should stop. Use
+/// `enough::Unstoppable` when you don't need cancellation (zero-cost).
 pub use enough::Stop;
 
 /// Adapt a [`Limits`] for a codec job.
-///
-/// Identity now that `Limits` *is* [`zencodec::ResourceLimits`] (`Copy`); kept as
-/// a one-liner so the ~45 codec call sites stay terse without each importing the
-/// upstream type. Inline it in a later sweep if the indirection ever grates.
 #[inline]
 pub(crate) fn to_resource_limits(limits: &Limits) -> zencodec::ResourceLimits {
     *limits

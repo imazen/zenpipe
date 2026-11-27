@@ -6,7 +6,7 @@ use zencodec::operation::PolicySet;
 use zencodec::storage::StorageBudget;
 use zencodec_io::row_encode::{self, Options};
 use zenpipe::Source;
-use zenpipe::io::{DecodeOptions, DecodeSource, PipelineRows};
+use zenpipe::io::{DecodeSource, PipelineRows, SourceOptions};
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let args: Vec<String> = std::env::args().collect();
@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let source = DecodeSource::from_bytes(
         &codecs,
         std::fs::read(input)?,
-        DecodeOptions::new(StorageBudget::new(256 << 20, 64)),
+        SourceOptions::new(StorageBudget::new(256 << 20, 64)),
     )?;
     let (w, h) = (source.width(), source.height());
     // Crop a centered half; operators need the owned (`from_bytes`) source.

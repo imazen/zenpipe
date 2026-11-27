@@ -36,7 +36,7 @@ pub use zencodec::encode::EncodeOutput;
 /// let buf = PixelBuf::from_bytes(vec![0u8; 100 * 100 * 4], 100, 100, PixelFormat::RGBA8_SRGB).unwrap();
 /// let output = EncodeRequest::new(ImageFormat::WebP)
 ///     .with_quality(85.0)
-///     .encode(buf.as_view(), false)?;
+///     .encode(buf.as_view())?;
 /// # Ok::<(), whereat::At<zencodecs::CodecError>>(())
 /// ```
 pub struct EncodeRequest<'a> {
@@ -50,17 +50,24 @@ pub struct EncodeRequest<'a> {
     speed: Option<EncodeSpeed>,
     lossless: bool,
     prefer_streaming: bool,
-    limits: Option<&'a Limits>,
+    limits: Option<Limits>,
     pulse: SharedPulse,
     metadata: Option<Metadata>,
     /// Retention policy applied to `metadata` when the codec embeds it.
     /// Defaults to [`MetadataPolicy::PreserveExact`] (verbatim).
     metadata_policy: MetadataPolicy,
-    registry: Option<&'a AllowedFormats>,
+    registry: Option<AllowedFormats>,
     codec_config: Option<&'a CodecConfig>,
     policy: Option<CodecPolicy>,
     encode_policy: Option<EncodePolicy>,
     orientation_mode: Option<zencodec::encode::EncodeOrientation>,
+    /// Optional loop count for animation encoding (`Some(0)` = infinite,
+    /// `Some(n)` = `n` loops, `None` = codec default).
+    loop_count: Option<u32>,
+    /// Optional explicit alpha-presence hint for auto-format selection when
+    /// encoding buffers whose pixel format has an alpha slot but whose pixels
+    /// are actually opaque.
+    alpha_hint: Option<bool>,
     #[cfg(feature = "tonemap")]
     tone_map_policy: crate::ToneMapPolicy,
     image_facts: Option<ImageFacts>,
@@ -97,6 +104,8 @@ impl<'a> EncodeRequest<'a> {
             policy: None,
             encode_policy: None,
             orientation_mode: None,
+            loop_count: None,
+            alpha_hint: None,
             #[cfg(feature = "tonemap")]
             tone_map_policy: crate::ToneMapPolicy::Bt2408,
             image_facts: None,
@@ -113,6 +122,21 @@ impl<'a> EncodeRequest<'a> {
     /// encoding; metadata supplies the intrinsic orientation.
     pub fn with_orientation_mode(mut self, mode: zencodec::encode::EncodeOrientation) -> Self {
         self.orientation_mode = Some(mode);
+        self
+    }
+
+    /// Set the animation loop count (`Some(0)` = infinite, `Some(n)` = `n` loops,
+    /// `None` = codec default). Used by [`animation_frame_encoder`](Self::animation_frame_encoder).
+    pub fn with_loop_count(mut self, count: Option<u32>) -> Self {
+        self.loop_count = count;
+        self
+    }
+
+    /// Override alpha presence for auto-format selection (e.g. set `false` when
+    /// encoding an RGBA8 buffer whose pixels are all opaque so JPEG remains eligible).
+    /// Ignored when an explicit format or [`with_image_facts`](Self::with_image_facts) is set.
+    pub fn with_alpha_hint(mut self, has_alpha: bool) -> Self {
+        self.alpha_hint = Some(has_alpha);
         self
     }
 
@@ -136,6 +160,8 @@ impl<'a> EncodeRequest<'a> {
             policy: None,
             encode_policy: None,
             orientation_mode: None,
+            loop_count: None,
+            alpha_hint: None,
             #[cfg(feature = "tonemap")]
             tone_map_policy: crate::ToneMapPolicy::Bt2408,
             image_facts: None,
@@ -209,7 +235,7 @@ impl<'a> EncodeRequest<'a> {
     /// anything (only `Fastest` does). `None` → use the caller's limits as-is.
     fn speed_limits(&self) -> Option<Limits> {
         let speed = self.speed?;
-        let base = self.limits.copied().unwrap_or_else(Limits::none);
+        let base = self.limits.unwrap_or_else(Limits::none);
         let applied = speed.apply_to_limits(base);
         (applied.threading != base.threading).then_some(applied)
     }
@@ -221,7 +247,7 @@ impl<'a> EncodeRequest<'a> {
     }
 
     /// Set resource limits.
-    pub fn with_limits(mut self, limits: &'a Limits) -> Self {
+    pub fn with_limits(mut self, limits: Limits) -> Self {
         self.limits = Some(limits);
         self
     }
@@ -260,7 +286,7 @@ impl<'a> EncodeRequest<'a> {
     }
 
     /// Set a codec registry to control which formats are enabled.
-    pub fn with_registry(mut self, registry: &'a AllowedFormats) -> Self {
+    pub fn with_registry(mut self, registry: AllowedFormats) -> Self {
         self.registry = Some(registry);
         self
     }
@@ -419,8 +445,7 @@ impl<'a> EncodeRequest<'a> {
             )));
         }
 
-        let default_registry = AllowedFormats::all();
-        let registry = self.registry.unwrap_or(&default_registry);
+        let registry = self.registry.unwrap_or_else(AllowedFormats::all);
 
         if !registry.can_encode(ImageFormat::Jpeg) {
             return Err(at!(CodecError::DisabledFormat(ImageFormat::Jpeg)));
@@ -432,7 +457,7 @@ impl<'a> EncodeRequest<'a> {
             self.gainmap_quality,
             self.metadata.as_ref(),
             self.codec_config,
-            self.limits,
+            self.limits.as_ref(),
             self.pulse,
         )
     }
@@ -451,8 +476,7 @@ impl<'a> EncodeRequest<'a> {
             )));
         }
 
-        let default_registry = AllowedFormats::all();
-        let registry = self.registry.unwrap_or(&default_registry);
+        let registry = self.registry.unwrap_or_else(AllowedFormats::all);
 
         if !registry.can_encode(ImageFormat::Jpeg) {
             return Err(at!(CodecError::DisabledFormat(ImageFormat::Jpeg)));
@@ -464,7 +488,7 @@ impl<'a> EncodeRequest<'a> {
             self.gainmap_quality,
             self.metadata.as_ref(),
             self.codec_config,
-            self.limits,
+            self.limits.as_ref(),
             self.pulse,
         )
     }
@@ -495,8 +519,7 @@ impl<'a> EncodeRequest<'a> {
         width: u32,
         height: u32,
     ) -> Result<alloc::boxed::Box<dyn zencodec::encode::DynAnimationFrameEncoder>> {
-        let default_registry = AllowedFormats::all();
-        let registry = self.registry.unwrap_or(&default_registry);
+        let registry = self.registry.unwrap_or_else(AllowedFormats::all);
 
         let format = match self.format {
             Some(f) => f,
@@ -515,9 +538,10 @@ impl<'a> EncodeRequest<'a> {
         let effort = self.effort_for(format);
         let speed_limits = self.speed_limits();
 
-        // Frames are written upright, like a still (`crate::orient_fit`):
-        // the canvas is the rotated one and each frame is rotated on push.
-        let (orientation, metadata) = crate::orient_fit::upright(self.metadata.as_ref());
+        // Frames are written upright, like a still (`crate::orient_fit`),
+        // unless `EncodeOrientation::PreserveStored` was requested.
+        let (orientation, metadata) =
+            crate::orient_fit::plan(self.metadata.as_ref(), self.orientation_mode);
         let (canvas_width, canvas_height) = orientation.output_dimensions(width, height);
         let inner = crate::dyn_dispatch::dyn_animation_frame_encoder(
             format,
@@ -529,13 +553,13 @@ impl<'a> EncodeRequest<'a> {
                 metadata,
                 metadata_policy: self.metadata_policy,
                 codec_config: self.codec_config,
-                limits: speed_limits.as_ref().or(self.limits),
+                limits: speed_limits.as_ref().or(self.limits.as_ref()),
                 pulse: self.pulse,
                 encode_policy: self.encode_policy,
                 orientation_mode: self.orientation_mode,
                 canvas_width,
                 canvas_height,
-                loop_count: None,
+                loop_count: self.loop_count,
             },
         )?;
         if orientation == zencodec::Orientation::Identity {
@@ -622,8 +646,7 @@ impl<'a> EncodeRequest<'a> {
         height: u32,
         build: impl FnOnce(ImageFormat, crate::dispatch::EncodeParams<'_>) -> Result<T>,
     ) -> Result<T> {
-        let default_registry = AllowedFormats::all();
-        let registry = self.registry.unwrap_or(&default_registry);
+        let registry = self.registry.unwrap_or_else(AllowedFormats::all);
         let default_policy = CodecPolicy::new();
         let policy = self.policy.as_ref().unwrap_or(&default_policy);
 
@@ -631,11 +654,12 @@ impl<'a> EncodeRequest<'a> {
             Some(f) => f,
             None => {
                 let facts = self.image_facts.clone().unwrap_or(ImageFacts {
+                    has_alpha: self.alpha_hint.unwrap_or(false),
                     pixel_count: width as u64 * height as u64,
                     ..Default::default()
                 });
                 let intent = self.quality_intent();
-                crate::select::select_format(&facts, &intent, registry, policy)?.format
+                crate::select::select_format(&facts, &intent, &registry, policy)?.format
             }
         };
 
@@ -663,7 +687,7 @@ impl<'a> EncodeRequest<'a> {
             metadata: self.metadata,
             metadata_policy: self.metadata_policy,
             codec_config: self.codec_config,
-            limits: speed_limits.as_ref().or(self.limits),
+            limits: speed_limits.as_ref().or(self.limits.as_ref()),
             pulse: self.pulse,
             encode_policy: self.encode_policy,
             orientation_mode: self.orientation_mode,
@@ -684,25 +708,30 @@ impl<'a> EncodeRequest<'a> {
     /// `pixels` is a type-erased pixel view with format, dimensions,
     /// and stride. Construct via [`PixelView::new()`](zenpixels::PixelView::new).
     ///
-    /// `has_meaningful_alpha` tells the auto-format selector whether the image
-    /// has alpha that must be preserved. When `true`, JPEG (which doesn't support
-    /// alpha) is excluded from auto-selection. When `false`, the alpha channel
-    /// (if any) is treated as padding. This flag is ignored when `format` is
-    /// explicitly set.
+    /// For auto-format selection (`EncodeRequest::auto()`), alpha presence is
+    /// derived from `pixels.format().color.alpha()` (straight or premultiplied
+    /// alpha excludes JPEG). Override with [`with_alpha_hint`](Self::with_alpha_hint)
+    /// or [`with_image_facts`](Self::with_image_facts) when encoding an RGBA
+    /// buffer whose pixels are actually opaque.
     ///
     /// For streaming encode, use [`build_streaming_encoder`](Self::build_streaming_encoder).
-    pub fn encode(self, pixels: PixelView<'_>, has_meaningful_alpha: bool) -> Result<EncodeOutput> {
-        self.encode_dispatch(pixels, has_meaningful_alpha)
+    pub fn encode(self, pixels: PixelView<'_>) -> Result<EncodeOutput> {
+        let has_alpha = self.alpha_hint.unwrap_or_else(|| {
+            matches!(
+                pixels.format().color.alpha(),
+                zenpixels::AlphaMode::Straight | zenpixels::AlphaMode::Premultiplied
+            )
+        });
+        self.encode_dispatch(pixels, has_alpha)
     }
 
     // ═══════════════════════════════════════════════════════════════════
     // Typed convenience: full-frame encode from imgref::ImgRef
     //
     // Each method picks the right `PixelFormat` from the typed pixel
-    // and calls [`encode`](Self::encode). RGB/Gray paths set
-    // `has_meaningful_alpha=false`; RGBA/BGRA paths set `true`.
+    // and calls [`encode`](Self::encode).
     //
-    // These are restored convenience wrappers — the canonical entry point
+    // These are convenience wrappers — the canonical entry point
     // is [`encode`](Self::encode) with a hand-built `PixelView`.
     // ═══════════════════════════════════════════════════════════════════
 
@@ -713,7 +742,7 @@ impl<'a> EncodeRequest<'a> {
     ) -> Result<EncodeOutput> {
         let pixels = PixelView::from_imgref(img, ColorSpace::SRGB)
             .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
-        self.encode(pixels, false)
+        self.encode(pixels)
     }
 
     /// Encode a full RGBA8 (sRGB, straight alpha) frame.
@@ -723,7 +752,7 @@ impl<'a> EncodeRequest<'a> {
     ) -> Result<EncodeOutput> {
         let pixels = PixelView::from_imgref(img, ColorSpace::SRGB_ALPHA)
             .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
-        self.encode(pixels, true)
+        self.encode(pixels)
     }
 
     /// Encode a full BGRA8 (sRGB) frame.
@@ -733,7 +762,7 @@ impl<'a> EncodeRequest<'a> {
     ) -> Result<EncodeOutput> {
         let pixels = PixelView::from_imgref(img, ColorSpace::SRGB_ALPHA)
             .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
-        self.encode(pixels, true)
+        self.encode(pixels)
     }
 
     /// Encode a full BGRX8 frame — alpha byte present but treated as padding.
@@ -761,7 +790,7 @@ impl<'a> EncodeRequest<'a> {
             &zenpixels::formats::BGRX8_SRGB,
         )
         .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
-        self.encode(pixels, false)
+        self.encode(pixels)
     }
 
     /// Encode a full grayscale 8-bit (sRGB) frame.
@@ -771,7 +800,7 @@ impl<'a> EncodeRequest<'a> {
     ) -> Result<EncodeOutput> {
         let pixels = PixelView::from_imgref(img, ColorSpace::GRAY_SRGB)
             .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
-        self.encode(pixels, false)
+        self.encode(pixels)
     }
 
     /// Encode a full RGB f32 (linear light) frame.
@@ -781,7 +810,7 @@ impl<'a> EncodeRequest<'a> {
     ) -> Result<EncodeOutput> {
         let pixels = PixelView::from_imgref(img, ColorSpace::LINEAR_SRGB)
             .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
-        self.encode(pixels, false)
+        self.encode(pixels)
     }
 
     /// Encode a full RGBA f32 (linear light, straight alpha) frame.
@@ -791,7 +820,7 @@ impl<'a> EncodeRequest<'a> {
     ) -> Result<EncodeOutput> {
         let pixels = PixelView::from_imgref(img, ColorSpace::LINEAR_SRGB_ALPHA)
             .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
-        self.encode(pixels, true)
+        self.encode(pixels)
     }
 
     /// Encode a full grayscale f32 (linear light) frame.
@@ -801,18 +830,7 @@ impl<'a> EncodeRequest<'a> {
     ) -> Result<EncodeOutput> {
         let pixels = PixelView::from_imgref(img, ColorSpace::GRAY_LINEAR)
             .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
-        self.encode(pixels, false)
-    }
-
-    /// Legacy spelling: same as [`encode_full_frame_rgba8`](Self::encode_full_frame_rgba8)
-    /// with explicit straight-alpha tagging.
-    pub fn encode_full_frame_srgba8_imgref(
-        self,
-        img: imgref::ImgRef<'_, rgb::Rgba<u8>>,
-    ) -> Result<EncodeOutput> {
-        let pixels = PixelView::from_imgref(img, ColorSpace::SRGB_ALPHA)
-            .map_err(|e| at!(CodecError::InvalidInput(alloc::format!("{e}"))))?;
-        self.encode(pixels, true)
+        self.encode(pixels)
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -877,10 +895,12 @@ impl<'a> EncodeRequest<'a> {
         height: u32,
         pixel_format: PixelFormat,
     ) -> Result<ResourceEstimate> {
-        let has_alpha = matches!(
-            pixel_format.color.alpha(),
-            zenpixels::AlphaMode::Straight | zenpixels::AlphaMode::Premultiplied
-        );
+        let has_alpha = self.alpha_hint.unwrap_or_else(|| {
+            matches!(
+                pixel_format.color.alpha(),
+                zenpixels::AlphaMode::Straight | zenpixels::AlphaMode::Premultiplied
+            )
+        });
         let format = self.resolve_encode_format(width, height, has_alpha)?;
         let image = ImageCharacteristics::new(width, height, pixel_format);
         estimate_encode(
@@ -901,8 +921,7 @@ impl<'a> EncodeRequest<'a> {
         height: u32,
         has_alpha: bool,
     ) -> Result<ImageFormat> {
-        let default_registry = AllowedFormats::all();
-        let registry = self.registry.unwrap_or(&default_registry);
+        let registry = self.registry.unwrap_or_else(AllowedFormats::all);
         let default_policy = CodecPolicy::new();
         let policy = self.policy.as_ref().unwrap_or(&default_policy);
 
@@ -916,7 +935,7 @@ impl<'a> EncodeRequest<'a> {
                     ..Default::default()
                 });
                 let intent = self.quality_intent();
-                crate::select::select_format(&facts, &intent, registry, policy)?.format
+                crate::select::select_format(&facts, &intent, &registry, policy)?.format
             }
         };
 
@@ -951,7 +970,7 @@ impl<'a> EncodeRequest<'a> {
         // before building the encoder if the calibrated encode estimate exceeds it.
         // Gated on the est (the admission-safe upper bound), matching the decode path;
         // the est already includes the input frame, so we do not add it on top.
-        if let Some(limits) = self.limits
+        if let Some(ref limits) = self.limits
             && limits.max_memory_bytes.is_some()
         {
             let image = ImageCharacteristics::new(width, height, pixel_format);
@@ -968,7 +987,7 @@ impl<'a> EncodeRequest<'a> {
         let resolved_quality = self.resolve_quality();
         let effort = self.effort_for(format);
         let speed_limits = self.speed_limits();
-        let limits = speed_limits.as_ref().or(self.limits);
+        let limits = speed_limits.as_ref().or(self.limits.as_ref());
 
         #[cfg(feature = "jpeg-ultrahdr")]
         let gain_map_source_metadata = if self.gain_map_source.is_some() {
@@ -1157,7 +1176,7 @@ mod tests {
         let ps = PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB).unwrap();
         let result = EncodeRequest::new(ImageFormat::Jpeg)
             .with_lossless(true)
-            .encode(ps, false);
+            .encode(ps);
 
         assert!(matches!(
             result.as_ref().map_err(|e| e.error()),
@@ -1199,7 +1218,7 @@ mod tests {
         let ps = PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB_ALPHA).unwrap();
         let output = EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality(75.0)
-            .encode(ps, false)
+            .encode(ps)
             .unwrap();
         assert!(!output.data().is_empty());
     }
@@ -1224,7 +1243,7 @@ mod tests {
         let ps = PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB_ALPHA).unwrap();
         let output = EncodeRequest::new(ImageFormat::WebP)
             .with_quality(75.0)
-            .encode(ps, true)
+            .encode(ps)
             .unwrap();
         assert!(!output.data().is_empty());
     }
@@ -1238,7 +1257,14 @@ mod tests {
 
         // This function has NO generic parameters
         fn encode_with(config: &dyn AnyEncoder, img: imgref::ImgRef<Rgba<u8>>) -> EncodeOutput {
-            config.encode_srgba8_imgref(img, true).unwrap()
+            let pixels = PixelView::from_imgref(
+                img,
+                ColorSpace::SRGB_ALPHA.with_alpha(zenpixels::AlphaMode::Opaque),
+            )
+            .unwrap();
+            config
+                .encode_pixels(pixels, None, None, SharedPulse::default())
+                .unwrap()
         }
 
         let img = imgref::ImgVec::new(
@@ -1285,7 +1311,7 @@ mod tests {
         let ps = PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB).unwrap();
         let output = EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality_profile(QualityProfile::Good)
-            .encode(ps, false)
+            .encode(ps)
             .unwrap();
         assert!(!output.data().is_empty());
     }
@@ -1309,19 +1335,13 @@ mod tests {
         let high = EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality_profile(QualityProfile::Good)
             .with_dpr(1.0)
-            .encode(
-                PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB).unwrap(),
-                false,
-            )
+            .encode(PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB).unwrap())
             .unwrap();
         // DPR 6.0 should decrease quality (smaller output)
         let low = EncodeRequest::new(ImageFormat::Jpeg)
             .with_quality_profile(QualityProfile::Good)
             .with_dpr(6.0)
-            .encode(
-                PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB).unwrap(),
-                false,
-            )
+            .encode(PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB).unwrap())
             .unwrap();
         // Higher quality should generally produce more bytes
         assert!(
@@ -1375,7 +1395,7 @@ mod tests {
         // An explicit Sequential from the caller is never widened by a preset.
         let seq = Limits::none().with_threading(ThreadingPolicy::Sequential);
         let req = EncodeRequest::new(ImageFormat::Png)
-            .with_limits(&seq)
+            .with_limits(seq)
             .with_speed(EncodeSpeed::OfflineMax);
         assert!(req.speed_limits().is_none());
         // No preset → nothing to apply.
@@ -1416,7 +1436,7 @@ mod tests {
         let fast = EncodeRequest::new(ImageFormat::Png)
             .with_lossless(true)
             .with_speed(EncodeSpeed::Fastest)
-            .encode(ps, false)
+            .encode(ps)
             .unwrap();
         let ps = PixelView::new(
             &px,
@@ -1429,7 +1449,7 @@ mod tests {
         let max = EncodeRequest::new(ImageFormat::Png)
             .with_lossless(true)
             .with_speed(EncodeSpeed::OfflineMax)
-            .encode(ps, false)
+            .encode(ps)
             .unwrap();
         assert!(
             fast.data().len() > max.data().len(),
@@ -1470,7 +1490,7 @@ mod tests {
         let output = EncodeRequest::auto()
             .with_quality(75.0)
             .with_policy(CodecPolicy::web_safe_output())
-            .encode(ps, false)
+            .encode(ps)
             .unwrap();
         // web_safe_output only allows JPEG, PNG, GIF — for opaque lossy, JPEG wins
         assert_eq!(output.format(), ImageFormat::Jpeg);
@@ -1501,7 +1521,7 @@ mod tests {
         let output = EncodeRequest::auto()
             .with_quality(75.0)
             .with_image_facts(facts)
-            .encode(ps, true)
+            .encode(ps)
             .unwrap();
         // With alpha, should pick a format that supports alpha (not JPEG)
         assert_ne!(output.format(), ImageFormat::Jpeg);

@@ -6,7 +6,6 @@ use crate::config::CodecConfig;
 use crate::error::Result;
 use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 use crate::macros::dispatch_format;
-use crate::policy::CodecPolicy;
 use crate::{AllowedFormats, CodecError, ImageFormat, ImageInfo, Limits, SharedPulse};
 use whereat::at;
 use zencodec::decode::DecodePolicy;
@@ -27,11 +26,10 @@ use zencodec::{GainMapRender, OrientationHint};
 pub struct DecodeRequest<'a> {
     data: &'a [u8],
     format: Option<ImageFormat>,
-    limits: Option<&'a Limits>,
+    limits: Option<Limits>,
     pulse: SharedPulse,
-    registry: Option<&'a AllowedFormats>,
+    registry: Option<AllowedFormats>,
     codec_config: Option<&'a CodecConfig>,
-    policy: Option<CodecPolicy>,
     decode_policy: Option<DecodePolicy>,
     /// When true, codecs that support gain maps will extract and attach
     /// gain map data to the `DecodeOutput` extras. Default: false.
@@ -59,7 +57,6 @@ impl<'a> DecodeRequest<'a> {
             pulse: SharedPulse::default(),
             registry: None,
             codec_config: None,
-            policy: None,
             decode_policy: None,
             extract_gain_map: false,
             gain_map_render: GainMapRender::BaseOnly,
@@ -74,7 +71,7 @@ impl<'a> DecodeRequest<'a> {
     }
 
     /// Set resource limits.
-    pub fn with_limits(mut self, limits: &'a Limits) -> Self {
+    pub fn with_limits(mut self, limits: Limits) -> Self {
         self.limits = Some(limits);
         self
     }
@@ -88,7 +85,7 @@ impl<'a> DecodeRequest<'a> {
     }
 
     /// Set a codec registry to control which formats are enabled.
-    pub fn with_registry(mut self, registry: &'a AllowedFormats) -> Self {
+    pub fn with_registry(mut self, registry: AllowedFormats) -> Self {
         self.registry = Some(registry);
         self
     }
@@ -96,16 +93,6 @@ impl<'a> DecodeRequest<'a> {
     /// Set format-specific codec configuration.
     pub fn with_codec_config(mut self, config: &'a CodecConfig) -> Self {
         self.codec_config = Some(config);
-        self
-    }
-
-    /// Set a per-request codec policy for filtering and preferences.
-    ///
-    /// Currently reserved for future use with fallback chains and
-    /// multi-decoder-per-format support. The policy's format restrictions
-    /// are checked during format detection.
-    pub fn with_policy(mut self, policy: CodecPolicy) -> Self {
-        self.policy = Some(policy);
         self
     }
 
@@ -152,9 +139,10 @@ impl<'a> DecodeRequest<'a> {
     /// - [`GainMapRender::ReconstructHdr`]: apply the gain map and return
     ///   reconstructed HDR pixels (a float pixel format) plus a content-light-level
     ///   / mastering-display envelope on the output [`ImageInfo`]. Honored only by
-    ///   decoders that advertise HDR reconstruction — currently JPEG UltraHDR; other
-    ///   formats return [`CodecError::UnsupportedOperation`] rather than silently
-    ///   handing back an SDR buffer. Prefer the [`reconstruct_hdr`](Self::reconstruct_hdr)
+    ///   decoders that advertise HDR reconstruction — JPEG UltraHDR (`jpeg-ultrahdr`)
+    ///   and HEIC (`heic-decode`); other formats return
+    ///   [`CodecError::UnsupportedOperation`] rather than silently handing back
+    ///   an SDR buffer. Prefer the [`reconstruct_gain_map_hdr`](Self::reconstruct_gain_map_hdr)
     ///   shorthand.
     /// - [`GainMapRender::Components`]: surface the gain map alongside the SDR base —
     ///   equivalent to [`with_gain_map_extraction(true)`](Self::with_gain_map_extraction).
@@ -189,18 +177,17 @@ impl<'a> DecodeRequest<'a> {
     /// headroom. The decoded [`DecodeOutput`] carries HDR pixels and a
     /// content-light-level / mastering-display envelope on its [`ImageInfo`].
     ///
-    /// Currently honored by JPEG UltraHDR (requires the `jpeg-ultrahdr` feature);
+    /// Supported by JPEG UltraHDR (`jpeg-ultrahdr`) and HEIC (`heic-decode`);
     /// other formats return [`CodecError::UnsupportedOperation`] until their
     /// decoders advertise HDR reconstruction.
-    pub fn reconstruct_hdr(mut self, target_headroom: Option<f32>) -> Self {
+    pub fn reconstruct_gain_map_hdr(mut self, target_headroom: Option<f32>) -> Self {
         self.gain_map_render = GainMapRender::ReconstructHdr { target_headroom };
         self
     }
 
     /// Resolve format (auto-detect or explicit) and check registry.
     fn resolve_format(&self) -> Result<ImageFormat> {
-        let default_registry = AllowedFormats::all();
-        let registry = self.registry.unwrap_or(&default_registry);
+        let registry = self.registry.unwrap_or_else(AllowedFormats::all);
         let format = match self.format {
             Some(f) => f,
             None => crate::info::detect_format(self.data)
@@ -225,19 +212,6 @@ impl<'a> DecodeRequest<'a> {
     pub fn decode_full_frame(self) -> Result<DecodeOutput> {
         let format = self.resolve_format()?;
         self.decode_format(format)
-    }
-
-    /// Decode the image to pixels.
-    ///
-    /// **Deprecated:** Use [`decode_full_frame`](Self::decode_full_frame) instead.
-    /// The name `decode()` hides the fact that this materializes the entire image.
-    /// `push_decode()` is the streaming alternative.
-    #[deprecated(
-        since = "0.1.0",
-        note = "renamed to decode_full_frame() to signal materialization; use push_decode() for streaming"
-    )]
-    pub fn decode(self) -> Result<DecodeOutput> {
-        self.decode_full_frame()
     }
 
     /// Decode an image and extract its gain map, if present.
@@ -294,7 +268,9 @@ impl<'a> DecodeRequest<'a> {
                 #[cfg(feature = "raw-decode-gainmap")]
                 let gm = match gm {
                     Some(gm) => Some(gm),
-                    None => extract_raw_gainmap(data, gainmap_controls.0, gainmap_controls.1)?,
+                    None => {
+                        extract_raw_gainmap(data, gainmap_controls.0.as_ref(), gainmap_controls.1)?
+                    }
                 };
                 gm
             }
@@ -304,7 +280,7 @@ impl<'a> DecodeRequest<'a> {
             ImageFormat::Jxl => extract_jxl_gainmap(&output),
             #[cfg(feature = "raw-decode-gainmap")]
             ImageFormat::Custom(def) if def.name == "dng" || def.name == "raw" => {
-                extract_raw_gainmap(data, gainmap_controls.0, gainmap_controls.1)?
+                extract_raw_gainmap(data, gainmap_controls.0.as_ref(), gainmap_controls.1)?
             }
             _ => None,
         };
@@ -454,7 +430,7 @@ impl<'a> DecodeRequest<'a> {
 
     /// Probe image metadata without decoding pixels.
     ///
-    /// Cheaper than `decode()` — only parses headers.
+    /// Cheaper than `decode_full_frame()` — only parses headers.
     pub fn probe(&self) -> Result<ImageInfo> {
         let format = self.resolve_format()?;
         crate::info::probe_format(self.data, format)
@@ -491,7 +467,7 @@ impl<'a> DecodeRequest<'a> {
     /// Pre-flight memory admission: when `limits.max_memory_bytes` is set, reject
     /// (before constructing any decoder) if the calibrated decode est exceeds it.
     fn check_decode_admission(&self, format: ImageFormat) -> Result<()> {
-        let Some(limits) = self.limits else {
+        let Some(ref limits) = self.limits else {
             return Ok(());
         };
         if limits.max_memory_bytes.is_none() {
@@ -509,7 +485,7 @@ impl<'a> DecodeRequest<'a> {
         crate::dyn_dispatch::DecodeParams {
             data: self.data,
             codec_config: self.codec_config,
-            limits: self.limits,
+            limits: self.limits.as_ref(),
             pulse: self.pulse.clone(),
             preferred: &[],
             decode_policy: self.decode_policy,
@@ -522,8 +498,9 @@ impl<'a> DecodeRequest<'a> {
         // Pre-flight: reject over-budget decodes before constructing the decoder.
         self.check_decode_admission(format)?;
         let dp = self.decode_policy;
+        let limits = self.limits.as_ref();
         // ReconstructHdr returns HDR pixels only from decoders that advertise the
-        // capability — JPEG UltraHDR (gain maps); every
+        // capability — JPEG UltraHDR and HEIC gain maps; every
         // other format errors here rather than silently returning an SDR buffer
         // mislabeled as HDR.
         if matches!(self.gain_map_render, GainMapRender::ReconstructHdr { .. })
@@ -540,7 +517,7 @@ impl<'a> DecodeRequest<'a> {
             Jpeg => "jpeg" => crate::codecs::jpeg::decode(
                 self.data,
                 self.codec_config,
-                self.limits,
+                limits,
                 self.pulse,
                 dp,
                 self.gain_map_render,
@@ -549,16 +526,16 @@ impl<'a> DecodeRequest<'a> {
             WebP => "webp" => crate::codecs::webp::decode(
                 self.data,
                 self.codec_config,
-                self.limits,
+                limits,
                 self.pulse,
                 dp,
             ),
-            Gif => "gif" => crate::codecs::gif::decode(self.data, self.limits, self.pulse, dp),
-            Png => "png" => crate::codecs::png::decode(self.data, self.limits, self.pulse, dp),
+            Gif => "gif" => crate::codecs::gif::decode(self.data, limits, self.pulse, dp),
+            Png => "png" => crate::codecs::png::decode(self.data, limits, self.pulse, dp),
             Avif => "avif-decode" => crate::codecs::avif_dec::decode(
                 self.data,
                 self.codec_config,
-                self.limits,
+                limits,
                 self.pulse,
                 dp,
                 self.extract_gain_map,
@@ -566,44 +543,44 @@ impl<'a> DecodeRequest<'a> {
             ),
             Jxl => "jxl-decode" => crate::codecs::jxl_dec::decode(
                 self.data,
-                self.limits,
+                limits,
                 self.pulse,
                 dp,
                 self.extract_gain_map,
             ),
             Heic => "heic-decode" => crate::codecs::heic::decode(
                 self.data,
-                self.limits,
+                limits,
                 self.pulse,
                 dp,
                 self.gain_map_render,
                 self.extract_gain_map,
                 self.orientation,
             ),
-            Pnm => "bitmaps" => crate::codecs::pnm::decode(self.data, self.limits, self.pulse, dp),
-            Bmp => "bitmaps-bmp" => crate::codecs::bmp::decode(self.data, self.limits, self.pulse, dp),
-            Farbfeld => "bitmaps" => crate::codecs::farbfeld::decode(self.data, self.limits, self.pulse, dp),
-            Tiff => "tiff" => crate::codecs::tiff::decode(self.data, self.limits, self.pulse, dp),
-            Qoi => "bitmaps-qoi" => crate::codecs::qoi::decode(self.data, self.limits, self.pulse, dp),
-            Tga => "bitmaps-tga" => crate::codecs::tga::decode(self.data, self.limits, self.pulse, dp),
-            Hdr => "bitmaps-hdr" => crate::codecs::hdr::decode(self.data, self.limits, self.pulse, dp);
+            Pnm => "bitmaps" => crate::codecs::pnm::decode(self.data, limits, self.pulse, dp),
+            Bmp => "bitmaps-bmp" => crate::codecs::bmp::decode(self.data, limits, self.pulse, dp),
+            Farbfeld => "bitmaps" => crate::codecs::farbfeld::decode(self.data, limits, self.pulse, dp),
+            Tiff => "tiff" => crate::codecs::tiff::decode(self.data, limits, self.pulse, dp),
+            Qoi => "bitmaps-qoi" => crate::codecs::qoi::decode(self.data, limits, self.pulse, dp),
+            Tga => "bitmaps-tga" => crate::codecs::tga::decode(self.data, limits, self.pulse, dp),
+            Hdr => "bitmaps-hdr" => crate::codecs::hdr::decode(self.data, limits, self.pulse, dp);
             // RAW/DNG: Custom format from zenraw
             #[cfg(feature = "raw-decode")]
             ImageFormat::Custom(def) if def.name == "dng" || def.name == "raw" => {
-                crate::codecs::raw::decode(self.data, self.codec_config, self.limits, self.pulse)
+                crate::codecs::raw::decode(self.data, self.codec_config, limits, self.pulse)
             }
             // JPEG 2000
             #[cfg(feature = "jp2-decode")]
-            ImageFormat::Jp2 => crate::codecs::jp2::decode(self.data, self.limits, self.pulse, dp),
+            ImageFormat::Jp2 => crate::codecs::jp2::decode(self.data, limits, self.pulse, dp),
             // SVG/SVGZ
             #[cfg(feature = "svg")]
             ImageFormat::Custom(def) if def.name == "svg" => {
-                crate::codecs::svg::decode(self.data, self.limits, self.pulse, dp)
+                crate::codecs::svg::decode(self.data, limits, self.pulse, dp)
             }
             // PDF: Custom format from zenpdf (renders page 0)
             #[cfg(feature = "pdf-decode")]
             ImageFormat::Custom(def) if def.name == "pdf" => {
-                crate::codecs::pdf::decode(self.data, self.limits, self.pulse, dp)
+                crate::codecs::pdf::decode(self.data, limits, self.pulse, dp)
             }
             _ => Err(at!(CodecError::UnsupportedFormat(format))),
         }
@@ -759,7 +736,7 @@ mod tests {
         let registry = AllowedFormats::none();
 
         let result = DecodeRequest::new(&jpeg_data)
-            .with_registry(&registry)
+            .with_registry(registry)
             .decode_full_frame();
 
         assert!(matches!(
@@ -788,7 +765,7 @@ mod tests {
 
         let result = DecodeRequest::new(not_really_dng)
             .with_format(ImageFormat::Custom(&zenraw::DNG_FORMAT))
-            .with_registry(&registry)
+            .with_registry(registry)
             .decode_full_frame();
 
         assert!(

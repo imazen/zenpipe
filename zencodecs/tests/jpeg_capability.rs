@@ -56,7 +56,7 @@ fn encode_jpeg_rgb8(img: ImgRef<'_, Rgb<u8>>, quality: f32) -> Vec<u8> {
     let view = PixelView::from_imgref(img, ColorSpace::SRGB).expect("from_imgref");
     EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(quality)
-        .encode(view, false)
+        .encode(view)
         .expect("encode rgb8 jpeg")
         .into_vec()
 }
@@ -74,7 +74,7 @@ fn encode_jpeg_rgba8_ignore_alpha(img: ImgRef<'_, Rgba<u8>>, quality: f32) -> Ve
     .expect("PixelView::new");
     EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(quality)
-        .encode(pixels, false)
+        .encode(pixels)
         .expect("encode rgba8 jpeg")
         .into_vec()
 }
@@ -84,7 +84,7 @@ fn encode_jpeg_with_meta(img: ImgRef<'_, Rgb<u8>>, meta: Metadata, quality: f32)
     EncodeRequest::new(ImageFormat::Jpeg)
         .with_quality(quality)
         .with_metadata(meta)
-        .encode(view, false)
+        .encode(view)
         .expect("encode jpeg with metadata")
         .into_vec()
 }

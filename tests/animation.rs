@@ -89,7 +89,11 @@ fn frame_source_decode_3_frames() {
 
     let info = source.frame_info().expect("first frame should be loaded");
     assert_eq!(info.index, 0);
-    assert_eq!(info.duration_ms, 100);
+    assert_eq!(info.duration_ms(), 100);
+    assert_eq!(
+        info.duration,
+        zencodec::animation::FrameDuration::from_millis(100)
+    );
     assert_eq!(source.width(), 8);
     assert_eq!(source.height(), 8);
 
@@ -149,13 +153,15 @@ fn frame_sink_encode_2_frames() {
     sink.begin_frame();
     let mut src = make_solid_source(width as u32, height as u32, [255, 0, 0, 255]);
     zenpipe::execute(src.as_mut(), &mut sink).unwrap();
-    sink.finish_frame(100).unwrap();
+    sink.finish_frame(zencodec::animation::FrameDuration::from_millis(100))
+        .unwrap();
 
     // Frame 2: blue
     sink.begin_frame();
     let mut src = make_solid_source(width as u32, height as u32, [0, 0, 255, 255]);
     zenpipe::execute(src.as_mut(), &mut sink).unwrap();
-    sink.finish_frame(200).unwrap();
+    sink.finish_frame(zencodec::animation::FrameDuration::from_millis(200))
+        .unwrap();
 
     let output = sink.finish_animation().unwrap();
     let encoded = output.into_vec();
@@ -528,7 +534,8 @@ fn finish_with_valid_frame(mut sink: FrameSink) -> Vec<u8> {
     )
     .unwrap();
     sink.consume(&strip).unwrap();
-    sink.finish_frame(100).unwrap();
+    sink.finish_frame(zencodec::animation::FrameDuration::from_millis(100))
+        .unwrap();
     sink.finish_animation().unwrap().into_vec()
 }
 
@@ -548,7 +555,8 @@ fn frame_sink_reads_strided_rgba_rows_exactly() {
     .unwrap();
     let mut sink = open_frame_sink();
     sink.consume(&strip).unwrap();
-    sink.finish_frame(100).unwrap();
+    sink.finish_frame(zencodec::animation::FrameDuration::from_millis(100))
+        .unwrap();
     let gif = sink.finish_animation().unwrap().into_vec();
     assert_eq!(first_gif_frame(&gif), rgba);
 }
@@ -920,6 +928,15 @@ mod pulse_forwarding {
             self.1.lock().unwrap().push(("encode", identity(pulse)));
             self.0.push_frame(pixels, duration_ms, pulse)
         }
+        fn push_frame_timed(
+            &mut self,
+            pixels: zenpixels::PixelView<'_>,
+            duration: zencodec::animation::FrameDuration,
+            pulse: Option<&dyn Pulse>,
+        ) -> Result<zencodec::animation::FrameDuration, BoxedError> {
+            self.1.lock().unwrap().push(("encode", identity(pulse)));
+            self.0.push_frame_timed(pixels, duration, pulse)
+        }
         fn finish(self: Box<Self>, pulse: Option<&dyn Pulse>) -> Result<EncodeOutput, BoxedError> {
             self.1.lock().unwrap().push(("finish", identity(pulse)));
             self.0.finish(pulse)
@@ -1013,7 +1030,101 @@ mod pulse_forwarding {
             |_, _| panic!("cancelled animation constructed a pipeline"),
             Some(&pulse),
         );
-        assert!(result.is_err_and(|e| matches!(e.error(), zenpipe::PipeError::Cancelled)));
+        assert!(result.is_err_and(|e| matches!(
+            e.error(),
+            zenpipe::PipeError::Stopped(enough::StopReason::Cancelled)
+        )));
         assert!(calls.lock().unwrap().is_empty());
     }
+}
+
+#[test]
+fn animation_transcode_preserves_distinct_frame_durations() {
+    // Encode a 2-frame GIF with distinct durations (120ms, 250ms) and loop count 3.
+    let mut enc = GifEncoderConfig::new()
+        .job()
+        .with_canvas_size(4, 4)
+        .with_loop_count(Some(3))
+        .animation_frame_encoder()
+        .unwrap();
+    let f0 = [200u8, 40, 40, 255].repeat(16);
+    let f1 = [40u8, 40, 200, 255].repeat(16);
+    let v0 = zenpixels::PixelView::new(&f0, 4, 4, 16, &zenpixels::formats::RGBA8_SRGB).unwrap();
+    let v1 = zenpixels::PixelView::new(&f1, 4, 4, 16, &zenpixels::formats::RGBA8_SRGB).unwrap();
+    enc.push_frame(v0, 120, None).unwrap();
+    enc.push_frame(v1, 250, None).unwrap();
+    let input_gif = enc.finish(None).unwrap().into_vec();
+
+    // Transcode through zenpipe::animation::transcode preserving durations + loop count.
+    let decoder = make_gif_decoder(input_gif.clone());
+    assert_eq!(decoder.loop_count(), Some(3));
+    let encoder = GifEncoderConfig::new()
+        .job()
+        .with_canvas_size(4, 4)
+        .with_loop_count(decoder.loop_count())
+        .dyn_animation_frame_encoder()
+        .unwrap();
+    let out =
+        zenpipe::animation::transcode(decoder, encoder, 4, 4, format::RGBA8_SRGB, |src, _info| {
+            Ok(src)
+        })
+        .unwrap();
+    let mut verify = make_gif_decoder(out.into_vec());
+    assert_eq!(verify.loop_count(), Some(3));
+    let d0 = verify.render_next_frame_owned(None).unwrap().unwrap();
+    let d1 = verify.render_next_frame_owned(None).unwrap().unwrap();
+    assert!(verify.render_next_frame_owned(None).unwrap().is_none());
+    assert_eq!(
+        d0.duration(),
+        zencodec::animation::FrameDuration::from_millis(120)
+    );
+    assert_eq!(
+        d1.duration(),
+        zencodec::animation::FrameDuration::from_millis(250)
+    );
+}
+
+#[cfg(all(feature = "job", feature = "nodes-gif"))]
+#[test]
+fn image_job_animated_transcode_preserves_loop_count_and_durations() {
+    use zencodecs::{CodecIntent, FormatChoice, ImageFormat};
+    use zenpipe::job::ImageJob;
+
+    let mut enc = zencodecs::EncodeRequest::new(ImageFormat::Gif)
+        .with_loop_count(Some(3))
+        .animation_frame_encoder(4, 4)
+        .unwrap();
+    let f0 = [220u8, 20, 20, 255].repeat(16);
+    let f1 = [20u8, 220, 20, 255].repeat(16);
+    let v0 = zenpixels::PixelView::new(&f0, 4, 4, 16, &zenpixels::formats::RGBA8_SRGB).unwrap();
+    let v1 = zenpixels::PixelView::new(&f1, 4, 4, 16, &zenpixels::formats::RGBA8_SRGB).unwrap();
+    enc.push_frame(v0, 130, None).unwrap();
+    enc.push_frame(v1, 270, None).unwrap();
+    let input_gif = enc.finish(None).unwrap().into_vec();
+
+    let result = ImageJob::new()
+        .add_input(0, input_gif)
+        .add_output(1)
+        .with_intent(CodecIntent::new().with_format(FormatChoice::Specific(ImageFormat::Gif)))
+        .run()
+        .expect("animated ImageJob should succeed");
+
+    assert_eq!(result.encode_results[0].format, ImageFormat::Gif);
+    let mut verify = make_gif_decoder(result.encode_results[0].bytes.clone());
+    assert_eq!(
+        verify.loop_count(),
+        Some(3),
+        "ImageJob animated transcode must preserve loop_count"
+    );
+    let d0 = verify.render_next_frame_owned(None).unwrap().unwrap();
+    let d1 = verify.render_next_frame_owned(None).unwrap().unwrap();
+    assert!(verify.render_next_frame_owned(None).unwrap().is_none());
+    assert_eq!(
+        d0.duration(),
+        zencodec::animation::FrameDuration::from_millis(130)
+    );
+    assert_eq!(
+        d1.duration(),
+        zencodec::animation::FrameDuration::from_millis(270)
+    );
 }

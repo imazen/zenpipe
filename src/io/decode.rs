@@ -50,7 +50,7 @@ fn failed(error: impl core::error::Error + Send + Sync + 'static) -> whereat::At
 
 /// Admission, queue and control settings for [`DecodeSource`].
 #[derive(Clone)]
-pub struct DecodeOptions {
+pub struct SourceOptions {
     storage: StorageBudget,
     strip_rows: u32,
     slots: u32,
@@ -58,7 +58,7 @@ pub struct DecodeOptions {
     pulse: SharedPulse,
 }
 
-impl DecodeOptions {
+impl SourceOptions {
     /// Share `storage` between the controlled decoder (its retained input and
     /// delivery rows) and this adapter's strip slots. Defaults: 64-row strips,
     /// two slots, default drive options and no pulse. The operation policy is
@@ -383,7 +383,7 @@ impl<'a> DecodeSource<SliceReadAt<'a>, PolicySet> {
     pub fn from_slice(
         codecs: &CodecSet,
         bytes: &'a [u8],
-        options: DecodeOptions,
+        options: SourceOptions,
     ) -> PipeResult<Self> {
         Self::new(
             codecs,
@@ -403,7 +403,7 @@ impl DecodeSource<SharedBytes, PolicySet> {
     pub fn from_bytes(
         codecs: &CodecSet,
         bytes: impl Into<SharedBytes>,
-        options: DecodeOptions,
+        options: SourceOptions,
     ) -> PipeResult<Self> {
         Self::new(
             codecs,
@@ -426,7 +426,7 @@ impl<R: ReadAt, P: OperationPolicy> DecodeSource<R, P> {
         request: &CodecDecodeOptions,
         source: R,
         policy: P,
-        options: DecodeOptions,
+        options: SourceOptions,
     ) -> PipeResult<Self> {
         if options.strip_rows == 0 || options.slots == 0 {
             return Err(refused(Refusal::InvalidOptions));

@@ -211,9 +211,9 @@ fn execute_single_output(
     }
 
     job = job.with_metadata_policy(match out.metadata.as_deref() {
-        Some("preserve") => zenpipe::job::MetadataPolicy::PreserveAll,
-        Some("strip") => zenpipe::job::MetadataPolicy::StripAll,
-        _ => zenpipe::job::MetadataPolicy::WebDefault,
+        Some("preserve") => zenpipe::job::MetadataPolicy::PreserveExact,
+        Some("strip") => zenpipe::job::MetadataPolicy::ColorAndRotation,
+        _ => zenpipe::job::MetadataPolicy::Web,
     });
     job = job.with_gain_map_mode(match out.hdr.as_deref() {
         Some("strip") => zenpipe::job::GainMapMode::Discard,

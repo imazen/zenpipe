@@ -16,7 +16,7 @@ fn solid_png() -> Vec<u8> {
     }
     EncodeRequest::new(ImageFormat::Png)
         .with_lossless(true)
-        .encode(b.as_view(), true)
+        .encode(b.as_view())
         .unwrap()
         .into_vec()
 }
@@ -31,11 +31,11 @@ fn run(input: &[u8], query: &str) -> ([u8; 3], [u8; 3]) {
         .with_cms(CmsMode::Preserve)
         .with_nodes(&nodes)
         .with_converters(&converters)
-        .with_intent(CodecIntent {
-            format: Some(FormatChoice::Specific(ImageFormat::Png)),
-            lossless: Some(BoolKeep::True),
-            ..Default::default()
-        })
+        .with_intent(
+            CodecIntent::new()
+                .with_format(FormatChoice::Specific(ImageFormat::Png))
+                .with_lossless(BoolKeep::True),
+        )
         .run()
         .unwrap();
     let decoded = DecodeRequest::new(&result.encode_results[0].bytes)

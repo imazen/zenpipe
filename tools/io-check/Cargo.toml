@@ -17,7 +17,7 @@ zencodec.workspace = true
 zencodec-io = { version = "0.2.0", features = ["std", "tokio"] }
 zenpixels.workspace = true
 zenresize = { version = "0.3.1", default-features = false }
-# The whole-raster orientation reference (`zenpipe::execute_layout::orient_image`) takes its enum.
+# Orientation reference tests use zenlayout's Orientation enum.
 zenlayout.workspace = true
 zenjpeg = { version = "0.9.0", features = ["zencodec", "controlled-decode"] }
 zenpng = { version = "0.2.0", default-features = false, features = ["controlled-decode"] }

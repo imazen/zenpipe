@@ -36,10 +36,40 @@ fn png_input() -> Vec<u8> {
 }
 
 fn intent(format: ImageFormat) -> CodecIntent {
-    CodecIntent {
-        format: Some(FormatChoice::Specific(format)),
-        ..Default::default()
+    CodecIntent::new().with_format(FormatChoice::Specific(format))
+}
+
+fn orient_rgb8(
+    input: &[u8],
+    width: u32,
+    height: u32,
+    o: zenlayout::Orientation,
+) -> (Vec<u8>, u32, u32) {
+    if o.is_identity() {
+        return (input.to_vec(), width, height);
     }
+    let out_size = o.transform_dimensions(width, height);
+    let (ow, oh) = (out_size.width, out_size.height);
+    let mut output = vec![0u8; ow as usize * oh as usize * 3];
+    for sy in 0..height {
+        for sx in 0..width {
+            let (dx, dy) = match o {
+                zenlayout::Orientation::Identity => (sx, sy),
+                zenlayout::Orientation::FlipH => (width - 1 - sx, sy),
+                zenlayout::Orientation::Rotate90 => (height - 1 - sy, sx),
+                zenlayout::Orientation::Transpose => (sy, sx),
+                zenlayout::Orientation::Rotate180 => (width - 1 - sx, height - 1 - sy),
+                zenlayout::Orientation::FlipV => (sx, height - 1 - sy),
+                zenlayout::Orientation::Rotate270 => (sy, width - 1 - sx),
+                zenlayout::Orientation::Transverse => (height - 1 - sy, width - 1 - sx),
+                _ => (sx, sy),
+            };
+            let src_off = (sy as usize * width as usize + sx as usize) * 3;
+            let dst_off = (dy as usize * ow as usize + dx as usize) * 3;
+            output[dst_off..dst_off + 3].copy_from_slice(&input[src_off..src_off + 3]);
+        }
+    }
+    (output, ow, oh)
 }
 
 fn decode_png(bytes: &[u8]) -> (u32, u32, Vec<u8>) {
@@ -174,7 +204,7 @@ fn displayed(bytes: &[u8]) -> (u32, u32, Vec<u8>) {
         .and_then(|e| e.orientation())
         .unwrap_or(zencodec::Orientation::Identity);
     let o = zenlayout::Orientation::from_exif(orientation.to_exif()).unwrap();
-    let (shown, w, h) = zenpipe::execute_layout::orient_image(&rgb, info.width, info.height, o, 3);
+    let (shown, w, h) = orient_rgb8(&rgb, info.width, info.height, o);
     (w, h, shown)
 }
 
@@ -184,19 +214,16 @@ fn displayed_orientation_survives_every_metadata_policy_on_both_routes() {
     let o = zencodec::Orientation::Rotate90;
     let (samples, input) = oriented_png_input(o);
     let lo = zenlayout::Orientation::from_exif(o.to_exif()).unwrap();
-    let (expected, ew, eh) = zenpipe::execute_layout::orient_image(&samples, W, H, lo, 3);
+    let (expected, ew, eh) = orient_rgb8(&samples, W, H, lo);
     let mut wrong = Vec::new();
     for policy in [
-        MetadataPolicy::PreserveAll,
-        MetadataPolicy::WebDefault,
-        MetadataPolicy::StripAll,
+        MetadataPolicy::PreserveExact,
+        MetadataPolicy::Web,
+        MetadataPolicy::ColorAndRotation,
     ] {
         for planned in [false, true] {
             // Lossless, so the comparison is about orientation, not quantization.
-            let lossless = CodecIntent {
-                lossless: Some(zencodecs::BoolKeep::True),
-                ..intent(ImageFormat::Png)
-            };
+            let lossless = intent(ImageFormat::Png).with_lossless(zencodecs::BoolKeep::True);
             let mut job = ImageJob::new()
                 .add_input(0, input.clone())
                 .add_output(1)
@@ -242,7 +269,7 @@ fn diagnose(shown: &[u8], w: u32, h: u32, samples: &[u8], expected: &[u8]) -> St
         .iter()
         .filter(|o| {
             let lo = zenlayout::Orientation::from_exif(o.to_exif()).unwrap();
-            let (r, rw, rh) = zenpipe::execute_layout::orient_image(samples, W, H, lo, 3);
+            let (r, rw, rh) = orient_rgb8(samples, W, H, lo);
             (rw, rh) == (w, h) && r == shown
         })
         .collect();
@@ -270,22 +297,19 @@ fn an_orient_node_renders_the_orientation_once_on_both_routes() {
     let o = zencodec::Orientation::Rotate90;
     let (samples, input) = oriented_png_input(o);
     let lo = zenlayout::Orientation::from_exif(o.to_exif()).unwrap();
-    let (expected, ew, eh) = zenpipe::execute_layout::orient_image(&samples, W, H, lo, 3);
+    let (expected, ew, eh) = orient_rgb8(&samples, W, H, lo);
     let nodes: Vec<Box<dyn zennode::NodeInstance>> =
         vec![Box::new(zenpipe::zennode_defs::Orient {
             orientation: i32::from(o.to_exif()),
         })];
     let mut wrong = Vec::new();
     for policy in [
-        MetadataPolicy::PreserveAll,
-        MetadataPolicy::WebDefault,
-        MetadataPolicy::StripAll,
+        MetadataPolicy::PreserveExact,
+        MetadataPolicy::Web,
+        MetadataPolicy::ColorAndRotation,
     ] {
         for planned in [false, true] {
-            let lossless = CodecIntent {
-                lossless: Some(zencodecs::BoolKeep::True),
-                ..intent(ImageFormat::Png)
-            };
+            let lossless = intent(ImageFormat::Png).with_lossless(zencodecs::BoolKeep::True);
             let mut job = ImageJob::new()
                 .add_input(0, input.clone())
                 .add_output(1)
@@ -327,20 +351,17 @@ fn autorotate_displays_upright_on_both_routes() {
     let o = zencodec::Orientation::Rotate90;
     let (samples, input) = oriented_png_input(o);
     let lo = zenlayout::Orientation::from_exif(o.to_exif()).unwrap();
-    let (expected, ew, eh) = zenpipe::execute_layout::orient_image(&samples, W, H, lo, 3);
+    let (expected, ew, eh) = orient_rgb8(&samples, W, H, lo);
     let nodes: Vec<Box<dyn zennode::NodeInstance>> =
         vec![Box::new(zenpipe::zennode_defs::Orient { orientation: 0 })];
     let mut wrong = Vec::new();
     for policy in [
-        MetadataPolicy::PreserveAll,
-        MetadataPolicy::WebDefault,
-        MetadataPolicy::StripAll,
+        MetadataPolicy::PreserveExact,
+        MetadataPolicy::Web,
+        MetadataPolicy::ColorAndRotation,
     ] {
         for planned in [false, true] {
-            let lossless = CodecIntent {
-                lossless: Some(zencodecs::BoolKeep::True),
-                ..intent(ImageFormat::Png)
-            };
+            let lossless = intent(ImageFormat::Png).with_lossless(zencodecs::BoolKeep::True);
             let mut job = ImageJob::new()
                 .add_input(0, input.clone())
                 .add_output(1)
@@ -401,15 +422,12 @@ fn a_crop_node_keeps_exact_pixels_on_both_routes() {
     })];
     let mut wrong = Vec::new();
     for planned in [false, true] {
-        let lossless = CodecIntent {
-            lossless: Some(zencodecs::BoolKeep::True),
-            ..intent(ImageFormat::Png)
-        };
+        let lossless = intent(ImageFormat::Png).with_lossless(zencodecs::BoolKeep::True);
         let mut job = ImageJob::new()
             .add_input(0, png_input())
             .add_output(1)
             .with_intent(lossless)
-            .with_metadata_policy(zenpipe::job::MetadataPolicy::PreserveAll)
+            .with_metadata_policy(zenpipe::job::MetadataPolicy::PreserveExact)
             .with_nodes(&nodes);
         if planned {
             job = job.with_output_policy(PolicySet::new());
@@ -471,10 +489,7 @@ fn identity_png16_matches_independent_decoder_on_both_output_routes() {
         let mut job = ImageJob::new()
             .add_input(0, input.clone())
             .add_output(1)
-            .with_intent(CodecIntent {
-                lossless: Some(zencodecs::BoolKeep::True),
-                ..intent(ImageFormat::Png)
-            });
+            .with_intent(intent(ImageFormat::Png).with_lossless(zencodecs::BoolKeep::True));
         if let Some(policy) = policy {
             job = job.with_output_policy(policy);
         }

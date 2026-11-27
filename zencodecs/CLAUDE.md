@@ -109,7 +109,6 @@ zencodecs/
 │   ├── encode.rs         # EncodeRequest (one-shot, animation, quality profiles, gain map)
 │   ├── intent.rs         # CodecIntent — parsed user intent for format selection and quality
 │   ├── decision.rs       # FormatDecision — resolved output of codec selection
-│   ├── riapi_parse.rs    # RIAPI codec key parsing and engine detection
 │   ├── transcode.rs      # Transcode API and streaming decode→encode bridge
 │   ├── zennode_defs.rs   # QualityIntentNode for pipeline integration (feature: zennode)
 │   ├── gainmap.rs        # Format-agnostic gain map types (DecodedGainMap, GainMapSource)

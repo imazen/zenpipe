@@ -39,7 +39,7 @@ fn make_test_jpeg() -> Vec<u8> {
         .expect("pixel view");
     zencodecs::EncodeRequest::new(zencodec::ImageFormat::Jpeg)
         .with_quality(90.0)
-        .encode(ps, false)
+        .encode(ps)
         .expect("JPEG encode")
         .into_vec()
 }
@@ -1215,7 +1215,7 @@ fn solid_png(w: u32, h: u32, rgba: [u8; 4]) -> Vec<u8> {
     )
     .unwrap();
     zencodecs::EncodeRequest::new(zencodec::ImageFormat::Png)
-        .encode(slice, true)
+        .encode(slice)
         .expect("fixture png")
         .data()
         .to_vec()

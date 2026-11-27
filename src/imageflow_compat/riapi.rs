@@ -25,7 +25,7 @@ pub enum RiapiEngine {
     /// Use imageflow_riapi (legacy v2 parser, full coverage).
     #[default]
     Legacy,
-    /// Use zenlayout::riapi + zennode registry (modular zen-native parser).
+    /// Use `zenpipe::riapi` + `zennode` registry (modular zen-native parser).
     ZenNative,
 }
 

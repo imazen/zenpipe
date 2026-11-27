@@ -73,7 +73,7 @@ pub fn try_lossless_jpeg_with_pulse(
     pulse: Option<&dyn zencodec::Pulse>,
 ) -> Result<Option<LosslessResult>, PipeError> {
     let control = pulse.unwrap_or(&zencodec::NoPulse);
-    control.check().map_err(|_| PipeError::Cancelled)?;
+    control.check().map_err(PipeError::Stopped)?;
     // 1. Source must be JPEG (check magic bytes).
     if !is_jpeg(source_data) {
         return Ok(None);
@@ -107,8 +107,13 @@ pub fn try_lossless_jpeg_with_pulse(
         edge_handling: EdgeHandling::TrimPartialBlocks,
     };
 
-    let result = zenjpeg::lossless::transform(source_data, &config, control)
-        .map_err(|e| PipeError::Op(alloc::format!("lossless JPEG transform failed: {e}")))?;
+    let result = zenjpeg::lossless::transform(source_data, &config, control).map_err(|e| {
+        if let Some(reason) = crate::error::codec_stop_reason(&e) {
+            PipeError::Stopped(reason)
+        } else {
+            PipeError::Op(alloc::format!("lossless JPEG transform failed: {e}"))
+        }
+    })?;
 
     // 6. Probe output dimensions.
     let (w, h) = probe_jpeg_dimensions(&result).unwrap_or_else(|| {
@@ -122,26 +127,6 @@ pub fn try_lossless_jpeg_with_pulse(
         width: w,
         height: h,
     }))
-}
-
-/// Compatibility entry point for cancellation-only callers.
-#[deprecated(
-    note = "use try_lossless_jpeg_with_pulse; adapt Stop with how_far::StopOnly::borrowed"
-)]
-pub fn try_lossless_jpeg(
-    source_data: &[u8],
-    nodes: &[Box<dyn NodeInstance>],
-    encode_config: &EncodeConfig,
-    exif_orientation: u8,
-    stop: &dyn enough::Stop,
-) -> Result<Option<LosslessResult>, PipeError> {
-    try_lossless_jpeg_with_pulse(
-        source_data,
-        nodes,
-        encode_config,
-        exif_orientation,
-        Some(&zencodec::how_far::StopOnly::borrowed(stop)),
-    )
 }
 
 /// Classify all pixel-processing nodes as a single composed lossless transform.

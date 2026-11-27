@@ -70,7 +70,7 @@ impl enough::Stop for DelayedStop {
 /// other error: that is a failure, not a stop, and has no stop latency.
 fn stop_kind(error: &whereat::At<zencodecs::CodecError>) -> Option<String> {
     match error.error() {
-        zencodecs::CodecError::Cancelled => Some("Cancelled".into()),
+        zencodecs::CodecError::Stopped(reason) => Some(format!("Stopped({reason:?})")),
         zencodecs::CodecError::Codec { source, .. } => {
             zencodec::find_cause::<zencodec::CodecError>(&**source).and_then(|e| {
                 match e.category() {
@@ -153,8 +153,11 @@ fn stop_kind_tells_a_stop_from_another_error() {
         Some("Stopped(Cancelled)")
     );
     assert_eq!(
-        stop_kind(&traced(zencodecs::CodecError::Cancelled)).as_deref(),
-        Some("Cancelled")
+        stop_kind(&traced(zencodecs::CodecError::Stopped(
+            StopReason::Cancelled
+        )))
+        .as_deref(),
+        Some("Stopped(Cancelled)")
     );
     // Not stops: each of these used to be reported as a cancellation with a
     // stop latency.

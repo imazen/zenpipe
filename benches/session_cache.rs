@@ -189,14 +189,7 @@ fn register(suite: &mut zenbench::Suite) {
             .run(|nodes| {
                 let source = decode_jpeg();
                 let info = source_info();
-                let config = ProcessConfig {
-                    nodes: &nodes,
-                    converters: &[],
-                    hdr_mode: "sdr_only",
-                    source_info: &info,
-                    trace_config: None,
-                    limits: None,
-                };
+                let config = ProcessConfig::new(&nodes, &info);
                 let output = zenpipe::orchestrate::stream(source, &config, None).expect("stream");
                 black_box(drain(output.source))
             })
@@ -211,14 +204,7 @@ fn register(suite: &mut zenbench::Suite) {
                 let mut nodes = geometry_nodes();
                 nodes.push(filter_node(255, 255, 255));
                 let info = source_info();
-                let config = ProcessConfig {
-                    nodes: &nodes,
-                    converters: &[],
-                    hdr_mode: "sdr_only",
-                    source_info: &info,
-                    trace_config: None,
-                    limits: None,
-                };
+                let config = ProcessConfig::new(&nodes, &info);
                 let source = decode_jpeg();
                 let output = session
                     .stream(source, &config, None, 0xBE4C)
@@ -239,14 +225,7 @@ fn register(suite: &mut zenbench::Suite) {
                 nodes.push(filter_node(r, g, b_val));
 
                 let info = source_info();
-                let config = ProcessConfig {
-                    nodes: &nodes,
-                    converters: &[],
-                    hdr_mode: "sdr_only",
-                    source_info: &info,
-                    trace_config: None,
-                    limits: None,
-                };
+                let config = ProcessConfig::new(&nodes, &info);
 
                 // Source not needed for cache hit, but API requires one.
                 let source = decode_jpeg();
@@ -273,14 +252,7 @@ fn register(suite: &mut zenbench::Suite) {
             .run(|nodes| {
                 let source = decode_jpeg();
                 let info = source_info();
-                let config = ProcessConfig {
-                    nodes: &nodes,
-                    converters: &[],
-                    hdr_mode: "sdr_only",
-                    source_info: &info,
-                    trace_config: None,
-                    limits: None,
-                };
+                let config = ProcessConfig::new(&nodes, &info);
                 let output = zenpipe::orchestrate::stream(source, &config, None).expect("stream");
                 black_box(materialize_and_encode_bmp(output.source).len())
             })
@@ -293,14 +265,7 @@ fn register(suite: &mut zenbench::Suite) {
                 let mut nodes = geometry_nodes();
                 nodes.push(filter_node(255, 255, 255));
                 let info = source_info();
-                let config = ProcessConfig {
-                    nodes: &nodes,
-                    converters: &[],
-                    hdr_mode: "sdr_only",
-                    source_info: &info,
-                    trace_config: None,
-                    limits: None,
-                };
+                let config = ProcessConfig::new(&nodes, &info);
                 let source = decode_jpeg();
                 let output = session
                     .stream(source, &config, None, 0xBE4C)
@@ -319,14 +284,7 @@ fn register(suite: &mut zenbench::Suite) {
                 nodes.push(filter_node(r, g, b_val));
 
                 let info = source_info();
-                let config = ProcessConfig {
-                    nodes: &nodes,
-                    converters: &[],
-                    hdr_mode: "sdr_only",
-                    source_info: &info,
-                    trace_config: None,
-                    limits: None,
-                };
+                let config = ProcessConfig::new(&nodes, &info);
 
                 let source = decode_jpeg();
                 let output = session
@@ -351,14 +309,7 @@ fn register(suite: &mut zenbench::Suite) {
                     nodes.push(filter_node(i * 25, 128, 255 - i * 25));
 
                     let info = source_info();
-                    let config = ProcessConfig {
-                        nodes: &nodes,
-                        converters: &[],
-                        hdr_mode: "sdr_only",
-                        source_info: &info,
-                        trace_config: None,
-                        limits: None,
-                    };
+                    let config = ProcessConfig::new(&nodes, &info);
                     let source = decode_jpeg();
                     let output =
                         zenpipe::orchestrate::stream(source, &config, None).expect("stream");
@@ -378,14 +329,7 @@ fn register(suite: &mut zenbench::Suite) {
                     nodes.push(filter_node(i * 25, 128, 255 - i * 25));
 
                     let info = source_info();
-                    let config = ProcessConfig {
-                        nodes: &nodes,
-                        converters: &[],
-                        hdr_mode: "sdr_only",
-                        source_info: &info,
-                        trace_config: None,
-                        limits: None,
-                    };
+                    let config = ProcessConfig::new(&nodes, &info);
                     let source = decode_jpeg();
                     let output = session
                         .stream(source, &config, None, 0xBE4C)

@@ -48,7 +48,7 @@ fn encode(format: ImageFormat, px: &[u8], w: u32, d: &PixelFormat, meta: Metadat
     EncodeRequest::new(format)
         .with_tone_map_policy(ToneMapPolicy::Bt2408)
         .with_metadata(meta)
-        .encode(slice, false)
+        .encode(slice)
         .unwrap()
         .into_vec()
 }
@@ -256,7 +256,7 @@ fn preserve_refuses_on_both_paths() {
         };
         assert!(
             request()
-                .encode(PixelView::new(&px, 2, H, 24, &d).unwrap(), false)
+                .encode(PixelView::new(&px, 2, H, 24, &d).unwrap())
                 .is_err()
         );
         let built = request().build_streaming_encoder(2, H);
@@ -283,13 +283,10 @@ fn the_default_is_bt2408_on_both_paths() {
         let slice = || PixelView::new(&px, 2, H, 24, &d).unwrap();
         let explicit = request()
             .with_tone_map_policy(ToneMapPolicy::Bt2408)
-            .encode(slice(), false)
+            .encode(slice())
             .unwrap()
             .into_vec();
-        assert_eq!(
-            request().encode(slice(), false).unwrap().into_vec(),
-            explicit
-        );
+        assert_eq!(request().encode(slice()).unwrap().into_vec(), explicit);
 
         let mut se = request().build_streaming_encoder(2, H).unwrap();
         se.encoder.begin(2, H, d.clone()).unwrap();
@@ -327,7 +324,7 @@ fn translucent_hdr_refuses_rather_than_dropping_alpha() {
     let shot = |px: &[u8]| {
         EncodeRequest::new(ImageFormat::Jpeg)
             .with_metadata(pq_meta())
-            .encode(PixelView::new(px, 2, H, 32, &d).unwrap(), false)
+            .encode(PixelView::new(px, 2, H, 32, &d).unwrap())
     };
     assert!(shot(&row(0.5)).is_err());
     assert!(shot(&row(1.0)).is_ok());
@@ -340,7 +337,7 @@ fn the_default_still_yields_to_strict_policy() {
     let result = EncodeRequest::new(ImageFormat::Bmp)
         .with_metadata(pq_meta())
         .with_encode_policy(zencodec::encode::EncodePolicy::none().with_strict(true))
-        .encode(PixelView::new(&px, 2, H, 24, &d).unwrap(), false);
+        .encode(PixelView::new(&px, 2, H, 24, &d).unwrap());
     assert!(result.is_err());
 }
 
@@ -394,7 +391,7 @@ fn strict_policy_refuses_tone_mapping_on_both_paths() {
         };
         assert!(
             request()
-                .encode(PixelView::new(&px, 1, H, 12, &d).unwrap(), false)
+                .encode(PixelView::new(&px, 1, H, 12, &d).unwrap())
                 .is_err()
         );
         if let Ok(mut se) = request().build_streaming_encoder(1, H) {
@@ -419,7 +416,7 @@ fn unsupported_hdr_color_is_an_error_on_both_paths() {
         };
         assert!(
             request()
-                .encode(PixelView::new(&px, 1, H, 12, &d).unwrap(), false)
+                .encode(PixelView::new(&px, 1, H, 12, &d).unwrap())
                 .is_err()
         );
         let mut se = request().build_streaming_encoder(1, H).unwrap();
@@ -436,12 +433,12 @@ fn srgb_icc_takes_precedence_over_hdr_cicp() {
     let d = PixelFormat::RGB8_SRGB;
     let request = || EncodeRequest::new(ImageFormat::Bmp).with_metadata(meta.clone());
     let expected = request()
-        .encode(PixelView::new(&px, 3, H, 9, &d).unwrap(), false)
+        .encode(PixelView::new(&px, 3, H, 9, &d).unwrap())
         .unwrap()
         .into_vec();
     let actual = request()
         .with_tone_map_policy(ToneMapPolicy::Bt2408)
-        .encode(PixelView::new(&px, 3, H, 9, &d).unwrap(), false)
+        .encode(PixelView::new(&px, 3, H, 9, &d).unwrap())
         .unwrap()
         .into_vec();
     assert_eq!(actual, expected);
@@ -554,7 +551,7 @@ fn hdr_padding_alpha_is_opaque_after_rendering() {
         let encoded = EncodeRequest::new(ImageFormat::WebP)
             .with_lossless(true)
             .with_tone_map_policy(ToneMapPolicy::Bt2408)
-            .encode(PixelView::new(&data, 1, 1, 16, &desc).unwrap(), true)
+            .encode(PixelView::new(&data, 1, 1, 16, &desc).unwrap())
             .unwrap();
         let decoded = DecodeRequest::new(encoded.data())
             .decode_full_frame()

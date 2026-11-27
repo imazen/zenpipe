@@ -55,10 +55,7 @@ fn map_err(
     format: zencodec::ImageFormat,
     e: impl core::error::Error + Send + Sync + 'static,
 ) -> whereat::At<CodecError> {
-    at!(CodecError::Codec {
-        format,
-        source: alloc::boxed::Box::new(e),
-    })
+    at!(CodecError::from_codec(format, e))
 }
 
 /// Probe RAW/DNG metadata without decoding pixels.
@@ -284,7 +281,7 @@ mod gainmap_controls {
         let view =
             zenpixels::PixelView::new(&pixels, 4, 4, 12, &zenpixels::formats::RGB8_SRGB).unwrap();
         let bytes = crate::EncodeRequest::new(zencodec::ImageFormat::Jpeg)
-            .encode(view, false)
+            .encode(view)
             .unwrap()
             .into_vec();
         let output = decode_gainmap_jpeg(&bytes, None, SharedPulse::default()).unwrap();
@@ -301,13 +298,12 @@ mod gainmap_controls {
             SharedPulse::new(zencodec::how_far::StopOnly::new(Timeout)),
         )
         .unwrap_err();
-        let CodecError::Codec { source, .. } = error.error() else {
-            panic!("{error:?}")
-        };
-        let cause = zencodec::find_cause::<zencodec::CodecError>(&**source).unwrap();
-        assert_eq!(
-            cause.category(),
-            zencodec::ErrorCategory::Stopped(zencodec::how_far::StopReason::TimedOut)
+        assert!(
+            matches!(
+                error.error(),
+                CodecError::Stopped(zencodec::how_far::StopReason::TimedOut)
+            ),
+            "{error:?}"
         );
         assert!(
             decode_gainmap_jpeg(

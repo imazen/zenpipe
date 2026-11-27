@@ -75,16 +75,16 @@ pub fn transcode_to_hdr_pq_png(
     // Decode the SDR base first: gates on gain-map presence (avoids a wasted
     // reconstruct on non-HDR input) and resolves the container primaries.
     let base = crate::DecodeRequest::new(data)
-        .with_registry(registry)
+        .with_registry(*registry)
         .decode_full_frame()?;
     if !base.info().supplements.gain_map {
         return Ok(None);
     }
     // Reconstruct HDR (linear float), display-oriented for this encoder path.
     let hdr = crate::DecodeRequest::new(data)
-        .with_registry(registry)
+        .with_registry(*registry)
         .with_orientation(OrientationHint::Correct)
-        .reconstruct_hdr(target_headroom)
+        .reconstruct_gain_map_hdr(target_headroom)
         .decode_full_frame()?;
 
     let (pq, cicp, cll) = prepare_hdr_png(hdr.pixels())?;
@@ -234,10 +234,10 @@ pub fn decode_gain_map_source(
         format => {
             let mut request = crate::DecodeRequest::new(&source.data)
                 .with_format(format)
-                .with_registry(registry);
+                .with_registry(*registry);
 
             if let Some(lim) = limits {
-                request = request.with_limits(lim);
+                request = request.with_limits(*lim);
             }
             request = request.with_pulse(pulse);
 

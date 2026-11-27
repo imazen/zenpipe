@@ -52,8 +52,8 @@ fuzz_target!(|input: RoundtripInput| {
     // Encode
     let encode_result = EncodeRequest::new(format)
         .with_quality(quality)
-        .with_registry(&AllowedFormats::all())
-        .encode(slice, input.has_alpha);
+        .with_registry(AllowedFormats::all())
+        .encode(slice);
 
     let encoded = match encode_result {
         Ok(output) => output,
@@ -68,8 +68,8 @@ fuzz_target!(|input: RoundtripInput| {
         .with_max_memory(64 * 1024 * 1024)
         .with_max_frames(50);
     let decoded = match DecodeRequest::new(encoded.data())
-        .with_limits(&limits)
-        .with_registry(&AllowedFormats::all())
+        .with_limits(limits)
+        .with_registry(AllowedFormats::all())
         .decode_full_frame()
     {
         Ok(d) => d,

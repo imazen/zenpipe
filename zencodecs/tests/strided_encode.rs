@@ -10,7 +10,7 @@ fn encode_accepts_strided_views_without_final_padding() {
     let encode = |data: &[u8], stride| {
         let pixels = PixelView::new(data, 2, 3, stride, &zenpixels::formats::RGB8_SRGB).unwrap();
         EncodeRequest::new(ImageFormat::Png)
-            .encode(pixels, false)
+            .encode(pixels)
             .unwrap()
             .into_vec()
     };

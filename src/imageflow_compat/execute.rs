@@ -349,11 +349,9 @@ fn execute_steps_with_overrides(
                 .map(|p| &p.intent)
                 .cloned()
                 .unwrap_or_default();
-            let canvas_facts = zencodecs::ImageFacts {
-                has_alpha: true,
-                pixel_count: out_w as u64 * out_h as u64,
-                ..Default::default()
-            };
+            let canvas_facts = zencodecs::ImageFacts::new()
+                .with_alpha(true)
+                .with_pixel_count(out_w as u64 * out_h as u64);
             let decision = zencodecs::select_format_from_intent(
                 &codec_intent,
                 &canvas_facts,
@@ -389,8 +387,8 @@ fn execute_steps_with_overrides(
                 let registry = AllowedFormats::all();
                 let decision = zencodecs::FormatDecision::for_format(zencodecs::ImageFormat::Png);
                 let output = zencodecs::EncodeRequest::new(decision.format)
-                    .with_registry(&registry)
-                    .encode(ps, crate::format::format_has_alpha(&fmt))
+                    .with_registry(registry)
+                    .encode(ps)
                     .map_err(|e| ZenError::Codec(format!("encode: {e}")))?;
                 return Ok((
                     vec![ZenEncodeResult {
@@ -570,8 +568,8 @@ fn execute_steps_with_overrides(
         let output = zencodecs::EncodeRequest::new(decision.format)
             .with_quality(eff_quality)
             .with_lossless(eff_lossless)
-            .with_registry(&registry)
-            .encode(pixel_slice, crate::format::format_has_alpha(&fmt))
+            .with_registry(registry)
+            .encode(pixel_slice)
             .map_err(|e| ZenError::Codec(format!("encode: {e}")))?;
 
         vec![ZenEncodeResult {
@@ -1039,7 +1037,7 @@ fn decode_to_source_frame(
 ) -> Result<Box<dyn crate::Source>, ZenError> {
     let codec_config = jpeg_decode_codec_config();
     let mut decoder = zencodecs::DecodeRequest::new(data)
-        .with_registry(registry)
+        .with_registry(*registry)
         .with_codec_config(&codec_config)
         .animation_frame_decoder()
         .map_err(|e| ZenError::Codec(format!("frame decoder: {e}")))?;
@@ -1101,7 +1099,7 @@ fn decode_to_source(
     policy.allow_truncated = Some(false);
     let codec_config = jpeg_decode_codec_config();
     match zencodecs::DecodeRequest::new(data)
-        .with_registry(registry)
+        .with_registry(*registry)
         .with_decode_policy(policy.clone())
         .with_codec_config(&codec_config)
         .build_streaming_decoder()
@@ -1112,7 +1110,7 @@ fn decode_to_source(
         }
         Err(_) => {
             let decoded = zencodecs::DecodeRequest::new(data)
-                .with_registry(registry)
+                .with_registry(*registry)
                 .with_decode_policy(policy)
                 .with_codec_config(&codec_config)
                 .decode_full_frame()
@@ -1272,7 +1270,7 @@ fn stream_encode(
         let mut req = zencodecs::EncodeRequest::new(decision.format)
             .with_quality(effective_quality)
             .with_lossless(effective_lossless)
-            .with_registry(&registry);
+            .with_registry(registry);
         if let Some(ref cfg) = codec_config {
             req = req.with_codec_config(cfg);
         }
@@ -1298,11 +1296,11 @@ fn stream_encode(
         let mut req = zencodecs::EncodeRequest::new(decision.format)
             .with_quality(effective_quality)
             .with_lossless(effective_lossless)
-            .with_registry(&registry);
+            .with_registry(registry);
         if let Some(ref cfg) = codec_config {
             req = req.with_codec_config(cfg);
         }
-        req.encode(pixel_slice, crate::format::format_has_alpha(&fmt))
+        req.encode(pixel_slice)
             .map_err(|e| ZenError::Codec(format!("one-shot encode: {e}")))?
     };
 

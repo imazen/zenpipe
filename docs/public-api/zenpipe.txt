@@ -6,46 +6,45 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenpipe.txt 1392 lines (supported surface) | zenpipe.features.txt 221 added (features: job,job-ultrahdr,nodes-all,io-tokio,json-schema) | zenpipe.internal.txt 33 lines (33 hidden + 0 excluded-feature)
+# files: zenpipe.txt 1340 lines (supported surface) | zenpipe.features.txt 216 added (features: job,job-ultrahdr,nodes-all,io-tokio,json-schema) | zenpipe.internal.txt 32 lines (32 hidden + 0 excluded-feature)
 
 ## summary
 #
-#   pub modules                                22
-#   pub types (struct/enum/trait/alias)       199
+#   pub modules                                21
+#   pub types (struct/enum/trait/alias)       193
 #   pub consts/statics                         45
-#   free functions                             60
-#   inherent methods                          342
+#   free functions                             41
+#   inherent methods                          317
 #   struct fields                             470
 #   enum variants                              61
 #   re-exports                                 34
-#   trait roster entries (type × trait)       361
-#   auto-trait-complete types                 124
-#   auto-trait exceptions                      38
+#   trait roster entries (type × trait)       355
+#   auto-trait-complete types                 122
+#   auto-trait exceptions                      37
 #
 # per-module pub lines:
-#   (root)                          207
-#   animation                        24
+#   (root)                          200
+#   animation                        23
 #   bridge                           55
 #   cache                            30
 #   codec                            13
-#   execute_layout                   15
 #   format                           18
 #   graph                           115
-#   limits                           79
-#   lossless                          6
-#   ops                              14
-#   orchestrate                      39
+#   limits                           42
+#   lossless                          5
+#   ops                              15
+#   orchestrate                      49
 #   riapi                             2
 #   session                           1
 #   sidecar                          25
-#   sources                          81
+#   sources                          80
 #   srcset                            2
 #   tiles                            92
 #   trace                           169
 #   watermark                        35
 #   zennode_defs                    211
 
-## items (1205 lines)
+## items (1157 lines)
 
 pub mod zenpipe
 pub use AlphaMode
@@ -72,14 +71,15 @@ pub use Transfer
 pub use Unstoppable
 pub mod animation
 pub struct animation::FrameInfo
-pub animation::FrameInfo::duration_ms: u32
+pub animation::FrameInfo::duration: zencodec::animation::FrameDuration
 pub animation::FrameInfo::index: u32
+pub fn animation::FrameInfo::duration_ms(&self) -> u32
 pub struct animation::FrameSink
 pub fn animation::FrameSink::begin_frame(&mut self)
 pub fn animation::FrameSink::finish_animation(self) -> PipeResult<zencodec::output::EncodeOutput>
 pub fn animation::FrameSink::finish_animation_with_pulse(self, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<zencodec::output::EncodeOutput>
-pub fn animation::FrameSink::finish_frame(&mut self, u32) -> PipeResult<()>
-pub fn animation::FrameSink::finish_frame_with_pulse(&mut self, u32, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<()>
+pub fn animation::FrameSink::finish_frame(&mut self, zencodec::animation::FrameDuration) -> PipeResult<()>
+pub fn animation::FrameSink::finish_frame_with_pulse(&mut self, zencodec::animation::FrameDuration, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<()>
 pub fn animation::FrameSink::new(alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, zenpixels::color::PixelFormat) -> Self
 pub fn animation::FrameSink::take_output(&mut self) -> core::option::Option<zencodec::output::EncodeOutput>
 pub struct animation::FrameSource
@@ -93,8 +93,6 @@ pub fn animation::FrameSource::new_with_pulse(alloc::boxed::Box<dyn zencodec::tr
 pub fn animation::transcode(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>, alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, zenpixels::color::PixelFormat, impl core::ops::function::FnMut(alloc::boxed::Box<dyn Source>, u32) -> PipeResult<alloc::boxed::Box<dyn Source>>) -> PipeResult<zencodec::output::EncodeOutput>
 pub fn animation::transcode_with_pulse(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>, alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, zenpixels::color::PixelFormat, impl core::ops::function::FnMut(alloc::boxed::Box<dyn Source>, u32) -> PipeResult<alloc::boxed::Box<dyn Source>>, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<zencodec::output::EncodeOutput>
 pub fn animation::transcode_with_pulse_and_limits(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>, alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, zenpixels::color::PixelFormat, impl core::ops::function::FnMut(alloc::boxed::Box<dyn Source>, u32) -> PipeResult<alloc::boxed::Box<dyn Source>>, core::option::Option<&dyn how_far::pulse::Pulse>, core::option::Option<u32>) -> PipeResult<zencodec::output::EncodeOutput>
-pub fn animation::transcode_with_stop(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>, alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, zenpixels::color::PixelFormat, impl core::ops::function::FnMut(alloc::boxed::Box<dyn Source>, u32) -> PipeResult<alloc::boxed::Box<dyn Source>>, &dyn enough::Stop) -> PipeResult<zencodec::output::EncodeOutput>
-pub fn animation::transcode_with_stop_and_limits(alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>, alloc::boxed::Box<dyn zencodec::traits::dyn_encoding::DynAnimationFrameEncoder>, u32, u32, zenpixels::color::PixelFormat, impl core::ops::function::FnMut(alloc::boxed::Box<dyn Source>, u32) -> PipeResult<alloc::boxed::Box<dyn Source>>, &dyn enough::Stop, core::option::Option<u32>) -> PipeResult<zencodec::output::EncodeOutput>
 pub mod bridge
 pub mod bridge::ordering
 pub bridge::ordering::OptimizationLevel::Lossless
@@ -176,22 +174,6 @@ pub fn codec::EncoderSink<'a>::preferred_strip_height(&self) -> u32
 pub fn codec::EncoderSink<'a>::take_output(&mut self) -> core::option::Option<zencodec::output::EncodeOutput>
 pub fn codec::EncoderSink<'a>::take_pending_output(&mut self, &mut alloc::vec::Vec<u8>)
 pub fn codec::EncoderSink<'a>::with_writer(self, impl core::ops::function::FnMut(&[u8]) -> PipeResult<()> + core::marker::Send + 'a) -> Self
-pub mod execute_layout
-pub fn execute_layout::canvas_color_to_pixel(&zenlayout::constraint::CanvasColor, zenpixels::color::PixelFormat) -> alloc::vec::Vec<u8>
-pub fn execute_layout::config_from_plan(u32, u32, &zenlayout::plan::LayoutPlan, zenpixels::color::PixelFormat, zenresize::filter::Filter) -> zenresize::pixel::ResizeConfig
-pub fn execute_layout::execute(&[u8], &zenlayout::plan::IdealLayout, zenpixels::color::PixelFormat, zenresize::filter::Filter) -> alloc::vec::Vec<u8>
-pub fn execute_layout::execute_layout(&[u8], u32, u32, &zenlayout::plan::LayoutPlan, zenpixels::color::PixelFormat, zenresize::filter::Filter) -> alloc::vec::Vec<u8>
-pub fn execute_layout::execute_layout_with_background<B: zenresize::composite::Background + core::clone::Clone>(&[u8], u32, u32, &zenlayout::plan::LayoutPlan, zenpixels::color::PixelFormat, zenresize::filter::Filter, B) -> core::result::Result<alloc::vec::Vec<u8>, whereat::at::At<zenresize::composite::CompositeError>>
-pub fn execute_layout::execute_secondary(&[u8], &zenlayout::plan::IdealLayout, zenlayout::constraint::Size, zenlayout::constraint::Size, core::option::Option<zenlayout::constraint::Size>, zenpixels::color::PixelFormat, zenresize::filter::Filter) -> alloc::vec::Vec<u8>
-pub fn execute_layout::execute_secondary_with_background<B: zenresize::composite::Background + core::clone::Clone>(&[u8], &zenlayout::plan::IdealLayout, zenlayout::constraint::Size, zenlayout::constraint::Size, core::option::Option<zenlayout::constraint::Size>, zenpixels::color::PixelFormat, zenresize::filter::Filter, B) -> core::result::Result<alloc::vec::Vec<u8>, whereat::at::At<zenresize::composite::CompositeError>>
-pub fn execute_layout::execute_with_background<B: zenresize::composite::Background + core::clone::Clone>(&[u8], &zenlayout::plan::IdealLayout, zenpixels::color::PixelFormat, zenresize::filter::Filter, B) -> core::result::Result<alloc::vec::Vec<u8>, whereat::at::At<zenresize::composite::CompositeError>>
-pub fn execute_layout::execute_with_offer(&[u8], &zenlayout::plan::IdealLayout, &zenlayout::plan::DecoderRequest, &zenlayout::plan::DecoderOffer, zenpixels::color::PixelFormat, zenresize::filter::Filter) -> alloc::vec::Vec<u8>
-pub fn execute_layout::fill_canvas(u32, u32, &[u8]) -> alloc::vec::Vec<u8>
-pub fn execute_layout::orient_image(&[u8], u32, u32, zenlayout::orientation::Orientation, u8) -> (alloc::vec::Vec<u8>, u32, u32)
-pub fn execute_layout::place_on_canvas(&mut [u8], u32, u32, &[u8], u32, u32, i32, i32, usize)
-pub fn execute_layout::replicate_edges(&mut [u8], u32, u32, u32, u32, usize)
-pub fn execute_layout::streaming_from_plan(u32, u32, &zenlayout::plan::LayoutPlan, zenpixels::color::PixelFormat, zenresize::filter::Filter) -> zenresize::streaming::StreamingResize
-pub fn execute_layout::streaming_from_plan_batched(u32, u32, &zenlayout::plan::LayoutPlan, zenpixels::color::PixelFormat, zenresize::filter::Filter, u32) -> zenresize::streaming::StreamingResize
 pub mod format
 pub use format::AlphaMode
 pub use format::ChannelOrder
@@ -324,21 +306,6 @@ pub type graph::MaterializeTransform = alloc::boxed::Box<(dyn core::ops::functio
 pub type graph::NodeId = usize
 pub type graph::TracedPipelineResult = PipeResult<(alloc::boxed::Box<dyn Source>, alloc::rcs::arc::Arc<std::sync::poison::mutex::Mutex<trace::PipelineTrace>>)>
 pub mod limits
-pub fn limits::AllocationGuard::bytes(&self) -> u64
-pub fn limits::AllocationTracker::allocate(&alloc::rcs::arc::Arc<Self>, u64) -> PipeResult<limits::AllocationGuard>
-pub fn limits::AllocationTracker::allocation_count(&self) -> u64
-pub fn limits::AllocationTracker::check(&self, u64) -> PipeResult<()>
-pub fn limits::AllocationTracker::current_bytes(&self) -> u64
-pub fn limits::AllocationTracker::limit_bytes(&self) -> u64
-pub fn limits::AllocationTracker::new(u64) -> Self
-pub fn limits::AllocationTracker::peak_bytes(&self) -> u64
-pub fn limits::AllocationTracker::remaining(&self) -> core::option::Option<u64>
-pub fn limits::AllocationTracker::try_allocate(&alloc::rcs::arc::Arc<Self>, u64) -> core::option::Option<limits::AllocationGuard>
-pub fn limits::AllocationTracker::unlimited() -> Self
-pub fn limits::Deadline::elapsed(&self) -> core::time::Duration
-pub fn limits::Deadline::is_expired(&self) -> bool
-pub fn limits::Deadline::new(core::time::Duration) -> Self
-pub fn limits::Deadline::remaining(&self) -> core::time::Duration
 pub limits::Limits::max_duration: core::option::Option<core::time::Duration>
 pub limits::Limits::max_frames: core::option::Option<u32>
 pub limits::Limits::max_height: core::option::Option<u32>
@@ -353,9 +320,7 @@ pub fn limits::Limits::check(&self, u32, u32, zenpixels::color::PixelFormat) -> 
 pub fn limits::Limits::check_dimensions(&self, u32, u32) -> PipeResult<()>
 pub fn limits::Limits::check_frames(&self, u32) -> PipeResult<()>
 pub fn limits::Limits::check_total_pixels(&self, u64) -> PipeResult<()>
-pub fn limits::Limits::to_allocation_tracker(self) -> alloc::rcs::arc::Arc<limits::AllocationTracker>
 pub fn limits::Limits::to_codec_limits(&self) -> zencodec::limits::ResourceLimits
-pub fn limits::Limits::to_deadline(&self) -> core::option::Option<limits::Deadline>
 pub fn limits::Limits::with_max_duration(self, core::time::Duration) -> Self
 pub fn limits::Limits::with_max_frames(self, u32) -> Self
 pub fn limits::Limits::with_max_height(self, u32) -> Self
@@ -372,7 +337,6 @@ pub struct lossless::LosslessResult
 pub lossless::LosslessResult::data: alloc::vec::Vec<u8>
 pub lossless::LosslessResult::height: u32
 pub lossless::LosslessResult::width: u32
-pub fn lossless::try_lossless_jpeg(&[u8], &[alloc::boxed::Box<dyn zennode::traits::NodeInstance>], &EncodeConfig, u8, &dyn enough::Stop) -> core::result::Result<core::option::Option<lossless::LosslessResult>, PipeError>
 pub fn lossless::try_lossless_jpeg_with_pulse(&[u8], &[alloc::boxed::Box<dyn zennode::traits::NodeInstance>], &EncodeConfig, u8, core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<core::option::Option<lossless::LosslessResult>, PipeError>
 pub mod ops
 pub struct ops::MatteFlattenOp
@@ -382,6 +346,7 @@ pub fn ops::RowConverterOp::from_plan(zenpixels_convert::plan::RowPlan) -> Self
 pub fn ops::RowConverterOp::must(zenpixels::color::PixelFormat, zenpixels::color::PixelFormat) -> Self
 pub fn ops::RowConverterOp::new(zenpixels::color::PixelFormat, zenpixels::color::PixelFormat) -> core::option::Option<Self>
 pub fn ops::RowConverterOp::new_explicit(zenpixels::color::PixelFormat, zenpixels::color::PixelFormat, &zenpixels_convert::policy::ConvertPolicy) -> core::option::Option<Self>
+pub fn ops::RowConverterOp::with_diffuse_white(zenpixels::color::PixelFormat, zenpixels::color::PixelFormat, zenpixels::hdr::DiffuseWhite) -> core::option::Option<Self>
 pub struct ops::ScaleAlphaOp
 pub fn ops::ScaleAlphaOp::new(f32) -> Self
 pub trait ops::PixelOp: core::marker::Send
@@ -396,6 +361,11 @@ pub orchestrate::ProcessConfig::limits: core::option::Option<&'a limits::Limits>
 pub orchestrate::ProcessConfig::nodes: &'a [alloc::boxed::Box<dyn zennode::traits::NodeInstance>]
 pub orchestrate::ProcessConfig::source_info: &'a orchestrate::SourceImageInfo
 pub orchestrate::ProcessConfig::trace_config: core::option::Option<&'a trace::TraceConfig>
+pub fn orchestrate::ProcessConfig<'a>::new(&'a [alloc::boxed::Box<dyn zennode::traits::NodeInstance>], &'a orchestrate::SourceImageInfo) -> Self
+pub fn orchestrate::ProcessConfig<'a>::with_converters(self, &'a [&'a dyn bridge::NodeConverter]) -> Self
+pub fn orchestrate::ProcessConfig<'a>::with_hdr_mode(self, &'a str) -> Self
+pub fn orchestrate::ProcessConfig<'a>::with_limits(self, &'a limits::Limits) -> Self
+pub fn orchestrate::ProcessConfig<'a>::with_trace_config(self, &'a trace::TraceConfig) -> Self
 pub orchestrate::ProcessedImage::decode_config: DecodeConfig
 pub orchestrate::ProcessedImage::encode_config: EncodeConfig
 pub orchestrate::ProcessedImage::metadata: core::option::Option<zencodec::metadata::Metadata>
@@ -432,7 +402,6 @@ pub fn Session::current_bytes(&self) -> usize
 pub fn Session::memory_budget(&self) -> usize
 pub fn Session::new(usize) -> Self
 pub fn Session::stream(&mut self, alloc::boxed::Box<dyn Source>, &orchestrate::ProcessConfig<'_>, core::option::Option<sidecar::SidecarStream>, u64) -> PipeResult<orchestrate::StreamingOutput>
-pub fn Session::stream_stoppable(&mut self, alloc::boxed::Box<dyn Source>, &orchestrate::ProcessConfig<'_>, core::option::Option<sidecar::SidecarStream>, u64, &dyn enough::Stop) -> PipeResult<orchestrate::StreamingOutput>
 pub fn Session::stream_with_pulse(&mut self, alloc::boxed::Box<dyn Source>, &orchestrate::ProcessConfig<'_>, core::option::Option<sidecar::SidecarStream>, u64, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<orchestrate::StreamingOutput>
 pub mod sidecar
 #[non_exhaustive] pub enum sidecar::SidecarKind
@@ -501,7 +470,6 @@ pub fn sources::MaterializedSource::data_mut(&mut self) -> &mut [u8]
 pub fn sources::MaterializedSource::from_data(alloc::vec::Vec<u8>, u32, u32, zenpixels::color::PixelFormat) -> Self
 pub fn sources::MaterializedSource::from_source(alloc::boxed::Box<dyn Source>) -> PipeResult<Self>
 pub fn sources::MaterializedSource::from_source_checked(alloc::boxed::Box<dyn Source>, &limits::Limits) -> PipeResult<Self>
-pub fn sources::MaterializedSource::from_source_stoppable(alloc::boxed::Box<dyn Source>, &dyn enough::Stop) -> PipeResult<Self>
 pub fn sources::MaterializedSource::from_source_with_pulse(alloc::boxed::Box<dyn Source>, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<Self>
 pub fn sources::MaterializedSource::from_source_with_transform(alloc::boxed::Box<dyn Source>, impl core::ops::function::FnOnce(&mut alloc::vec::Vec<u8>, &mut u32, &mut u32, &mut zenpixels::color::PixelFormat)) -> PipeResult<Self>
 pub fn sources::MaterializedSource::into_data(self) -> alloc::vec::Vec<u8>
@@ -1060,8 +1028,7 @@ pub enum OptimizationLevel [also: bridge, bridge::ordering]
 pub OptimizationLevel::Lossless
 pub OptimizationLevel::None
 pub OptimizationLevel::Speed
-pub enum PipeError
-pub PipeError::Cancelled
+#[non_exhaustive] pub enum PipeError
 pub PipeError::Codec(alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>)
 pub PipeError::DimensionMismatch(alloc::string::String)
 pub PipeError::FormatMismatch
@@ -1070,19 +1037,7 @@ pub PipeError::FormatMismatch::got: alloc::boxed::Box<zenpixels::color::PixelFor
 pub PipeError::LimitExceeded(alloc::string::String)
 pub PipeError::Op(alloc::string::String)
 pub PipeError::Resize(alloc::string::String)
-pub struct AllocationGuard [also: limits]
-pub fn limits::AllocationGuard::bytes(&self) -> u64
-pub struct AllocationTracker [also: limits]
-pub fn limits::AllocationTracker::allocate(&alloc::rcs::arc::Arc<Self>, u64) -> PipeResult<limits::AllocationGuard>
-pub fn limits::AllocationTracker::allocation_count(&self) -> u64
-pub fn limits::AllocationTracker::check(&self, u64) -> PipeResult<()>
-pub fn limits::AllocationTracker::current_bytes(&self) -> u64
-pub fn limits::AllocationTracker::limit_bytes(&self) -> u64
-pub fn limits::AllocationTracker::new(u64) -> Self
-pub fn limits::AllocationTracker::peak_bytes(&self) -> u64
-pub fn limits::AllocationTracker::remaining(&self) -> core::option::Option<u64>
-pub fn limits::AllocationTracker::try_allocate(&alloc::rcs::arc::Arc<Self>, u64) -> core::option::Option<limits::AllocationGuard>
-pub fn limits::AllocationTracker::unlimited() -> Self
+pub PipeError::Stopped(enough::reason::StopReason)
 pub struct CacheSource [also: cache]
 pub struct CachedPixels [also: cache]
 pub fn cache::CachedPixels::byte_size(&self) -> usize
@@ -1096,11 +1051,6 @@ pub fn cache::CachedPixels::width(&self) -> u32
 pub struct DagNode [also: bridge]
 pub DagNode::inputs: alloc::vec::Vec<usize>
 pub DagNode::instance: alloc::boxed::Box<dyn zennode::traits::NodeInstance>
-pub struct Deadline [also: limits]
-pub fn limits::Deadline::elapsed(&self) -> core::time::Duration
-pub fn limits::Deadline::is_expired(&self) -> bool
-pub fn limits::Deadline::new(core::time::Duration) -> Self
-pub fn limits::Deadline::remaining(&self) -> core::time::Duration
 pub struct DecodeConfig [also: bridge]
 pub DecodeConfig::color_intent: alloc::string::String
 pub DecodeConfig::hdr_mode: alloc::string::String
@@ -1115,7 +1065,7 @@ pub EncodeConfig::quality_profile: core::option::Option<alloc::string::String>
 pub fn EncodeConfig::from_nodes(&[alloc::boxed::Box<dyn zennode::traits::NodeInstance>]) -> Self
 pub fn EncodeConfig::resolve_profile(&self) -> zencodecs::quality::QualityProfile
 pub fn EncodeConfig::resolve_quality(&self) -> zencodecs::quality::QualityIntent
-pub struct Limits [also: limits]
+#[non_exhaustive] pub struct Limits [also: limits]
 pub Limits::max_duration: core::option::Option<core::time::Duration>
 pub Limits::max_frames: core::option::Option<u32>
 pub Limits::max_height: core::option::Option<u32>
@@ -1130,9 +1080,7 @@ pub fn limits::Limits::check(&self, u32, u32, zenpixels::color::PixelFormat) -> 
 pub fn limits::Limits::check_dimensions(&self, u32, u32) -> PipeResult<()>
 pub fn limits::Limits::check_frames(&self, u32) -> PipeResult<()>
 pub fn limits::Limits::check_total_pixels(&self, u64) -> PipeResult<()>
-pub fn limits::Limits::to_allocation_tracker(self) -> alloc::rcs::arc::Arc<limits::AllocationTracker>
 pub fn limits::Limits::to_codec_limits(&self) -> zencodec::limits::ResourceLimits
-pub fn limits::Limits::to_deadline(&self) -> core::option::Option<limits::Deadline>
 pub fn limits::Limits::with_max_duration(self, core::time::Duration) -> Self
 pub fn limits::Limits::with_max_frames(self, u32) -> Self
 pub fn limits::Limits::with_max_height(self, u32) -> Self
@@ -1161,13 +1109,18 @@ pub PipelineResult::decode_config: DecodeConfig
 pub PipelineResult::encode_config: EncodeConfig
 pub PipelineResult::source: alloc::boxed::Box<dyn Source>
 pub fn bridge::PipelineResult::materialize(self) -> PipeResult<bridge::MaterializedImage>
-pub struct ProcessConfig<'a> [also: orchestrate]
+#[non_exhaustive] pub struct ProcessConfig<'a> [also: orchestrate]
 pub ProcessConfig::converters: &'a [&'a dyn bridge::NodeConverter]
 pub ProcessConfig::hdr_mode: &'a str
 pub ProcessConfig::limits: core::option::Option<&'a limits::Limits>
 pub ProcessConfig::nodes: &'a [alloc::boxed::Box<dyn zennode::traits::NodeInstance>]
 pub ProcessConfig::source_info: &'a orchestrate::SourceImageInfo
 pub ProcessConfig::trace_config: core::option::Option<&'a trace::TraceConfig>
+pub fn orchestrate::ProcessConfig<'a>::new(&'a [alloc::boxed::Box<dyn zennode::traits::NodeInstance>], &'a orchestrate::SourceImageInfo) -> Self
+pub fn orchestrate::ProcessConfig<'a>::with_converters(self, &'a [&'a dyn bridge::NodeConverter]) -> Self
+pub fn orchestrate::ProcessConfig<'a>::with_hdr_mode(self, &'a str) -> Self
+pub fn orchestrate::ProcessConfig<'a>::with_limits(self, &'a limits::Limits) -> Self
+pub fn orchestrate::ProcessConfig<'a>::with_trace_config(self, &'a trace::TraceConfig) -> Self
 pub struct ProcessedImage [also: orchestrate]
 pub ProcessedImage::decode_config: DecodeConfig
 pub ProcessedImage::encode_config: EncodeConfig
@@ -1194,7 +1147,6 @@ pub fn Session::current_bytes(&self) -> usize
 pub fn Session::memory_budget(&self) -> usize
 pub fn Session::new(usize) -> Self
 pub fn Session::stream(&mut self, alloc::boxed::Box<dyn Source>, &orchestrate::ProcessConfig<'_>, core::option::Option<sidecar::SidecarStream>, u64) -> PipeResult<orchestrate::StreamingOutput>
-pub fn Session::stream_stoppable(&mut self, alloc::boxed::Box<dyn Source>, &orchestrate::ProcessConfig<'_>, core::option::Option<sidecar::SidecarStream>, u64, &dyn enough::Stop) -> PipeResult<orchestrate::StreamingOutput>
 pub fn Session::stream_with_pulse(&mut self, alloc::boxed::Box<dyn Source>, &orchestrate::ProcessConfig<'_>, core::option::Option<sidecar::SidecarStream>, u64, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<orchestrate::StreamingOutput>
 pub struct SourceImageInfo [also: orchestrate]
 pub SourceImageInfo::exif_orientation: u8
@@ -1244,7 +1196,6 @@ pub fn Source::width(&self) -> u32
 pub fn canonical_sort(&mut [alloc::boxed::Box<dyn zennode::traits::NodeInstance>]) [also: bridge, bridge::ordering]
 pub fn execute(&mut dyn Source, &mut dyn Sink) -> PipeResult<()>
 pub fn execute_with_pulse(&mut dyn Source, &mut dyn Sink, core::option::Option<&dyn how_far::pulse::Pulse>) -> PipeResult<()>
-pub fn execute_with_stop(&mut dyn Source, &mut dyn Sink, &dyn enough::Stop) -> PipeResult<()>
 pub fn full_registry() -> zennode::registry::NodeRegistry
 pub fn geometry_split(&[alloc::boxed::Box<dyn zennode::traits::NodeInstance>]) -> usize [also: cache]
 pub fn optimize_node_order(bridge::ordering::OptimizationLevel, &mut [alloc::boxed::Box<dyn zennode::traits::NodeInstance>]) [also: bridge, bridge::ordering]
@@ -1253,7 +1204,7 @@ pub fn subtree_hash(&dyn zennode::traits::NodeInstance, &[u64]) -> u64 [also: ca
 pub type PipeResult<T> = core::result::Result<T, whereat::at::At<PipeError>>
 pub type Strip<'a> = zenpixels::buffer::PixelView<'a>
 
-## trait impls (148 types)
+## trait impls (145 types)
 
 DecodeConfig: Clone, Debug, Default
 EncodeConfig: Clone, Debug, Default
@@ -1271,9 +1222,6 @@ graph::EdgeKind: Clone, Copy, Debug, Eq, PartialEq
 graph::PipelineGraph: Default
 graph::ResourceEstimate: Clone, Debug, Default
 graph::SourceInfo: Clone, Debug
-limits::AllocationGuard: Debug, Drop
-limits::AllocationTracker: Debug, Default
-limits::Deadline: Debug, enough::Stop
 limits::Limits: Clone, Copy, Debug, Default
 lossless::LosslessResult: Debug
 ops::MatteFlattenOp: ops::PixelOp
@@ -1406,7 +1354,7 @@ zennode_defs::SrotateRiapiDef: zennode::traits::NodeDef
 
 ## auto traits
 
-124 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+122 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 DagNode: !RefUnwindSafe !UnwindSafe
 EncodeConfig: !RefUnwindSafe !UnwindSafe
 PipeError: !RefUnwindSafe !UnwindSafe
@@ -1420,7 +1368,6 @@ codec::DecoderSource<'a>: !RefUnwindSafe !Sync !UnwindSafe
 codec::EncoderSink<'a>: !RefUnwindSafe !Sync !UnwindSafe
 graph::NodeOp: !RefUnwindSafe !Sync !UnwindSafe
 graph::PipelineGraph: !RefUnwindSafe !Sync !UnwindSafe
-limits::AllocationTracker: !Freeze
 ops::RowConverterOp: !RefUnwindSafe !UnwindSafe
 orchestrate::ProcessConfig<'a>: !RefUnwindSafe !UnwindSafe
 orchestrate::ProcessedImage: !RefUnwindSafe !UnwindSafe

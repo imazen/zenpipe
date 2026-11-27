@@ -7,7 +7,7 @@ use zencodec::storage::StorageBudget;
 use zencodec_io::row_encode::{self, Options};
 use zencodec_io::tokio_io::BytesSource;
 use zenpipe::io::tokio_bridge::{BlockingReadAt, drive_to_async_writer};
-use zenpipe::io::{DecodeOptions, DecodeSource, PipelineRows};
+use zenpipe::io::{DecodeSource, PipelineRows, SourceOptions};
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
@@ -29,7 +29,7 @@ async fn main() -> Result<(), Error> {
                 &CodecDecodeOptions::new(),
                 BlockingReadAt::new(source, handle),
                 PolicySet::new(),
-                DecodeOptions::new(StorageBudget::new(256 << 20, 64)),
+                SourceOptions::new(StorageBudget::new(256 << 20, 64)),
             )?;
             Ok(row_encode::encode_job(
                 zenpng::PngEncoderConfig::new().with_generic_effort(0).job(),

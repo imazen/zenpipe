@@ -119,6 +119,7 @@ impl QualityProfile {
 /// Created from a [`QualityProfile`], a raw quality value, or constructed
 /// directly. Per-codec native values are computed via calibration tables.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct QualityIntent {
     /// Generic quality 0.0-100.0.
     pub quality: f32,
@@ -216,20 +217,6 @@ impl QualityIntent {
             .round()
             .clamp(0.0, 100.0) as u8;
         (min, max.max(min))
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // Aliases matching imageflow / proposal naming
-    // ═══════════════════════════════════════════════════════════════════
-
-    /// Alias for [`jpeg_quality`](Self::jpeg_quality) -- mozjpeg native quality.
-    pub fn mozjpeg_quality(&self) -> u8 {
-        self.jpeg_quality()
-    }
-
-    /// Alias for [`webp_quality`](Self::webp_quality) -- libwebp native quality.
-    pub fn libwebp_quality(&self) -> f32 {
-        self.webp_quality()
     }
 }
 
@@ -593,18 +580,6 @@ mod tests {
     fn profile_parse_invalid() {
         assert_eq!(QualityProfile::parse("bogus"), None);
         assert_eq!(QualityProfile::parse(""), None);
-    }
-
-    #[test]
-    fn mozjpeg_quality_alias() {
-        let intent = QualityIntent::from_quality(73.0);
-        assert_eq!(intent.mozjpeg_quality(), intent.jpeg_quality());
-    }
-
-    #[test]
-    fn libwebp_quality_alias() {
-        let intent = QualityIntent::from_quality(73.0);
-        assert!((intent.libwebp_quality() - intent.webp_quality()).abs() < 0.001);
     }
 
     // ═══════════════════════════════════════════════════════════════════

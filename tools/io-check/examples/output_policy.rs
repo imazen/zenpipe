@@ -13,7 +13,7 @@ use zencodec::encode::EncoderConfig;
 use zencodec::operation::{OutputSchedule, PolicySet};
 use zencodec::storage::StorageBudget;
 use zencodec_io::row_encode::{self, Options};
-use zenpipe::io::{DecodeOptions, DecodeSource, PipelineRows};
+use zenpipe::io::{DecodeSource, PipelineRows, SourceOptions};
 
 fn rows<'a>(
     codecs: &CodecSet,
@@ -25,7 +25,7 @@ fn rows<'a>(
     let source = DecodeSource::from_slice(
         codecs,
         bytes,
-        DecodeOptions::new(StorageBudget::new(256 << 20, 64)),
+        SourceOptions::new(StorageBudget::new(256 << 20, 64)),
     )?;
     Ok(PipelineRows::from_source(source)?)
 }

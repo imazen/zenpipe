@@ -18,6 +18,25 @@
 use zencodec::{Metadata, Orientation};
 use zenpixels::{PixelBuf, PixelFormat, PixelView};
 
+/// Plan the orientation transform and reconciled metadata for an encode request.
+///
+/// - `None | Some(EncodeOrientation::Bake)` applies the stored orientation to
+///   the pixels and rewrites orientation metadata to `Identity` (`1`).
+/// - `Some(EncodeOrientation::PreserveStored)` leaves pixels unrotated and
+///   passes the metadata (including its stored orientation) unchanged to the
+///   codec, which will either preserve it or refuse via `try_set_orientation_mode`.
+pub(crate) fn plan(
+    meta: Option<&Metadata>,
+    mode: Option<zencodec::encode::EncodeOrientation>,
+) -> (Orientation, Option<Metadata>) {
+    match mode {
+        Some(zencodec::encode::EncodeOrientation::PreserveStored) => {
+            (Orientation::Identity, meta.cloned())
+        }
+        None | Some(zencodec::encode::EncodeOrientation::Bake) | Some(_) => upright(meta),
+    }
+}
+
 /// The orientation an encode must apply to its pixels, and the metadata to
 /// encode them with afterwards.
 pub(crate) fn upright(meta: Option<&Metadata>) -> (Orientation, Option<Metadata>) {

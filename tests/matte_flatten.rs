@@ -13,7 +13,7 @@ fn transparent_png() -> Vec<u8> {
     let slice =
         zenpixels::PixelView::new(&pixels, 8, 8, 8 * 4, &zenpixels::formats::RGBA8_SRGB).unwrap();
     zencodecs::EncodeRequest::new(zencodec::ImageFormat::Png)
-        .encode(slice, true)
+        .encode(slice)
         .expect("encode fixture png")
         .data()
         .to_vec()

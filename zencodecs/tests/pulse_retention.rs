@@ -47,6 +47,7 @@ impl Pulse for Deadline {
 /// an `At`-only downcast saw nothing). The reason itself is still required.
 fn stop_reason(error: &whereat::At<CodecError>) -> Option<StopReason> {
     match error.error() {
+        CodecError::Stopped(reason) => Some(*reason),
         CodecError::Codec { source, .. } => zencodec::find_cause::<zencodec::CodecError>(&**source)
             .and_then(|e| match e.category() {
                 zencodec::ErrorCategory::Stopped(reason) => Some(reason),
@@ -163,13 +164,13 @@ fn jpeg_and_png_requests_hand_their_pulse_to_the_codec_job() {
     let mut failures = Vec::new();
     for format in [ImageFormat::Jpeg, ImageFormat::Png] {
         let encoded = EncodeRequest::new(format)
-            .encode(pixels(), false)
+            .encode(pixels())
             .unwrap()
             .into_vec();
         each_stop_point(&format!("{format:?} encode"), &mut failures, |pulse| {
             EncodeRequest::new(format)
                 .with_pulse(pulse)
-                .encode(pixels(), false)
+                .encode(pixels())
                 .map(drop)
         });
         each_stop_point(&format!("{format:?} decode"), &mut failures, |pulse| {

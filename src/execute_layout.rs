@@ -2,6 +2,7 @@
 //!
 //! Executes a [`LayoutPlan`] on decoded pixel data, handling the full pipeline
 //! from decoder output to final canvas. Operates on u8 (sRGB) pixel data.
+#![allow(dead_code)]
 
 #[cfg(not(feature = "std"))]
 use alloc::vec;

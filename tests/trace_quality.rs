@@ -141,6 +141,7 @@ fn avif_trace_includes_zenavif_and_boundaries() {
 }
 
 /// zenjxl is instrumented.
+#[cfg(feature = "nodes-jxl")]
 #[test]
 fn jxl_trace_includes_zenjxl_and_boundaries() {
     assert_trace(run_job(TRUNCATED_JXL), &["zenjxl", "zencodecs", "zenpipe"]);

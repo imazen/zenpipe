@@ -6,42 +6,42 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodecs.txt 785 lines (supported surface) | zencodecs.features.txt 164 added (features: all,jp2-decode,metadata,tonemap,checked-transcode-async) | zencodecs.internal.txt 21 lines (21 hidden + 0 excluded-feature)
+# files: zencodecs.txt 862 lines (supported surface) | zencodecs.features.txt 164 added (features: all,jp2-decode,metadata,tonemap,checked-transcode-async) | zencodecs.internal.txt 22 lines (22 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                22
-#   pub types (struct/enum/trait/alias)        61
+#   pub types (struct/enum/trait/alias)        63
 #   pub consts/statics                         10
 #   free functions                             39
-#   inherent methods                          268
-#   struct fields                             131
-#   enum variants                             121
+#   inherent methods                          330
+#   struct fields                             139
+#   enum variants                             125
 #   re-exports                                131
-#   trait roster entries (type × trait)       108
+#   trait roster entries (type × trait)       116
 #   conditional trait impls (verbatim)          1
 #   auto-trait-complete types                  25
-#   auto-trait exceptions                       7
+#   auto-trait exceptions                       8
 #
 # per-module pub lines:
-#   (root)                          349
+#   (root)                          354
 #   codec_id                         34
 #   color                             3
 #   config                           69
-#   decision                         31
+#   decision                         41
 #   estimate                         16
 #   gainmap                           4
-#   intent                           32
+#   intent                           54
 #   inventory                        10
 #   pixel                             8
 #   policy                           33
-#   quality                          54
-#   select                           21
+#   quality                          50
+#   select                           35
 #   speed                            17
 #   trace                            48
-#   transcode                        54
+#   transcode                        83
 
-## items (748 lines)
+## items (823 lines)
 
 pub mod zencodecs
 pub use AnimationFrame
@@ -236,6 +236,11 @@ pub fn decision::FormatDecision::jxl_distance(&self) -> f32
 pub fn decision::FormatDecision::jxl_effort(&self) -> u8
 pub fn decision::FormatDecision::png_quality_range(&self) -> (u8, u8)
 pub fn decision::FormatDecision::webp_quality(&self) -> f32
+pub fn decision::FormatDecision::with_hints(self, alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>) -> Self
+pub fn decision::FormatDecision::with_lossless(self, bool) -> Self
+pub fn decision::FormatDecision::with_matte(self, [u8; 3]) -> Self
+pub fn decision::FormatDecision::with_quality(self, quality::QualityIntent) -> Self
+pub fn decision::FormatDecision::with_trace(self, alloc::vec::Vec<trace::SelectionStep>) -> Self
 pub mod estimate
 pub use estimate::ComputeEnvironment
 pub use estimate::ImageCharacteristics
@@ -266,15 +271,26 @@ pub intent::CodecIntent::quality_dpr: core::option::Option<f32>
 pub intent::CodecIntent::quality_fallback: core::option::Option<f32>
 pub intent::CodecIntent::quality_profile: core::option::Option<quality::QualityProfile>
 pub fn intent::CodecIntent::effective_quality(&self) -> f32
+pub fn intent::CodecIntent::new() -> Self
 pub fn intent::CodecIntent::resolve_lossless(&self, bool) -> bool
+pub fn intent::CodecIntent::with_allowed(self, FormatSet) -> Self
+pub fn intent::CodecIntent::with_format(self, intent::FormatChoice) -> Self
+pub fn intent::CodecIntent::with_hints(self, intent::PerCodecHints) -> Self
+pub fn intent::CodecIntent::with_lossless(self, intent::BoolKeep) -> Self
+pub fn intent::CodecIntent::with_matte(self, [u8; 3]) -> Self
+pub fn intent::CodecIntent::with_quality_dpr(self, f32) -> Self
+pub fn intent::CodecIntent::with_quality_fallback(self, f32) -> Self
+pub fn intent::CodecIntent::with_quality_profile(self, quality::QualityProfile) -> Self
 pub intent::PerCodecHints::avif: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
 pub intent::PerCodecHints::gif: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
 pub intent::PerCodecHints::jpeg: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
 pub intent::PerCodecHints::jxl: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
 pub intent::PerCodecHints::png: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
 pub intent::PerCodecHints::webp: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
-pub fn intent::PerCodecHints::for_format(&self, zencodec::format::ImageFormat) -> &alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
+pub fn intent::PerCodecHints::for_format(&self, zencodec::format::ImageFormat) -> core::option::Option<&alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>>
+pub fn intent::PerCodecHints::for_format_mut(&mut self, zencodec::format::ImageFormat) -> core::option::Option<&mut alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>>
 pub fn intent::PerCodecHints::is_empty(&self) -> bool
+pub fn intent::PerCodecHints::new() -> Self
 pub mod inventory
 pub use inventory::Disposition
 pub use inventory::Inventory
@@ -337,8 +353,6 @@ pub fn quality::QualityIntent::from_quality(f32) -> Self
 pub fn quality::QualityIntent::jpeg_quality(&self) -> u8
 pub fn quality::QualityIntent::jxl_distance(&self) -> f32
 pub fn quality::QualityIntent::jxl_effort(&self) -> u8
-pub fn quality::QualityIntent::libwebp_quality(&self) -> f32
-pub fn quality::QualityIntent::mozjpeg_quality(&self) -> u8
 pub fn quality::QualityIntent::png_quality_range(&self) -> (u8, u8)
 pub fn quality::QualityIntent::webp_method(&self) -> u8
 pub fn quality::QualityIntent::webp_quality(&self) -> f32
@@ -356,6 +370,13 @@ pub select::ImageFacts::is_lossless_source: bool
 pub select::ImageFacts::pixel_count: u64
 pub select::ImageFacts::source_format: core::option::Option<zencodec::format::ImageFormat>
 pub fn select::ImageFacts::from_image_info(&zencodec::info::ImageInfo) -> Self
+pub fn select::ImageFacts::new() -> Self
+pub fn select::ImageFacts::with_alpha(self, bool) -> Self
+pub fn select::ImageFacts::with_animation(self, bool) -> Self
+pub fn select::ImageFacts::with_hdr(self, bool) -> Self
+pub fn select::ImageFacts::with_lossless_source(self, bool) -> Self
+pub fn select::ImageFacts::with_pixel_count(self, u64) -> Self
+pub fn select::ImageFacts::with_source_format(self, zencodec::format::ImageFormat) -> Self
 pub fn select::FormatPicker::pick(&self, &[f32], &[zencodec::format::ImageFormat]) -> core::option::Option<zencodec::format::ImageFormat>
 pub fn select::FormatPicker::pick_with_penalties(&self, &[f32], &[zencodec::format::ImageFormat], &[f32]) -> core::option::Option<zencodec::format::ImageFormat>
 pub fn select::available_encode_formats(&AllowedFormats, &policy::CodecPolicy) -> FormatSet
@@ -413,6 +434,8 @@ pub fn trace::SelectionTrace::new() -> Self
 pub fn trace::SelectionTrace::push(&mut self, trace::SelectionStep)
 pub fn trace::SelectionTrace::steps(&self) -> &[trace::SelectionStep]
 pub mod transcode
+pub transcode::AnimationPolicy::FirstFrame
+pub transcode::AnimationPolicy::Refuse
 pub transcode::QualityTarget::Absolute(f32)
 pub transcode::QualityTarget::Relative(f32)
 pub fn transcode::QualityTarget::score(self) -> f32
@@ -427,12 +450,27 @@ pub const transcode::SupplementSet::THUMBNAIL: Self
 pub fn transcode::SupplementSet::contains(self, Self) -> bool
 pub fn transcode::SupplementSet::is_empty(self) -> bool
 pub fn transcode::SupplementSet::union(self, Self) -> Self
+pub transcode::TranscodeOptions::animation: transcode::AnimationPolicy
 pub transcode::TranscodeOptions::color: transcode::TranscodeColor
+pub transcode::TranscodeOptions::limits: core::option::Option<zencodec::limits::ResourceLimits>
 pub transcode::TranscodeOptions::matte: core::option::Option<[u8; 3]>
 pub transcode::TranscodeOptions::metadata: core::option::Option<zencodec::metadata::Metadata>
 pub transcode::TranscodeOptions::metadata_policy: zencodec::metadata::MetadataPolicy
 pub transcode::TranscodeOptions::orientation: zencodec::orientation::OrientationHint
+pub transcode::TranscodeOptions::pulse: core::option::Option<how_far::pulse::SharedPulse>
 pub transcode::TranscodeOptions::supplements: transcode::SupplementPolicy
+pub transcode::TranscodeOptions::tone_map: core::option::Option<ToneMapPolicy>
+pub fn transcode::TranscodeOptions::new() -> Self
+pub fn transcode::TranscodeOptions::with_animation(self, transcode::AnimationPolicy) -> Self
+pub fn transcode::TranscodeOptions::with_color(self, transcode::TranscodeColor) -> Self
+pub fn transcode::TranscodeOptions::with_limits(self, zencodec::limits::ResourceLimits) -> Self
+pub fn transcode::TranscodeOptions::with_matte(self, [u8; 3]) -> Self
+pub fn transcode::TranscodeOptions::with_metadata(self, zencodec::metadata::Metadata) -> Self
+pub fn transcode::TranscodeOptions::with_metadata_policy(self, zencodec::metadata::MetadataPolicy) -> Self
+pub fn transcode::TranscodeOptions::with_orientation(self, zencodec::orientation::OrientationHint) -> Self
+pub fn transcode::TranscodeOptions::with_pulse(self, how_far::pulse::SharedPulse) -> Self
+pub fn transcode::TranscodeOptions::with_supplements(self, transcode::SupplementPolicy) -> Self
+pub fn transcode::TranscodeOptions::with_tone_map_policy(self, ToneMapPolicy) -> Self
 pub transcode::TranscodeOutput::data: alloc::vec::Vec<u8>
 pub transcode::TranscodeOutput::format: zencodec::format::ImageFormat
 pub transcode::TranscodeOutput::mime_type: &'static str
@@ -443,12 +481,14 @@ pub fn transcode::TranscodeSink<'a>::output_timing(&self) -> core::option::Optio
 pub fn transcode::TranscodeSink<'a>::pending_output(&self) -> &[u8]
 pub fn transcode::TranscodeSink<'a>::take_pending_output(&mut self, &mut alloc::vec::Vec<u8>)
 pub fn transcode::TranscodeSink<'a>::with_writer(self, impl core::ops::function::FnMut(&[u8]) -> core::result::Result<(), zencodec::sink::SinkError> + core::marker::Send + 'a) -> Self
+#[non_exhaustive] pub enum AnimationPolicy [also: transcode]
+pub AnimationPolicy::FirstFrame
+pub AnimationPolicy::Refuse
 pub enum BoolKeep [also: intent]
 pub BoolKeep::False
 pub BoolKeep::Keep
 pub BoolKeep::True
 #[non_exhaustive] pub enum CodecError
-pub CodecError::Cancelled
 pub CodecError::Codec
 pub CodecError::Codec::format: zencodec::format::ImageFormat
 pub CodecError::Codec::source: alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>
@@ -457,6 +497,7 @@ pub CodecError::InvalidInput(alloc::string::String)
 pub CodecError::LimitExceeded(alloc::string::String)
 pub CodecError::NoSuitableEncoder
 pub CodecError::Oom
+pub CodecError::Stopped(enough::reason::StopReason)
 pub CodecError::UnrecognizedFormat
 pub CodecError::UnsupportedFormat(zencodec::format::ImageFormat)
 pub CodecError::UnsupportedOperation
@@ -548,7 +589,7 @@ pub fn AllowedFormats::encode_set(&self) -> FormatSet
 pub fn AllowedFormats::none() -> Self
 pub fn AllowedFormats::with_decode(self, zencodec::format::ImageFormat, bool) -> Self
 pub fn AllowedFormats::with_encode(self, zencodec::format::ImageFormat, bool) -> Self
-pub struct CodecIntent [also: intent]
+#[non_exhaustive] pub struct CodecIntent [also: intent]
 pub CodecIntent::allowed: FormatSet
 pub CodecIntent::format: core::option::Option<intent::FormatChoice>
 pub CodecIntent::hints: intent::PerCodecHints
@@ -558,8 +599,17 @@ pub CodecIntent::quality_dpr: core::option::Option<f32>
 pub CodecIntent::quality_fallback: core::option::Option<f32>
 pub CodecIntent::quality_profile: core::option::Option<quality::QualityProfile>
 pub fn intent::CodecIntent::effective_quality(&self) -> f32
+pub fn intent::CodecIntent::new() -> Self
 pub fn intent::CodecIntent::resolve_lossless(&self, bool) -> bool
-pub struct CodecPolicy [also: policy]
+pub fn intent::CodecIntent::with_allowed(self, FormatSet) -> Self
+pub fn intent::CodecIntent::with_format(self, intent::FormatChoice) -> Self
+pub fn intent::CodecIntent::with_hints(self, intent::PerCodecHints) -> Self
+pub fn intent::CodecIntent::with_lossless(self, intent::BoolKeep) -> Self
+pub fn intent::CodecIntent::with_matte(self, [u8; 3]) -> Self
+pub fn intent::CodecIntent::with_quality_dpr(self, f32) -> Self
+pub fn intent::CodecIntent::with_quality_fallback(self, f32) -> Self
+pub fn intent::CodecIntent::with_quality_profile(self, quality::QualityProfile) -> Self
+#[non_exhaustive] pub struct CodecPolicy [also: policy]
 pub fn policy::CodecPolicy::allowed_formats(&self) -> core::option::Option<&FormatSet>
 pub fn policy::CodecPolicy::effective_priority(&self, codec_id::CodecId, i32, zencodec::format::ImageFormat) -> i32
 pub fn policy::CodecPolicy::fallback_enabled(&self) -> bool
@@ -583,23 +633,21 @@ pub ConfiguredJob::supported: &'static [zenpixels::color::PixelFormat]
 pub struct DecodeRequest<'a>
 pub fn DecodeRequest<'a>::animation_frame_decoder(self) -> Result<alloc::boxed::Box<dyn zencodec::traits::dyn_decoding::DynAnimationFrameDecoder>>
 pub fn DecodeRequest<'a>::build_streaming_decoder(self) -> Result<alloc::boxed::Box<(dyn zencodec::traits::dyn_decoding::DynStreamingDecoder + 'static)>>
-pub fn DecodeRequest<'a>::decode(self) -> Result<zencodec::output::DecodeOutput>
 pub fn DecodeRequest<'a>::decode_full_frame(self) -> Result<zencodec::output::DecodeOutput>
 pub fn DecodeRequest<'a>::estimate(&self) -> Result<zencodec::estimate::ResourceEstimate>
 pub fn DecodeRequest<'a>::new(&'a [u8]) -> Self
 pub fn DecodeRequest<'a>::probe(&self) -> Result<zencodec::info::ImageInfo>
 pub fn DecodeRequest<'a>::push_decode(self, &mut dyn zencodec::sink::DecodeRowSink) -> Result<zencodec::cost::OutputInfo>
-pub fn DecodeRequest<'a>::reconstruct_hdr(self, core::option::Option<f32>) -> Self
+pub fn DecodeRequest<'a>::reconstruct_gain_map_hdr(self, core::option::Option<f32>) -> Self
 pub fn DecodeRequest<'a>::with_codec_config(self, &'a config::CodecConfig) -> Self
 pub fn DecodeRequest<'a>::with_decode_policy(self, zencodec::policy::DecodePolicy) -> Self
 pub fn DecodeRequest<'a>::with_format(self, zencodec::format::ImageFormat) -> Self
 pub fn DecodeRequest<'a>::with_gain_map_extraction(self, bool) -> Self
 pub fn DecodeRequest<'a>::with_gain_map_render(self, zencodec::gainmap::GainMapRender) -> Self
-pub fn DecodeRequest<'a>::with_limits(self, &'a zencodec::limits::ResourceLimits) -> Self
+pub fn DecodeRequest<'a>::with_limits(self, zencodec::limits::ResourceLimits) -> Self
 pub fn DecodeRequest<'a>::with_orientation(self, zencodec::orientation::OrientationHint) -> Self
-pub fn DecodeRequest<'a>::with_policy(self, policy::CodecPolicy) -> Self
 pub fn DecodeRequest<'a>::with_pulse(self, how_far::pulse::SharedPulse) -> Self
-pub fn DecodeRequest<'a>::with_registry(self, &'a AllowedFormats) -> Self
+pub fn DecodeRequest<'a>::with_registry(self, AllowedFormats) -> Self
 pub struct EffortPlan [also: estimate]
 pub EffortPlan::effort: core::option::Option<u32>
 pub EffortPlan::estimate: zencodec::estimate::ResourceEstimate
@@ -613,7 +661,7 @@ pub fn EncodeRequest<'a>::animation_frame_encoder(self, u32, u32) -> Result<allo
 pub fn EncodeRequest<'a>::auto() -> Self
 pub fn EncodeRequest<'a>::build_job(self, u32, u32) -> Result<ConfiguredJob>
 pub fn EncodeRequest<'a>::build_streaming_encoder(self, u32, u32) -> Result<StreamingEncoder>
-pub fn EncodeRequest<'a>::encode(self, zenpixels::buffer::PixelView<'_>, bool) -> Result<zencodec::output::EncodeOutput>
+pub fn EncodeRequest<'a>::encode(self, zenpixels::buffer::PixelView<'_>) -> Result<zencodec::output::EncodeOutput>
 pub fn EncodeRequest<'a>::encode_full_frame_bgra8(self, imgref::ImgRef<'_, rgb::formats::bgra::Bgra<u8>>) -> Result<zencodec::output::EncodeOutput>
 pub fn EncodeRequest<'a>::encode_full_frame_bgrx8(self, imgref::ImgRef<'_, rgb::formats::bgra::Bgra<u8>>) -> Result<zencodec::output::EncodeOutput>
 pub fn EncodeRequest<'a>::encode_full_frame_gray8(self, imgref::ImgRef<'_, rgb::formats::gray::Gray_v08<u8>>) -> Result<zencodec::output::EncodeOutput>
@@ -622,11 +670,11 @@ pub fn EncodeRequest<'a>::encode_full_frame_rgb8(self, imgref::ImgRef<'_, rgb::f
 pub fn EncodeRequest<'a>::encode_full_frame_rgb_f32(self, imgref::ImgRef<'_, rgb::formats::rgb::Rgb<f32>>) -> Result<zencodec::output::EncodeOutput>
 pub fn EncodeRequest<'a>::encode_full_frame_rgba8(self, imgref::ImgRef<'_, rgb::formats::rgba::Rgba<u8>>) -> Result<zencodec::output::EncodeOutput>
 pub fn EncodeRequest<'a>::encode_full_frame_rgba_f32(self, imgref::ImgRef<'_, rgb::formats::rgba::Rgba<f32>>) -> Result<zencodec::output::EncodeOutput>
-pub fn EncodeRequest<'a>::encode_full_frame_srgba8_imgref(self, imgref::ImgRef<'_, rgb::formats::rgba::Rgba<u8>>) -> Result<zencodec::output::EncodeOutput>
 pub fn EncodeRequest<'a>::estimate(&self, u32, u32, zenpixels::color::PixelFormat) -> Result<zencodec::estimate::ResourceEstimate>
 pub fn EncodeRequest<'a>::new(zencodec::format::ImageFormat) -> Self
 pub fn EncodeRequest<'a>::quality_intent(&self) -> quality::QualityIntent
 pub fn EncodeRequest<'a>::speed(&self) -> core::option::Option<speed::EncodeSpeed>
+pub fn EncodeRequest<'a>::with_alpha_hint(self, bool) -> Self
 pub fn EncodeRequest<'a>::with_cicp(self, core::option::Option<zenpixels::cicp::Cicp>) -> Self
 pub fn EncodeRequest<'a>::with_codec_config(self, &'a config::CodecConfig) -> Self
 pub fn EncodeRequest<'a>::with_color_emit_policy(self, zencodec::color::ColorEmitPolicy) -> Self
@@ -634,7 +682,8 @@ pub fn EncodeRequest<'a>::with_dpr(self, f32) -> Self
 pub fn EncodeRequest<'a>::with_effort(self, u32) -> Self
 pub fn EncodeRequest<'a>::with_encode_policy(self, zencodec::policy::EncodePolicy) -> Self
 pub fn EncodeRequest<'a>::with_image_facts(self, select::ImageFacts) -> Self
-pub fn EncodeRequest<'a>::with_limits(self, &'a zencodec::limits::ResourceLimits) -> Self
+pub fn EncodeRequest<'a>::with_limits(self, zencodec::limits::ResourceLimits) -> Self
+pub fn EncodeRequest<'a>::with_loop_count(self, core::option::Option<u32>) -> Self
 pub fn EncodeRequest<'a>::with_lossless(self, bool) -> Self
 pub fn EncodeRequest<'a>::with_metadata(self, zencodec::metadata::Metadata) -> Self
 pub fn EncodeRequest<'a>::with_metadata_policy(self, zencodec::metadata::MetadataPolicy) -> Self
@@ -644,10 +693,10 @@ pub fn EncodeRequest<'a>::with_prefer_streaming(self, bool) -> Self
 pub fn EncodeRequest<'a>::with_pulse(self, how_far::pulse::SharedPulse) -> Self
 pub fn EncodeRequest<'a>::with_quality(self, f32) -> Self
 pub fn EncodeRequest<'a>::with_quality_profile(self, quality::QualityProfile) -> Self
-pub fn EncodeRequest<'a>::with_registry(self, &'a AllowedFormats) -> Self
+pub fn EncodeRequest<'a>::with_registry(self, AllowedFormats) -> Self
 pub fn EncodeRequest<'a>::with_speed(self, speed::EncodeSpeed) -> Self
 pub fn EncodeRequest<'a>::with_tone_map_policy(self, ToneMapPolicy) -> Self
-pub struct FormatDecision [also: decision]
+#[non_exhaustive] pub struct FormatDecision [also: decision]
 pub FormatDecision::format: zencodec::format::ImageFormat
 pub FormatDecision::hints: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
 pub FormatDecision::lossless: bool
@@ -666,6 +715,11 @@ pub fn decision::FormatDecision::jxl_distance(&self) -> f32
 pub fn decision::FormatDecision::jxl_effort(&self) -> u8
 pub fn decision::FormatDecision::png_quality_range(&self) -> (u8, u8)
 pub fn decision::FormatDecision::webp_quality(&self) -> f32
+pub fn decision::FormatDecision::with_hints(self, alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>) -> Self
+pub fn decision::FormatDecision::with_lossless(self, bool) -> Self
+pub fn decision::FormatDecision::with_matte(self, [u8; 3]) -> Self
+pub fn decision::FormatDecision::with_quality(self, quality::QualityIntent) -> Self
+pub fn decision::FormatDecision::with_trace(self, alloc::vec::Vec<trace::SelectionStep>) -> Self
 pub struct FormatSet(_)
 pub const FormatSet::EMPTY: Self
 pub fn FormatSet::all() -> Self
@@ -682,7 +736,7 @@ pub fn FormatSet::web_safe() -> Self
 pub fn FormatSet::with(self, zencodec::format::ImageFormat) -> Self
 pub const fn FormatSet::with_const(self, zencodec::format::ImageFormat) -> Self
 pub fn FormatSet::without(self, zencodec::format::ImageFormat) -> Self
-pub struct ImageFacts [also: select]
+#[non_exhaustive] pub struct ImageFacts [also: select]
 pub ImageFacts::has_alpha: bool
 pub ImageFacts::has_animation: bool
 pub ImageFacts::is_hdr: bool
@@ -690,16 +744,25 @@ pub ImageFacts::is_lossless_source: bool
 pub ImageFacts::pixel_count: u64
 pub ImageFacts::source_format: core::option::Option<zencodec::format::ImageFormat>
 pub fn select::ImageFacts::from_image_info(&zencodec::info::ImageInfo) -> Self
-pub struct PerCodecHints [also: intent]
+pub fn select::ImageFacts::new() -> Self
+pub fn select::ImageFacts::with_alpha(self, bool) -> Self
+pub fn select::ImageFacts::with_animation(self, bool) -> Self
+pub fn select::ImageFacts::with_hdr(self, bool) -> Self
+pub fn select::ImageFacts::with_lossless_source(self, bool) -> Self
+pub fn select::ImageFacts::with_pixel_count(self, u64) -> Self
+pub fn select::ImageFacts::with_source_format(self, zencodec::format::ImageFormat) -> Self
+#[non_exhaustive] pub struct PerCodecHints [also: intent]
 pub PerCodecHints::avif: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
 pub PerCodecHints::gif: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
 pub PerCodecHints::jpeg: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
 pub PerCodecHints::jxl: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
 pub PerCodecHints::png: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
 pub PerCodecHints::webp: alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
-pub fn intent::PerCodecHints::for_format(&self, zencodec::format::ImageFormat) -> &alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>
+pub fn intent::PerCodecHints::for_format(&self, zencodec::format::ImageFormat) -> core::option::Option<&alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>>
+pub fn intent::PerCodecHints::for_format_mut(&mut self, zencodec::format::ImageFormat) -> core::option::Option<&mut alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::string::String>>
 pub fn intent::PerCodecHints::is_empty(&self) -> bool
-pub struct QualityIntent [also: quality]
+pub fn intent::PerCodecHints::new() -> Self
+#[non_exhaustive] pub struct QualityIntent [also: quality]
 pub QualityIntent::effort: core::option::Option<u32>
 pub QualityIntent::lossless: bool
 pub QualityIntent::quality: f32
@@ -711,8 +774,6 @@ pub fn quality::QualityIntent::from_quality(f32) -> Self
 pub fn quality::QualityIntent::jpeg_quality(&self) -> u8
 pub fn quality::QualityIntent::jxl_distance(&self) -> f32
 pub fn quality::QualityIntent::jxl_effort(&self) -> u8
-pub fn quality::QualityIntent::libwebp_quality(&self) -> f32
-pub fn quality::QualityIntent::mozjpeg_quality(&self) -> u8
 pub fn quality::QualityIntent::png_quality_range(&self) -> (u8, u8)
 pub fn quality::QualityIntent::webp_method(&self) -> u8
 pub fn quality::QualityIntent::webp_quality(&self) -> f32
@@ -739,14 +800,29 @@ pub const transcode::SupplementSet::THUMBNAIL: Self
 pub fn transcode::SupplementSet::contains(self, Self) -> bool
 pub fn transcode::SupplementSet::is_empty(self) -> bool
 pub fn transcode::SupplementSet::union(self, Self) -> Self
-pub struct TranscodeOptions [also: transcode]
+#[non_exhaustive] pub struct TranscodeOptions [also: transcode]
+pub TranscodeOptions::animation: transcode::AnimationPolicy
 pub TranscodeOptions::color: transcode::TranscodeColor
+pub TranscodeOptions::limits: core::option::Option<zencodec::limits::ResourceLimits>
 pub TranscodeOptions::matte: core::option::Option<[u8; 3]>
 pub TranscodeOptions::metadata: core::option::Option<zencodec::metadata::Metadata>
 pub TranscodeOptions::metadata_policy: zencodec::metadata::MetadataPolicy
 pub TranscodeOptions::orientation: zencodec::orientation::OrientationHint
+pub TranscodeOptions::pulse: core::option::Option<how_far::pulse::SharedPulse>
 pub TranscodeOptions::supplements: transcode::SupplementPolicy
-pub struct TranscodeOutput [also: transcode]
+pub TranscodeOptions::tone_map: core::option::Option<ToneMapPolicy>
+pub fn transcode::TranscodeOptions::new() -> Self
+pub fn transcode::TranscodeOptions::with_animation(self, transcode::AnimationPolicy) -> Self
+pub fn transcode::TranscodeOptions::with_color(self, transcode::TranscodeColor) -> Self
+pub fn transcode::TranscodeOptions::with_limits(self, zencodec::limits::ResourceLimits) -> Self
+pub fn transcode::TranscodeOptions::with_matte(self, [u8; 3]) -> Self
+pub fn transcode::TranscodeOptions::with_metadata(self, zencodec::metadata::Metadata) -> Self
+pub fn transcode::TranscodeOptions::with_metadata_policy(self, zencodec::metadata::MetadataPolicy) -> Self
+pub fn transcode::TranscodeOptions::with_orientation(self, zencodec::orientation::OrientationHint) -> Self
+pub fn transcode::TranscodeOptions::with_pulse(self, how_far::pulse::SharedPulse) -> Self
+pub fn transcode::TranscodeOptions::with_supplements(self, transcode::SupplementPolicy) -> Self
+pub fn transcode::TranscodeOptions::with_tone_map_policy(self, ToneMapPolicy) -> Self
+#[non_exhaustive] pub struct TranscodeOutput [also: transcode]
 pub TranscodeOutput::data: alloc::vec::Vec<u8>
 pub TranscodeOutput::format: zencodec::format::ImageFormat
 pub TranscodeOutput::mime_type: &'static str
@@ -760,7 +836,6 @@ pub fn transcode::TranscodeSink<'a>::take_pending_output(&mut self, &mut alloc::
 pub fn transcode::TranscodeSink<'a>::with_writer(self, impl core::ops::function::FnMut(&[u8]) -> core::result::Result<(), zencodec::sink::SinkError> + core::marker::Send + 'a) -> Self
 pub trait AnyEncoder: core::marker::Send + core::marker::Sync
 pub fn AnyEncoder::encode_pixels(&self, zenpixels::buffer::PixelView<'_>, core::option::Option<zencodec::metadata::Metadata>, core::option::Option<&zencodec::limits::ResourceLimits>, how_far::pulse::SharedPulse) -> Result<zencodec::output::EncodeOutput>
-pub fn AnyEncoder::encode_srgba8_imgref(&self, imgref::ImgRef<'_, rgb::formats::rgba::Rgba<u8>>, bool) -> Result<zencodec::output::EncodeOutput>
 pub fn AnyEncoder::format(&self) -> zencodec::format::ImageFormat
 pub fn AnyEncoder::supported_pixel_formats(&self) -> &'static [zenpixels::color::PixelFormat]
 pub trait FormatPicker [also: select]
@@ -792,10 +867,10 @@ pub fn transcode_to_quality(&[u8], zencodec::format::ImageFormat, transcode::Qua
 pub type Result<T> = core::result::Result<T, whereat::at::At<CodecError>>
 pub type TranscodeWriter<'a> = alloc::boxed::Box<(dyn core::ops::function::FnMut(&[u8]) -> core::result::Result<(), zencodec::sink::SinkError> + core::marker::Send + 'a)> [also: transcode]
 
-## trait impls (28 types)
+## trait impls (29 types)
 
 AllowedFormats: Clone, Copy, Debug, Default
-CodecError: Debug, Display, Error
+CodecError: Debug, Display, Error, From<enough::reason::StopReason>
 FormatSet: Clone, Copy, Debug, Default, Eq, PartialEq
 ToneMapPolicy: Clone, Copy, Debug, Default, Eq, PartialEq
 codec_id::CodecId: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
@@ -813,7 +888,8 @@ quality::QualityProfile: Clone, Copy, Debug, Default, PartialEq
 select::ImageFacts: Clone, Debug, Default
 speed::EncodeSpeed: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
 trace::SelectionStep: Clone, Debug, Display
-trace::SelectionTrace: Clone, Debug, Default, Display
+trace::SelectionTrace: Clone, Debug, Default, Display, From<alloc::vec::Vec<trace::SelectionStep>>
+transcode::AnimationPolicy: Clone, Copy, Debug, Default, Eq, PartialEq
 transcode::QualityTarget: Clone, Copy, Debug, PartialEq
 transcode::SupplementPolicy: Clone, Copy, Debug, Default
 transcode::SupplementSet: BitOr, Clone, Copy, Debug, Eq, PartialEq
@@ -833,4 +909,5 @@ DecodeRequest<'a>: !RefUnwindSafe !UnwindSafe
 EncodeRequest<'a>: !RefUnwindSafe !UnwindSafe
 StreamingEncoder: !RefUnwindSafe !Sync !UnwindSafe
 config::CodecConfig: !RefUnwindSafe !UnwindSafe
+transcode::TranscodeOptions: !RefUnwindSafe !UnwindSafe
 transcode::TranscodeSink<'a>: !RefUnwindSafe !Sync !UnwindSafe

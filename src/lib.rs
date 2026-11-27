@@ -22,7 +22,7 @@ use whereat::at;
 
 pub mod cache;
 mod error;
-pub mod execute_layout;
+pub(crate) mod execute_layout;
 pub mod format;
 pub mod graph;
 pub mod limits;
@@ -111,9 +111,7 @@ pub mod watermark;
 pub use error::{PipeError, PipeResult};
 pub use format::PixelFormat;
 pub use graph::{ResourceEstimate, SourceInfo};
-#[cfg(feature = "std")]
-pub use limits::Deadline;
-pub use limits::{AllocationGuard, AllocationTracker, Limits};
+pub use limits::Limits;
 pub use strip::{Strip, StripBuf};
 
 // Re-export key zenpixels-convert types.
@@ -196,26 +194,12 @@ pub fn execute_with_pulse(
 ) -> PipeResult<()> {
     let control = pulse.unwrap_or(&zencodec::NoPulse);
     loop {
-        control.check().map_err(|_| at!(PipeError::Cancelled))?;
+        control.check().map_err(|r| at!(PipeError::Stopped(r)))?;
         let strip = source.next()?;
-        control.check().map_err(|_| at!(PipeError::Cancelled))?;
+        control.check().map_err(|r| at!(PipeError::Stopped(r)))?;
         match strip {
             Some(strip) => sink.consume(&strip)?,
             None => return sink.finish(),
         }
     }
-}
-
-/// Compatibility entry point for cancellation-only callers.
-#[deprecated(note = "use execute_with_pulse; adapt Stop with how_far::StopOnly::borrowed")]
-pub fn execute_with_stop(
-    source: &mut dyn Source,
-    sink: &mut dyn Sink,
-    stop: &dyn Stop,
-) -> PipeResult<()> {
-    execute_with_pulse(
-        source,
-        sink,
-        Some(&zencodec::how_far::StopOnly::borrowed(stop)),
-    )
 }

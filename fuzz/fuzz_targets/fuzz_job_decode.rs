@@ -11,19 +11,18 @@ use zenpipe::limits::Limits;
 
 /// Tight limits for fuzzing: 4096x4096, ~64MB.
 fn fuzz_limits() -> Limits {
-    Limits {
-        max_pixels: Some(16_000_000),
-        max_memory_bytes: Some(64 * 1024 * 1024),
-        max_width: Some(4096),
-        max_height: Some(4096),
-        max_frames: Some(4),
-        max_total_pixels: Some(64_000_000),
+    Limits::NONE
+        .with_max_pixels(16_000_000)
+        .with_max_memory_bytes(64 * 1024 * 1024)
+        .with_max_width(4096)
+        .with_max_height(4096)
+        .with_max_frames(4)
+        .with_max_total_pixels(64_000_000)
         // Same ceiling as max_memory_bytes: an unbounded encode buffer is an
         // OOM the fuzzer would report as a crash, which is noise rather than a
         // finding. Added when `Limits` grew the field (9cb07998).
-        max_output_bytes: Some(64 * 1024 * 1024),
-        max_duration: Some(core::time::Duration::from_secs(10)),
-    }
+        .with_max_output_bytes(64 * 1024 * 1024)
+        .with_max_duration(core::time::Duration::from_secs(10))
 }
 
 fuzz_target!(|data: &[u8]| {

@@ -3,14 +3,8 @@
 //! Each test corresponds to a CRITICAL or HIGH finding. Failures here mean
 //! a previously-fixed defense was reintroduced.
 
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::thread;
-
 use zenpipe::graph::{EdgeKind, NodeOp, PipelineGraph};
-use zenpipe::limits::{
-    AllocationTracker, checked_buffer_size, checked_dim_add, checked_stride_buffer,
-};
+use zenpipe::limits::{checked_buffer_size, checked_dim_add, checked_stride_buffer};
 use zenpipe::sources::{CropSource, ExpandCanvasSource, MaterializedSource};
 use zenpipe::{PipeError, format};
 
@@ -81,55 +75,6 @@ fn audit_c2_checked_stride_buffer_rejects_overflow() {
 fn audit_c2_checked_dim_add_rejects_wrap() {
     assert!(checked_dim_add(u32::MAX, 1).is_err());
     assert_eq!(checked_dim_add(100, 200).unwrap(), 300);
-}
-
-// -----------------------------------------------------------------------
-// H1: AllocationTracker must enforce limit under concurrency.
-// -----------------------------------------------------------------------
-
-#[test]
-fn audit_h1_allocation_tracker_enforces_limit_concurrently() {
-    let limit_bytes = 1024 * 1024; // 1 MB
-    let tracker = Arc::new(AllocationTracker::new(limit_bytes));
-
-    // Each thread tries to grab `limit_bytes / 2 + 1` bytes. With a TOCTOU
-    // race-prone implementation, both could pass the check and exceed the
-    // limit by ~limit_bytes/2. With the compare_exchange loop, at most one
-    // wins and the other surfaces a LimitExceeded error.
-    let total_grabbed = Arc::new(AtomicU64::new(0));
-    let mut handles = vec![];
-    for _ in 0..16 {
-        let t = Arc::clone(&tracker);
-        let g = Arc::clone(&total_grabbed);
-        handles.push(thread::spawn(move || {
-            for _ in 0..50 {
-                if let Ok(_guard) = t.allocate(limit_bytes / 2 + 1) {
-                    g.fetch_add(limit_bytes / 2 + 1, Ordering::SeqCst);
-                    // hold briefly
-                    std::thread::yield_now();
-                }
-            }
-        }));
-    }
-    for h in handles {
-        h.join().unwrap();
-    }
-
-    // The tracker may briefly hit but must never EXCEED the limit at any
-    // point. Peak should be <= limit_bytes.
-    assert!(
-        tracker.peak_bytes() <= limit_bytes,
-        "peak {} exceeds limit {}",
-        tracker.peak_bytes(),
-        limit_bytes
-    );
-}
-
-#[test]
-fn audit_h1_allocation_tracker_rejects_u64_overflow() {
-    let tracker = Arc::new(AllocationTracker::new(1024));
-    // Ask for u64::MAX. checked_add(current, u64::MAX) overflows -> error.
-    assert!(tracker.allocate(u64::MAX).is_err());
 }
 
 // -----------------------------------------------------------------------

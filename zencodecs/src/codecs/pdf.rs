@@ -25,10 +25,7 @@ pub(crate) fn detect_pdf(data: &[u8]) -> bool {
 }
 
 fn map_err(e: impl core::error::Error + Send + Sync + 'static) -> whereat::At<CodecError> {
-    at!(CodecError::Codec {
-        format: pdf_format(),
-        source: alloc::boxed::Box::new(e),
-    })
+    at!(CodecError::from_codec(pdf_format(), e))
 }
 
 /// Probe PDF metadata (page-0 dimensions + page count) without rendering.

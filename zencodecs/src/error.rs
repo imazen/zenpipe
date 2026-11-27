@@ -41,9 +41,9 @@ pub enum CodecError {
     /// Resource limit exceeded.
     #[error("limit exceeded: {0}")]
     LimitExceeded(String),
-    /// Operation cancelled via Stop token.
-    #[error("operation cancelled")]
-    Cancelled,
+    /// Operation stopped via cancellation or deadline (`enough::StopReason`).
+    #[error("operation stopped: {0}")]
+    Stopped(enough::StopReason),
     /// Allocation failure.
     #[error("out of memory")]
     Oom,
@@ -63,9 +63,28 @@ pub enum CodecError {
     },
 }
 
+impl From<enough::StopReason> for CodecError {
+    fn from(reason: enough::StopReason) -> Self {
+        Self::Stopped(reason)
+    }
+}
+
+/// Extract an [`enough::StopReason`] from a codec error chain if the failure
+/// represents cooperative cancellation or a deadline timeout.
+fn extract_stop_reason(error: &(dyn core::error::Error + 'static)) -> Option<enough::StopReason> {
+    if let Some(ce) = zencodec::find_cause::<zencodec::CodecError>(error)
+        && let zencodec::ErrorCategory::Stopped(reason) = ce.category()
+    {
+        return Some(reason);
+    }
+    None
+}
+
 // Conversion helpers for codec-specific errors
 impl CodecError {
-    /// Wrap a codec-specific error.
+    /// Wrap a codec-specific error, lifting cooperative cancellation/timeouts
+    /// (`zencodec::ErrorCategory::Stopped` or `enough::StopReason`) into
+    /// [`CodecError::Stopped`].
     ///
     /// Use with `at!()` to capture location:
     /// ```ignore
@@ -75,17 +94,24 @@ impl CodecError {
     where
         E: core::error::Error + Send + Sync + 'static,
     {
+        if let Some(reason) = extract_stop_reason(&error) {
+            return CodecError::Stopped(reason);
+        }
         CodecError::Codec {
             format,
             source: Box::new(error),
         }
     }
 
-    /// Wrap a pre-boxed codec error (from dyn dispatch).
+    /// Wrap a pre-boxed codec error (from dyn dispatch), lifting cooperative
+    /// cancellation/timeouts into [`CodecError::Stopped`].
     pub fn from_codec_boxed(
         format: ImageFormat,
         source: Box<dyn core::error::Error + Send + Sync>,
     ) -> Self {
+        if let Some(reason) = extract_stop_reason(source.as_ref()) {
+            return CodecError::Stopped(reason);
+        }
         CodecError::Codec { format, source }
     }
 }

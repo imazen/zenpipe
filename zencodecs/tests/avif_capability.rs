@@ -52,7 +52,7 @@ fn encode_avif_with_meta(img: ImgRef<'_, Rgb<u8>>, meta: Metadata, quality: f32)
     EncodeRequest::new(ImageFormat::Avif)
         .with_quality(quality)
         .with_metadata(meta)
-        .encode(view, false)
+        .encode(view)
         .expect("encode AVIF with metadata")
         .into_vec()
 }

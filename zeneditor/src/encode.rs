@@ -69,7 +69,7 @@ pub(crate) fn encode_pixels(
     }
 
     let output = req
-        .encode(pixels, false)
+        .encode(pixels)
         .map_err(|e| format!("{format} encode: {e}"))?;
     let mime = image_format.mime_type();
     Ok(EncodeResult {

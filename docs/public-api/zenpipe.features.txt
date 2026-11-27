@@ -10,13 +10,14 @@
 ## summary
 #
 #   pub modules                                 6
-#   pub types (struct/enum/trait/alias)        27
+#   pub types (struct/enum/trait/alias)        25
 #   free functions                             13
-#   inherent methods                           48
-#   struct fields                              65
-#   enum variants                              29
-#   trait roster entries (type × trait)        83
-#   auto-trait-complete types                  21
+#   inherent methods                           51
+#   struct fields                              63
+#   enum variants                              26
+#   re-exports                                  1
+#   trait roster entries (type × trait)        75
+#   auto-trait-complete types                  19
 #   auto-trait exceptions                       6
 #
 # per-module pub lines:
@@ -25,10 +26,10 @@
 #   codec_info                       15
 #   codegen_csharp                    3
 #   io                               72
-#   job                              81
+#   job                              78
 #   schema_export                    10
 
-## items (188 lines)
+## items (185 lines)
 
 pub struct bridge::ZenFiltersConverter
 pub mod codec_info
@@ -80,17 +81,11 @@ pub io::Refusal::StripTooTall
 pub io::Refusal::StripTooTall::max: u32
 pub io::Refusal::StripTooTall::rows: u32
 pub io::Refusal::UnknownColor
-pub struct io::DecodeOptions
-pub fn io::DecodeOptions::new(zencodec::storage::StorageBudget) -> Self
-pub fn io::DecodeOptions::with_drive(self, zencodec_io::drive::DriveOptions) -> Self
-pub fn io::DecodeOptions::with_pulse(self, how_far::pulse::SharedPulse) -> Self
-pub fn io::DecodeOptions::with_queue_slots(self, u32) -> Self
-pub fn io::DecodeOptions::with_strip_rows(self, u32) -> Self
 pub struct io::DecodeSource<R, P>
-pub fn io::DecodeSource<io::SharedBytes, zencodec::operation::policy::PolicySet>::from_bytes(&zencodec::set::CodecSet, impl core::convert::Into<io::SharedBytes>, io::DecodeOptions) -> PipeResult<Self>
-pub fn io::DecodeSource<zencodec::source::SliceReadAt<'a>, zencodec::operation::policy::PolicySet>::from_slice(&zencodec::set::CodecSet, &'a [u8], io::DecodeOptions) -> PipeResult<Self>
+pub fn io::DecodeSource<io::SharedBytes, zencodec::operation::policy::PolicySet>::from_bytes(&zencodec::set::CodecSet, impl core::convert::Into<io::SharedBytes>, io::SourceOptions) -> PipeResult<Self>
+pub fn io::DecodeSource<zencodec::source::SliceReadAt<'a>, zencodec::operation::policy::PolicySet>::from_slice(&zencodec::set::CodecSet, &'a [u8], io::SourceOptions) -> PipeResult<Self>
 pub fn io::DecodeSource<R, P>::info(&self) -> &zencodec::info::ImageInfo
-pub fn io::DecodeSource<R, P>::new(&zencodec::set::CodecSet, &zencodec::operation::DecodeOptions, R, P, io::DecodeOptions) -> PipeResult<Self>
+pub fn io::DecodeSource<R, P>::new(&zencodec::set::CodecSet, &zencodec::operation::DecodeOptions, R, P, io::SourceOptions) -> PipeResult<Self>
 pub fn io::DecodeSource<R, P>::report(&self) -> &zencodec::operation::policy::OperationReport
 pub fn io::DecodeSource<R, P>::retained_input_capacity(&self) -> usize
 pub fn io::DecodeSource<R, P>::stats(&self) -> io::DecodeStats
@@ -124,8 +119,15 @@ pub io::RowStats::strips_without_color: u64
 pub struct io::SharedBytes(_)
 pub fn io::SharedBytes::as_bytes(&self) -> &[u8]
 pub fn io::SharedBytes::new(impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
+pub struct io::SourceOptions
+pub fn io::SourceOptions::new(zencodec::storage::StorageBudget) -> Self
+pub fn io::SourceOptions::with_drive(self, zencodec_io::drive::DriveOptions) -> Self
+pub fn io::SourceOptions::with_pulse(self, how_far::pulse::SharedPulse) -> Self
+pub fn io::SourceOptions::with_queue_slots(self, u32) -> Self
+pub fn io::SourceOptions::with_strip_rows(self, u32) -> Self
 pub fn io::render_orientation(alloc::boxed::Box<dyn Source>, zenpixels::orientation::Orientation, &zencodec::storage::StorageBudget, u32) -> PipeResult<alloc::boxed::Box<dyn Source>>
 pub mod job
+pub use job::MetadataPolicy
 pub enum job::CmsMode
 pub job::CmsMode::None
 pub job::CmsMode::Preserve
@@ -142,10 +144,6 @@ pub job::GainMapMode::Preserve
 pub enum job::IoSlot
 pub job::IoSlot::Input(alloc::vec::Vec<u8>)
 pub job::IoSlot::Output
-pub enum job::MetadataPolicy
-pub job::MetadataPolicy::PreserveAll
-pub job::MetadataPolicy::StripAll
-pub job::MetadataPolicy::WebDefault
 pub struct job::CompareResult
 pub job::CompareResult::dimensions_differ: bool
 pub job::CompareResult::height_a: u32
@@ -153,7 +151,7 @@ pub job::CompareResult::height_b: u32
 pub job::CompareResult::psnr: f64
 pub job::CompareResult::width_a: u32
 pub job::CompareResult::width_b: u32
-pub struct job::DecodeInfo
+#[non_exhaustive] pub struct job::DecodeInfo
 pub job::DecodeInfo::format: zencodec::format::ImageFormat
 pub job::DecodeInfo::has_alpha: bool
 pub job::DecodeInfo::has_animation: bool
@@ -163,14 +161,10 @@ pub job::DecodeInfo::mime_type: alloc::string::String
 pub job::DecodeInfo::width: u32
 pub fn job::DecodeInfo::bits_per_pixel(&self, usize) -> f64
 pub fn job::DecodeInfo::format_name(&self) -> &'static str
-pub struct job::DecodedPixels
-pub job::DecodedPixels::bytes_per_pixel: usize
-pub job::DecodedPixels::data: alloc::vec::Vec<u8>
-pub job::DecodedPixels::height: u32
-pub job::DecodedPixels::width: u32
-pub struct job::EncodeResult
+#[non_exhaustive] pub struct job::EncodeResult
 pub job::EncodeResult::bytes: alloc::vec::Vec<u8>
 pub job::EncodeResult::extension: alloc::string::String
+pub job::EncodeResult::format: zencodec::format::ImageFormat
 pub job::EncodeResult::height: u32
 pub job::EncodeResult::io_id: i32
 pub job::EncodeResult::mime_type: alloc::string::String
@@ -194,16 +188,20 @@ pub fn job::ImageJob<'a>::with_gain_map_mode(self, job::GainMapMode) -> Self
 pub fn job::ImageJob<'a>::with_intent(self, zencodecs::intent::CodecIntent) -> Self
 pub fn job::ImageJob<'a>::with_limits(self, limits::Limits) -> Self
 pub fn job::ImageJob<'a>::with_lossless(self, bool) -> Self
-pub fn job::ImageJob<'a>::with_metadata_policy(self, job::MetadataPolicy) -> Self
+pub fn job::ImageJob<'a>::with_metadata_policy(self, zencodec::metadata::MetadataPolicy) -> Self
 pub fn job::ImageJob<'a>::with_nodes(self, &'a [alloc::boxed::Box<dyn zennode::traits::NodeInstance>]) -> Self
 pub fn job::ImageJob<'a>::with_output_extension(self, &str) -> Self
 pub fn job::ImageJob<'a>::with_output_policy(self, zencodec::operation::policy::PolicySet) -> Self
+pub fn job::ImageJob<'a>::with_policy(self, zencodecs::policy::CodecPolicy) -> Self
+pub fn job::ImageJob<'a>::with_pulse(self, how_far::pulse::SharedPulse) -> Self
 pub fn job::ImageJob<'a>::with_quality(self, f32) -> Self
 pub fn job::ImageJob<'a>::with_registry(self, zencodecs::registry::AllowedFormats) -> Self
+pub fn job::ImageJob<'a>::with_stop(self, impl enough::Stop + 'static) -> Self
 pub fn job::ImageJob<'a>::with_trace(self, &'a trace::TraceConfig) -> Self
-pub struct job::JobResult
+#[non_exhaustive] pub struct job::JobResult
 pub job::JobResult::decode_infos: alloc::vec::Vec<job::DecodeInfo>
 pub job::JobResult::encode_results: alloc::vec::Vec<job::EncodeResult>
+pub job::JobResult::selection: core::option::Option<zencodecs::trace::SelectionTrace>
 pub job::JobResult::trace: core::option::Option<trace::FullPipelineTrace>
 pub fn job::compare(&[u8], &[u8]) -> PipeResult<job::CompareResult>
 pub fn job::get_io_bytes(&hashbrown::map::HashMap<i32, job::IoSlot>, i32) -> core::option::Option<&[u8]>
@@ -219,12 +217,11 @@ pub fn schema_export::export_openapi_schemas() -> serde_json::value::Value
 pub fn schema_export::export_querystring_keys() -> serde_json::value::Value
 pub fn schema_export::export_querystring_schema() -> serde_json::value::Value
 
-## trait impls (26 types)
+## trait impls (24 types)
 
 bridge::ZenFiltersConverter: bridge::NodeConverter
 codec_info::FormatInfo: Clone, Debug
 codegen_csharp::CSharpOutput: Debug
-io::DecodeOptions: Clone
 io::DecodeSource<R, P>: Source
 io::DecodeStats: Clone, Copy, Debug, Default, Eq, PartialEq
 io::OrientationCost: Clone, Copy, Debug, Eq, PartialEq
@@ -232,6 +229,7 @@ io::PipelineRows<S>: zencodec_io::row_encode::Source
 io::Refusal: Clone, Copy, Debug, Display, Eq, Error, PartialEq
 io::RowStats: Clone, Copy, Debug, Default, Eq, PartialEq
 io::SharedBytes: Clone, Debug, From<alloc::rcs::arc::Arc<[u8]>>, From<alloc::vec::Vec<u8>>, zencodec::source::ReadAt
+io::SourceOptions: Clone
 io::tokio_bridge::BlockingReadAt<S>: zencodec::source::ReadAt
 io::tokio_bridge::ChannelWriter: Write
 io::tokio_bridge::Delivered: Clone, Copy, Debug, Default, Eq, PartialEq
@@ -239,21 +237,19 @@ io::tokio_bridge::DriveError<E>: Debug, Display, Error
 job::CmsMode: Clone, Copy, Debug, Default, Eq, PartialEq
 job::CompareResult: Clone, Debug
 job::DecodeInfo: Clone, Debug
-job::DecodedPixels: Clone, Debug
 job::DefaultsPreset: Clone, Copy, Debug, Default, Eq, PartialEq
 job::EncodeResult: Clone, Debug
 job::GainMapMode: Clone, Copy, Debug, Default, Eq, PartialEq
 job::IoSlot: Clone
 job::JobResult: Clone, Debug
-job::MetadataPolicy: Clone, Copy, Debug, Default, Eq, PartialEq
 schema_export::ExportedSchemas: Debug
 
 ## auto traits
 
-21 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
-io::DecodeOptions: !RefUnwindSafe !UnwindSafe
+19 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 io::DecodeSource<R, P>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 io::PipelineRows<S>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+io::SourceOptions: !RefUnwindSafe !UnwindSafe
 io::tokio_bridge::BlockingReadAt<S>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 io::tokio_bridge::DriveError<E>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 job::ImageJob<'a>: !RefUnwindSafe !UnwindSafe

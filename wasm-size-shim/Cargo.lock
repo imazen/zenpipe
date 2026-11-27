@@ -885,11 +885,6 @@ version = "0.2.0"
 source = "git+https://github.com/imazen/zencodec?rev=5d4f6c473404c09c95f404543f8a16a1e3cb8477#5d4f6c473404c09c95f404543f8a16a1e3cb8477"
 
 [[patch.unused]]
-name = "zencodec-media"
-version = "0.2.0"
-source = "git+https://github.com/imazen/zencodec?rev=5d4f6c473404c09c95f404543f8a16a1e3cb8477#5d4f6c473404c09c95f404543f8a16a1e3cb8477"
-
-[[patch.unused]]
 name = "zencodec-testkit"
 version = "0.3.0"
 source = "git+https://github.com/imazen/zencodec?rev=5d4f6c473404c09c95f404543f8a16a1e3cb8477#5d4f6c473404c09c95f404543f8a16a1e3cb8477"

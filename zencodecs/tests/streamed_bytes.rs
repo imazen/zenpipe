@@ -126,7 +126,7 @@ fn every_dispatched_codec_keeps_bytes_across_sink_drains() {
             let pixels = PixelView::new(&data, W, H, stride, &desc).unwrap();
             let one = EncodeRequest::new(format)
                 .with_quality(85.0)
-                .encode(pixels.clone(), alpha)
+                .encode(pixels.clone())
                 .unwrap();
             let (undrained, timing) = streamed(format, pixels.clone(), Drain::Never);
             saw_streaming |= timing.streams();
@@ -235,14 +235,14 @@ fn output_limit_includes_bytes_already_sent_for_every_codec() {
         let base = zencodecs::Limits::none();
         let want = EncodeRequest::new(format)
             .with_quality(85.0)
-            .with_limits(&base)
-            .encode(pixels.clone(), false)
+            .with_limits(base)
+            .encode(pixels.clone())
             .unwrap();
         for cap in [want.len(), want.len() - 1] {
             let limits = zencodecs::Limits::none().with_max_output(cap as u64);
             let se = EncodeRequest::new(format)
                 .with_quality(85.0)
-                .with_limits(&limits)
+                .with_limits(limits)
                 .build_streaming_encoder(W, H)
                 .unwrap();
             let bytes = Arc::new(Mutex::new(Vec::new()));
@@ -297,7 +297,7 @@ fn tiny_output_budgets_allow_early_refusal_without_excess_writes() {
         let pixels = PixelView::new(&data, W, H, stride, &descriptor).unwrap();
         let full = EncodeRequest::new(format)
             .with_quality(85.0)
-            .encode(pixels.clone(), false)
+            .encode(pixels.clone())
             .unwrap();
         assert!(full.len() > 7, "{format:?} fixture fits a tiny budget");
         for cap in [0, 1, 7] {
@@ -307,7 +307,7 @@ fn tiny_output_budgets_allow_early_refusal_without_excess_writes() {
             let result = (|| -> Result<EncodeOutput, BoxedError> {
                 let se = EncodeRequest::new(format)
                     .with_quality(85.0)
-                    .with_limits(&limits)
+                    .with_limits(limits)
                     .build_streaming_encoder(W, H)?;
                 let mut sink = TranscodeSink::new(se.encoder, se.supported).with_writer(move |b| {
                     out.lock().unwrap().extend_from_slice(b);

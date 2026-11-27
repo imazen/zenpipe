@@ -57,7 +57,7 @@ fn encode_png_with_meta(img: ImgRef<'_, Rgb<u8>>, meta: Metadata) -> Vec<u8> {
     let view = PixelView::from_imgref(img, ColorSpace::SRGB).expect("from_imgref");
     EncodeRequest::new(ImageFormat::Png)
         .with_metadata(meta)
-        .encode(view, false)
+        .encode(view)
         .expect("encode PNG with metadata")
         .into_vec()
 }
@@ -154,7 +154,7 @@ fn png_rgba16_round_trip_is_lossless_pixel_byte_equal() {
     let view = PixelView::from_imgref(img.as_ref(), ColorSpace::SRGB_ALPHA).expect("from_imgref");
 
     let bytes = EncodeRequest::new(ImageFormat::Png)
-        .encode(view, false)
+        .encode(view)
         .expect("encode PNG rgba16")
         .into_vec();
 

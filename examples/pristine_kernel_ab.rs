@@ -178,7 +178,7 @@ fn main() -> std::process::ExitCode {
             };
             let Ok(jpg) = EncodeRequest::new(ImageFormat::Jpeg)
                 .with_quality(q as f32)
-                .encode(slice, false)
+                .encode(slice)
             else {
                 eprintln!("FAIL {src} q{q} — encode");
                 failed += 1;

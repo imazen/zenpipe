@@ -174,7 +174,7 @@ fn discover_pairs() -> Vec<(PathBuf, PathBuf)> {
 fn load_resized(path: &Path, max_dim: u32) -> Option<(Vec<u8>, u32, u32)> {
     use zenresize::{Filter, PixelFormat, ResizeConfig, Resizer};
     let bytes = fs::read(path).ok()?;
-    let decoded = DecodeRequest::new(&bytes).decode().ok()?;
+    let decoded = DecodeRequest::new(&bytes).decode_full_frame().ok()?;
     let (iw, ih) = (decoded.width(), decoded.height());
     let rgb8 = convert_to_buf(
         &decoded.into_buffer().as_view(),
@@ -530,9 +530,8 @@ fn phase_extract_features(pairs: &[(PathBuf, PathBuf)]) -> Vec<[f32; N_FEAT]> {
             .collect();
     }
 
-    let m1 = oklab::OklabSpace::for_primaries(Primaries::Bt709)
-        .unwrap()
-        .rgb_to_lms();
+    let space = oklab::OklabSpace::for_primaries(Primaries::Bt709).unwrap();
+    let m1 = *space.rgb_to_lms();
     let mut features = Vec::with_capacity(pairs.len());
     let t0 = Instant::now();
 
@@ -580,12 +579,9 @@ fn phase_baseline(pairs: &[(PathBuf, PathBuf)], features: &[[f32; N_FEAT]]) -> V
         return scores;
     }
 
-    let m1 = oklab::OklabSpace::for_primaries(Primaries::Bt709)
-        .unwrap()
-        .rgb_to_lms();
-    let m1_inv = oklab::OklabSpace::for_primaries(Primaries::Bt709)
-        .unwrap()
-        .lms_to_rgb();
+    let space = oklab::OklabSpace::for_primaries(Primaries::Bt709).unwrap();
+    let m1 = *space.rgb_to_lms();
+    let m1_inv = *space.lms_to_rgb();
     let zs = Zensim::new(ZensimProfile::latest());
     let mut ctx = FilterContext::new();
     let mut scores = Vec::with_capacity(pairs.len());
@@ -674,12 +670,9 @@ fn phase_optimize(
             .collect();
     }
 
-    let m1 = oklab::OklabSpace::for_primaries(Primaries::Bt709)
-        .unwrap()
-        .rgb_to_lms();
-    let m1_inv = oklab::OklabSpace::for_primaries(Primaries::Bt709)
-        .unwrap()
-        .lms_to_rgb();
+    let space = oklab::OklabSpace::for_primaries(Primaries::Bt709).unwrap();
+    let m1 = *space.rgb_to_lms();
+    let m1_inv = *space.lms_to_rgb();
     let zs = Zensim::new(ZensimProfile::latest());
 
     let mut cluster_params = Vec::with_capacity(NUM_CLUSTERS);
@@ -846,12 +839,9 @@ fn phase_evaluate(
     cluster_params: &[[f32; N_PARAMS]],
     baseline_scores: &[f64],
 ) {
-    let m1 = oklab::OklabSpace::for_primaries(Primaries::Bt709)
-        .unwrap()
-        .rgb_to_lms();
-    let m1_inv = oklab::OklabSpace::for_primaries(Primaries::Bt709)
-        .unwrap()
-        .lms_to_rgb();
+    let space = oklab::OklabSpace::for_primaries(Primaries::Bt709).unwrap();
+    let m1 = *space.rgb_to_lms();
+    let m1_inv = *space.lms_to_rgb();
     let zs = Zensim::new(ZensimProfile::latest());
     let mut ctx = FilterContext::new();
 

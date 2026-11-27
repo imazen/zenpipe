@@ -59,6 +59,7 @@ pub enum IoSlot {
 
 /// Result of a single encode operation within a job.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct EncodeResult {
     /// The I/O ID this output was written to.
     pub io_id: i32,
@@ -68,6 +69,8 @@ pub struct EncodeResult {
     pub width: u32,
     /// Output height in pixels.
     pub height: u32,
+    /// Output image format.
+    pub format: zencodecs::ImageFormat,
     /// MIME type of the encoded output (e.g., `"image/jpeg"`).
     pub mime_type: String,
     /// File extension (e.g., `"jpg"`).
@@ -76,6 +79,7 @@ pub struct EncodeResult {
 
 /// Information about a decoded input source.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct DecodeInfo {
     /// The I/O ID of the input.
     pub io_id: i32,
@@ -121,17 +125,11 @@ impl DecodeInfo {
     }
 }
 
-/// Decoded pixel data from an input.
-#[derive(Clone, Debug)]
-pub struct DecodedPixels {
-    /// Raw pixel bytes (row-major, tightly packed).
-    pub data: Vec<u8>,
-    /// Image width.
-    pub width: u32,
-    /// Image height.
-    pub height: u32,
-    /// Bytes per pixel.
-    pub bytes_per_pixel: usize,
+/// Internal decoded pixel buffer for [`compare`].
+struct RawDecodedPixels {
+    data: Vec<u8>,
+    width: u32,
+    height: u32,
 }
 
 /// Result of comparing two images.
@@ -192,31 +190,32 @@ pub fn compare(a: &[u8], b: &[u8]) -> crate::PipeResult<CompareResult> {
 }
 
 /// Decode raw bytes to pixels (internal helper).
-fn decode_pixels_raw(data: &[u8]) -> crate::PipeResult<DecodedPixels> {
+fn decode_pixels_raw(data: &[u8]) -> crate::PipeResult<RawDecodedPixels> {
     let decoded = at_crate!(zencodecs::DecodeRequest::new(data).decode_full_frame())
-        .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
+        .map_err_at(codec_err_to_pipe)?;
 
     let pixels = decoded.pixels();
     let w = decoded.width();
     let h = decoded.height();
-    let bpp = pixels.format().layout.bytes_per_pixel();
     let pixel_data = pixels.as_strided_bytes().to_vec();
 
-    Ok(DecodedPixels {
+    Ok(RawDecodedPixels {
         data: pixel_data,
         width: w,
         height: h,
-        bytes_per_pixel: bpp,
     })
 }
 
 /// Result of a completed image processing job.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct JobResult {
     /// Encoded outputs, keyed by io_id.
     pub encode_results: Vec<EncodeResult>,
     /// Decode metadata for each input, keyed by io_id.
     pub decode_infos: Vec<DecodeInfo>,
+    /// Format/codec selection audit trail from `zencodecs::select_format_from_intent`.
+    pub selection: Option<zencodecs::SelectionTrace>,
     /// The pipeline trace when [`ImageJob::with_trace`] was set, with the
     /// execution layer finalized after the encode drained the pipeline
     /// (`to_text()` / `to_json()` / `memory_timeline()` ready). `None`
@@ -258,38 +257,51 @@ pub enum CmsMode {
 
 // ─── Metadata policy ───
 
-/// Controls which metadata survives the pipeline.
-///
-/// EXIF and XMP contain privacy-sensitive data (GPS, camera serial numbers,
-/// edit history) and can be large (embedded thumbnails, C2PA provenance).
-/// ICC profiles and CICP are functional — they affect how pixels display.
-/// So is the orientation: every policy carries the source's to the encoder
-/// unless a `zenlayout.orient` node renders it into the pixels, in which case
-/// the output is upright and says so.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum MetadataPolicy {
-    /// Web-optimized defaults (recommended).
-    ///
-    /// Keeps: ICC profile (stripped if sRGB — browsers assume it), CICP,
-    /// HDR metadata (ContentLightLevel, MasteringDisplay).
-    ///
-    /// Strips: EXIF (privacy: GPS, timestamps, camera IDs, thumbnails),
-    /// XMP (privacy: edit history, author info; includes C2PA provenance).
-    /// The orientation itself is kept (see above).
-    #[default]
-    WebDefault,
+pub use zencodecs::MetadataPolicy;
 
-    /// Keep all metadata from the source image.
-    ///
-    /// ICC, EXIF, XMP (including C2PA), CICP, HDR metadata, orientation.
-    /// Use for archival or when metadata preservation is required.
-    PreserveAll,
+/// Lift a `zencodecs::CodecError` into `PipeError`, preserving cooperative
+/// cancellation/timeout reasons as `PipeError::Stopped`.
+fn codec_err_to_pipe(e: zencodecs::CodecError) -> PipeError {
+    if let Some(reason) = crate::error::codec_stop_reason(&e) {
+        PipeError::Stopped(reason)
+    } else {
+        PipeError::Codec(Box::new(e))
+    }
+}
 
-    /// Strip all metadata. Smallest output.
-    ///
-    /// Only the bare minimum for correct display is kept:
-    /// CICP (4 bytes, needed for wide gamut/HDR) and the orientation.
-    StripAll,
+/// Pulse adapter combining a caller-supplied [`zencodecs::SharedPulse`] with a
+/// job-level [`crate::limits::Deadline`]. Checks both on every poll and
+/// forwards progress reporting and phase planning to the caller's pulse.
+#[cfg(feature = "std")]
+struct CombinedPulse {
+    pulse: zencodecs::SharedPulse,
+    deadline: crate::limits::Deadline,
+}
+
+#[cfg(feature = "std")]
+impl enough::Stop for CombinedPulse {
+    fn check(&self) -> Result<(), enough::StopReason> {
+        self.pulse.check()?;
+        self.deadline.check()
+    }
+}
+
+#[cfg(feature = "std")]
+impl zencodec::how_far::Report for CombinedPulse {
+    fn advance(&self, completed: u64) {
+        self.pulse.advance(completed);
+    }
+}
+
+#[cfg(feature = "std")]
+impl zencodec::Pulse for CombinedPulse {
+    fn split(
+        &self,
+        execution: zencodec::how_far::Execution,
+        parts: &[zencodec::how_far::PhaseSpec<'_>],
+    ) -> Result<Vec<zencodec::how_far::Child<'_>>, zencodec::how_far::PlanError> {
+        self.pulse.split(execution, parts)
+    }
 }
 
 // ─── Gain map mode ───
@@ -329,7 +341,7 @@ pub enum DefaultsPreset {
     ///
     /// - CMS: Preserve wide gamut (P3, Rec.2020 pass through)
     /// - Gain maps: Preserve (automatic round-trip)
-    /// - Metadata: WebDefault (strip EXIF/XMP/C2PA, keep ICC/CICP/HDR)
+    /// - Metadata: [`MetadataPolicy::Web`] (strip GPS/camera/XMP, keep non-sRGB ICC/CICP/HDR/rights)
     #[default]
     Web,
 
@@ -337,21 +349,21 @@ pub enum DefaultsPreset {
     ///
     /// - CMS: SrgbCompat (convert everything to sRGB)
     /// - Gain maps: Discard (v2 never had them)
-    /// - Metadata: StripAll (v2 didn't preserve metadata through pipeline)
+    /// - Metadata: [`MetadataPolicy::ColorAndRotation`] (strip descriptive metadata)
     V2Compat,
 
     /// Archival — preserve everything from the source.
     ///
     /// - CMS: Preserve wide gamut
     /// - Gain maps: Preserve
-    /// - Metadata: PreserveAll (ICC, EXIF, XMP, C2PA, CICP, HDR)
+    /// - Metadata: [`MetadataPolicy::PreserveExact`] (ICC, EXIF, XMP, C2PA, CICP, HDR)
     Archival,
 
     /// Minimal — strip everything, smallest output.
     ///
     /// - CMS: None (no transforms)
     /// - Gain maps: Discard
-    /// - Metadata: StripAll
+    /// - Metadata: [`MetadataPolicy::ColorAndRotation`]
     Minimal,
 }
 
@@ -374,16 +386,21 @@ pub struct ImageJob<'a> {
     converters: &'a [&'a dyn NodeConverter],
     /// Codec intent for format/quality selection.
     intent: zencodecs::CodecIntent,
+    /// Per-request codec filtering/selection policy.
+    policy: zencodecs::CodecPolicy,
     /// Color management mode.
     cms_mode: CmsMode,
     /// Gain map handling mode.
     gain_map_mode: GainMapMode,
-    /// Metadata stripping policy.
+    /// Metadata retention policy.
     metadata_policy: MetadataPolicy,
     /// Resource limits.
     limits: Option<Limits>,
-    /// One deadline shared by every stage of the current run.
-    job_stop: Option<zencodec::StopToken>,
+    /// Caller-supplied cancellation/progress pulse.
+    pulse: Option<zencodecs::SharedPulse>,
+    /// One shared control (composing `pulse` + `limits.max_duration` deadline)
+    /// established at `run()` entry and threaded through every stage.
+    run_control: Option<zencodecs::SharedPulse>,
     /// Codec registry (which formats are enabled).
     registry: zencodecs::AllowedFormats,
     /// Codec config overrides.
@@ -410,11 +427,13 @@ impl<'a> ImageJob<'a> {
             nodes: &[],
             converters: &[],
             intent: zencodecs::CodecIntent::default(),
+            policy: zencodecs::CodecPolicy::default(),
             cms_mode: CmsMode::default(),
             gain_map_mode: GainMapMode::default(),
-            metadata_policy: MetadataPolicy::default(),
+            metadata_policy: MetadataPolicy::Web,
             limits: None,
-            job_stop: None,
+            pulse: None,
+            run_control: None,
             registry: zencodecs::AllowedFormats::all(),
             codec_config: None,
             trace_config: None,
@@ -473,35 +492,58 @@ impl<'a> ImageJob<'a> {
         self
     }
 
+    /// Set the codec selection policy (killbits, allowlists, format restrictions).
+    pub fn with_policy(mut self, policy: zencodecs::CodecPolicy) -> Self {
+        self.policy = policy;
+        self
+    }
+
+    /// Attach a cooperative cancellation/progress pulse to every stage of the job
+    /// (decode, pixel pipeline, animation, and encode). Composes with
+    /// [`Limits::max_duration`] when both are set.
+    pub fn with_pulse(mut self, pulse: zencodecs::SharedPulse) -> Self {
+        self.pulse = Some(pulse);
+        self
+    }
+
+    /// Attach a cancellation-only [`enough::Stop`] token to every stage of the job
+    /// (wrapped via [`zencodec::how_far::StopOnly`]). Composes with
+    /// [`Limits::max_duration`] when both are set.
+    pub fn with_stop(self, stop: impl enough::Stop + 'static) -> Self {
+        self.with_pulse(zencodecs::SharedPulse::new(
+            zencodec::how_far::StopOnly::new(stop),
+        ))
+    }
+
     /// Apply a defaults preset (sets CMS, gain map, and metadata policies).
     ///
     /// Individual settings can be overridden after this call.
     /// ```ignore
     /// ImageJob::new()
     ///     .with_defaults(DefaultsPreset::V2Compat)
-    ///     .with_metadata_policy(MetadataPolicy::WebDefault)  // override just metadata
+    ///     .with_metadata_policy(MetadataPolicy::Web)  // override just metadata
     /// ```
     pub fn with_defaults(mut self, preset: DefaultsPreset) -> Self {
         match preset {
             DefaultsPreset::Web => {
                 self.cms_mode = CmsMode::Preserve;
                 self.gain_map_mode = GainMapMode::Preserve;
-                self.metadata_policy = MetadataPolicy::WebDefault;
+                self.metadata_policy = MetadataPolicy::Web;
             }
             DefaultsPreset::V2Compat => {
                 self.cms_mode = CmsMode::SrgbCompat;
                 self.gain_map_mode = GainMapMode::Discard;
-                self.metadata_policy = MetadataPolicy::StripAll;
+                self.metadata_policy = MetadataPolicy::ColorAndRotation;
             }
             DefaultsPreset::Archival => {
                 self.cms_mode = CmsMode::Preserve;
                 self.gain_map_mode = GainMapMode::Preserve;
-                self.metadata_policy = MetadataPolicy::PreserveAll;
+                self.metadata_policy = MetadataPolicy::PreserveExact;
             }
             DefaultsPreset::Minimal => {
                 self.cms_mode = CmsMode::None;
                 self.gain_map_mode = GainMapMode::Discard;
-                self.metadata_policy = MetadataPolicy::StripAll;
+                self.metadata_policy = MetadataPolicy::ColorAndRotation;
             }
         }
         self
@@ -522,10 +564,10 @@ impl<'a> ImageJob<'a> {
         self
     }
 
-    /// Set the metadata policy.
+    /// Set the metadata retention policy.
     ///
-    /// Default: [`MetadataPolicy::WebDefault`] — strips EXIF/XMP/C2PA,
-    /// keeps ICC/CICP/HDR metadata for correct display.
+    /// Default: [`MetadataPolicy::Web`] — strips GPS/camera/timestamps/XMP,
+    /// keeps non-sRGB ICC/CICP/HDR/orientation/rights.
     pub fn with_metadata_policy(mut self, policy: MetadataPolicy) -> Self {
         self.metadata_policy = policy;
         self
@@ -589,13 +631,13 @@ impl<'a> ImageJob<'a> {
         self
     }
 
-    /// Enable lossless encoding (WebP, JXL, AVIF, PNG).
+    /// Force lossless (`true`) or lossy (`false`) encoding.
     pub fn with_lossless(mut self, lossless: bool) -> Self {
-        self.intent.lossless = if lossless {
-            Some(zencodecs::BoolKeep::True)
+        self.intent.lossless = Some(if lossless {
+            zencodecs::BoolKeep::True
         } else {
-            None
-        };
+            zencodecs::BoolKeep::False
+        });
         self
     }
 
@@ -665,11 +707,17 @@ impl<'a> ImageJob<'a> {
     ///
     /// Returns a [`JobResult`] with encoded outputs and decode metadata.
     pub fn run(mut self) -> crate::PipeResult<JobResult> {
-        self.job_stop = self
-            .limits
-            .as_ref()
-            .and_then(Limits::to_deadline)
-            .map(zencodec::StopToken::new);
+        let deadline = self.limits.and_then(Limits::to_deadline);
+        self.run_control = Some(match (self.pulse.clone(), deadline) {
+            (Some(pulse), Some(deadline)) => {
+                zencodecs::SharedPulse::new(CombinedPulse { pulse, deadline })
+            }
+            (Some(pulse), None) => pulse,
+            (None, Some(deadline)) => {
+                zencodecs::SharedPulse::new(zencodec::how_far::StopOnly::new(deadline))
+            }
+            (None, None) => zencodecs::SharedPulse::default(),
+        });
         // 1. Get primary input bytes.
         let input_bytes = match self.io.get(&self.decode_io_id) {
             Some(IoSlot::Input(data)) => data,
@@ -686,7 +734,7 @@ impl<'a> ImageJob<'a> {
             input_bytes,
             &self.registry
         ))
-        .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
+        .map_err_at(codec_err_to_pipe)?;
 
         // Enforce dimension and total pixel limits before decoding.
         if let Some(ref limits) = self.limits {
@@ -738,9 +786,9 @@ impl<'a> ImageJob<'a> {
             &intent,
             &facts,
             &self.registry,
-            &zencodecs::CodecPolicy::default(),
+            &self.policy,
         ))
-        .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
+        .map_err_at(codec_err_to_pipe)?;
 
         // 4b. Animated inputs run per-frame pipelines so "resize this GIF"
         // stays a GIF. Falls back to the single-frame path when frame
@@ -774,10 +822,12 @@ impl<'a> ImageJob<'a> {
                         bytes,
                         width: out_w,
                         height: out_h,
+                        format: decision.format,
                         mime_type: decision.format.mime_type().to_string(),
                         extension: decision.format.extension().to_string(),
                     }],
                     decode_infos: vec![decode_info],
+                    selection: Some(zencodecs::SelectionTrace::from(decision.trace)),
                     trace: None,
                 });
             }
@@ -886,17 +936,19 @@ impl<'a> ImageJob<'a> {
             is_hdr: false, // handled by CMS
             exif_orientation: image_info.orientation.to_exif(),
             metadata: Some({
-                let mut m = self.apply_metadata_policy(image_info.metadata());
-                if discard_icc {
-                    m.icc_profile = None;
-                }
-                // Display-critical, not descriptive: the encoder must carry the
-                // source orientation unless the nodes render it.
+                let mut m = image_info.metadata();
+                // Display-critical, not descriptive: set orientation BEFORE
+                // filtering so `Metadata::filtered` reconciles any retained EXIF
+                // orientation tag against what the pipeline actually rendered.
                 m.orientation = if self.renders_orientation() {
                     zencodec::Orientation::Identity
                 } else {
                     image_info.orientation
                 };
+                let mut m = m.filtered(&self.metadata_policy);
+                if discard_icc {
+                    m.icc_profile = None;
+                }
                 m
             }),
         };
@@ -931,25 +983,18 @@ impl<'a> ImageJob<'a> {
         Ok(JobResult {
             encode_results: vec![encode_result],
             decode_infos: vec![decode_info],
+            selection: Some(zencodecs::SelectionTrace::from(decision.trace)),
             trace,
         })
     }
 
-    /// Clone the deadline established at run entry. Codec fallback and later
-    /// pipeline stages must not restart the job's duration budget.
-    fn deadline(&self) -> Option<zencodec::StopToken> {
-        self.job_stop.clone()
-    }
-
-    /// The job's one operation control: its [`deadline`](Self::deadline) as a
-    /// cancellation-only pulse, or the quiet default when no limit is set.
+    /// The job's one shared operation control (composing any caller-provided
+    /// pulse with the job's duration deadline established at `run()` entry).
     fn control(&self) -> zencodec::SharedPulse {
-        match self.deadline() {
-            Some(deadline) => {
-                zencodec::SharedPulse::new(zencodec::how_far::StopOnly::new(deadline))
-            }
-            None => zencodec::SharedPulse::default(),
-        }
+        self.run_control
+            .clone()
+            .or_else(|| self.pulse.clone())
+            .unwrap_or_default()
     }
 
     /// The planned route of [`stream_encode`](Self::stream_encode): retain the
@@ -965,9 +1010,7 @@ impl<'a> ImageJob<'a> {
         policy: zencodec::operation::PolicySet,
         metadata: Option<&zencodec::Metadata>,
     ) -> crate::PipeResult<EncodeResult> {
-        let configured = request
-            .build_job(w, h)
-            .map_err(|e| at!(PipeError::Codec(Box::new(e))))?;
+        let configured = at_crate!(request.build_job(w, h)).map_err_at(codec_err_to_pipe)?;
         // The job embeds this metadata's carriers; the rows are declared with
         // the same interpretation, so planning compares like with like.
         let origin = metadata.map(|m| match (m.icc_profile.clone(), m.cicp) {
@@ -1002,12 +1045,19 @@ impl<'a> ImageJob<'a> {
             options,
             Some(pulse.as_pulse()),
         )
-        .map_err(|e| at!(PipeError::Codec(Box::new(e))))?;
+        .map_err(|e| {
+            if let Some(reason) = crate::error::codec_stop_reason(&e) {
+                at!(PipeError::Stopped(reason))
+            } else {
+                at!(PipeError::Codec(Box::new(e)))
+            }
+        })?;
         Ok(EncodeResult {
             io_id: self.encode_io_id,
             bytes,
             width: w,
             height: h,
+            format: target_format,
             mime_type: target_format.mime_type().to_string(),
             extension: target_format.extension().to_string(),
         })
@@ -1213,22 +1263,18 @@ pub(crate) fn transcode_animated_nodes(
 ) -> crate::PipeResult<Option<(Vec<u8>, u32, u32)>> {
     // Animation decoder (frames arrive composited at canvas size).
     let mut decode_request = zencodecs::DecodeRequest::new(data)
-        .with_registry(registry)
+        .with_registry(*registry)
         .with_pulse(control.clone());
     if let Some(cfg) = codec_config {
         decode_request = decode_request.with_codec_config(cfg);
     }
     if let Some(cl) = codec_limits {
-        decode_request = decode_request.with_limits(cl);
+        decode_request = decode_request.with_limits(*cl);
     }
-    let decoder = at_crate!(decode_request.animation_frame_decoder()).map_err_at(|e| {
-        if crate::error::is_codec_stop(&e) {
-            PipeError::Cancelled
-        } else {
-            PipeError::Codec(Box::new(e))
-        }
-    })?;
+    let decoder =
+        at_crate!(decode_request.animation_frame_decoder()).map_err_at(codec_err_to_pipe)?;
     let info = decoder.info().clone();
+    let loop_count = decoder.loop_count();
     let (in_w, in_h) = (info.width, info.height);
 
     // Output dimensions come from the compiled pipeline's estimate, so the
@@ -1258,7 +1304,8 @@ pub(crate) fn transcode_animated_nodes(
     // caller keeps its single-frame behavior.
     let mut encode_request = zencodecs::EncodeRequest::new(target_format)
         .with_quality(quality)
-        .with_registry(registry)
+        .with_registry(*registry)
+        .with_loop_count(loop_count)
         .with_pulse(control.clone());
     if lossless {
         encode_request = encode_request.with_lossless(true);
@@ -1266,14 +1313,21 @@ pub(crate) fn transcode_animated_nodes(
     if let Some(e) = effort {
         encode_request = encode_request.with_effort(e);
     }
+    if let Some(cfg) = codec_config {
+        encode_request = encode_request.with_codec_config(cfg);
+    }
     if let Some(cl) = codec_limits {
-        encode_request = encode_request.with_limits(cl);
+        encode_request = encode_request.with_limits(*cl);
     }
     let encoder = match encode_request.animation_frame_encoder(out_w, out_h) {
         Ok(enc) => enc,
         // A stop is the operation's refusal, not a static target.
-        Err(e) if crate::error::is_codec_stop(e.error()) => return Err(at!(PipeError::Cancelled)),
-        Err(_) => return Ok(None),
+        Err(e) => {
+            if let Some(reason) = crate::error::codec_stop_reason(e.error()) {
+                return Err(at!(PipeError::Stopped(reason)));
+            }
+            return Ok(None);
+        }
     };
 
     let output = crate::animation::transcode_with_pulse_and_limits(
@@ -1304,12 +1358,12 @@ impl<'a> ImageJob<'a> {
         let codec_limits = self.limits.as_ref().map(Limits::to_codec_limits);
 
         // Try streaming decode first, fall back to full-frame.
-        let mut request = zencodecs::DecodeRequest::new(data).with_registry(&self.registry);
+        let mut request = zencodecs::DecodeRequest::new(data).with_registry(self.registry);
 
         if let Some(ref config) = self.codec_config {
             request = request.with_codec_config(config);
         }
-        if let Some(ref cl) = codec_limits {
+        if let Some(cl) = codec_limits {
             request = request.with_limits(cl);
         }
         // The job deadline must reach the codec, not just the strip loop:
@@ -1322,16 +1376,22 @@ impl<'a> ImageJob<'a> {
                 let decoder_source = crate::codec::DecoderSource::new(decoder)?;
                 Ok(Box::new(decoder_source))
             }
-            Err(_) => {
-                // Fall back to full-frame decode.
-                let mut fallback =
-                    zencodecs::DecodeRequest::new(data).with_registry(&self.registry);
-                if let Some(ref cl) = codec_limits {
+            Err(e) => {
+                if let Some(reason) = crate::error::codec_stop_reason(e.error()) {
+                    return Err(at!(PipeError::Stopped(reason)));
+                }
+                // Fall back to full-frame decode, preserving codec_config,
+                // limits, and control.
+                let mut fallback = zencodecs::DecodeRequest::new(data).with_registry(self.registry);
+                if let Some(ref config) = self.codec_config {
+                    fallback = fallback.with_codec_config(config);
+                }
+                if let Some(cl) = codec_limits {
                     fallback = fallback.with_limits(cl);
                 }
                 fallback = fallback.with_pulse(self.control());
-                let decoded = at_crate!(fallback.decode_full_frame())
-                    .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
+                let decoded =
+                    at_crate!(fallback.decode_full_frame()).map_err_at(codec_err_to_pipe)?;
 
                 let pixels = decoded.pixels();
                 let w = decoded.width();
@@ -1348,7 +1408,7 @@ impl<'a> ImageJob<'a> {
     /// Decode with HDR reconstruction: apply the gain map at decode time to
     /// produce HDR pixels (RIAPI `hdr=reconstruct`). `target_headroom` in
     /// stops; `None` = full headroom. Supported where the decoder implements
-    /// reconstruction (JPEG UltraHDR today) — other formats error loudly.
+    /// reconstruction (JPEG UltraHDR and HEIC today) — other formats error loudly.
     #[cfg(feature = "job-ultrahdr")]
     fn decode_source_reconstruct_hdr(
         &self,
@@ -1357,17 +1417,16 @@ impl<'a> ImageJob<'a> {
     ) -> crate::PipeResult<Box<dyn Source>> {
         let codec_limits = self.limits.as_ref().map(Limits::to_codec_limits);
         let mut request = zencodecs::DecodeRequest::new(data)
-            .with_registry(&self.registry)
-            .reconstruct_hdr(target_headroom);
+            .with_registry(self.registry)
+            .reconstruct_gain_map_hdr(target_headroom);
         if let Some(ref config) = self.codec_config {
             request = request.with_codec_config(config);
         }
-        if let Some(ref cl) = codec_limits {
+        if let Some(cl) = codec_limits {
             request = request.with_limits(cl);
         }
         request = request.with_pulse(self.control());
-        let decoded =
-            at_crate!(request.decode_full_frame()).map_err_at(|e| PipeError::Codec(Box::new(e)))?;
+        let decoded = at_crate!(request.decode_full_frame()).map_err_at(codec_err_to_pipe)?;
         let pixels = decoded.pixels();
         let w = decoded.width();
         let h = decoded.height();
@@ -1390,19 +1449,19 @@ impl<'a> ImageJob<'a> {
     ) -> crate::PipeResult<(Box<dyn Source>, Option<crate::sidecar::SidecarStream>)> {
         let codec_limits = self.limits.as_ref().map(Limits::to_codec_limits);
         let mut request = zencodecs::DecodeRequest::new(data)
-            .with_registry(&self.registry)
+            .with_registry(self.registry)
             .with_gain_map_extraction(true);
 
         if let Some(ref config) = self.codec_config {
             request = request.with_codec_config(config);
         }
-        if let Some(ref cl) = codec_limits {
+        if let Some(cl) = codec_limits {
             request = request.with_limits(cl);
         }
         request = request.with_pulse(self.control());
 
         let (decoded, gain_map) =
-            at_crate!(request.decode_gain_map()).map_err_at(|e| PipeError::Codec(Box::new(e)))?;
+            at_crate!(request.decode_gain_map()).map_err_at(codec_err_to_pipe)?;
 
         // Convert base image to Source.
         let pixels = decoded.pixels();
@@ -1471,40 +1530,6 @@ impl<'a> ImageJob<'a> {
                     .and_then(|v| v.as_i32())
                     .is_some_and(|o| (2..=8).contains(&o))
         })
-    }
-
-    /// Apply metadata policy: filter metadata fields based on the policy.
-    fn apply_metadata_policy(&self, mut meta: zencodec::Metadata) -> zencodec::Metadata {
-        match self.metadata_policy {
-            MetadataPolicy::PreserveAll => meta,
-            MetadataPolicy::WebDefault => {
-                // Strip EXIF (GPS, camera IDs, thumbnails, C2PA in JUMBF)
-                meta.exif = None;
-                // Strip XMP (edit history, author, C2PA provenance)
-                meta.xmp = None;
-                // Keep ICC (required for wide gamut), but strip known sRGB profiles
-                // (browsers assume sRGB — embedding it wastes 500B–150KB).
-                if let Some(ref icc) = meta.icc_profile
-                    && zencodecs::icc_profile_is_srgb(icc)
-                {
-                    meta.icc_profile = None;
-                }
-                // Keep CICP (4 bytes, required for correct wide gamut/HDR display)
-                // Keep content_light_level and mastering_display (HDR tone mapping)
-                // Orientation: set by the caller from what the nodes render.
-                meta
-            }
-            MetadataPolicy::StripAll => {
-                meta.exif = None;
-                meta.xmp = None;
-                meta.icc_profile = None;
-                meta.content_light_level = None;
-                meta.mastering_display = None;
-                // Keep only CICP (4 bytes, bare minimum for correct display);
-                // the caller sets the orientation from what the nodes render.
-                meta
-            }
-        }
     }
 
     /// Apply CMS transform if configured and needed.
@@ -1621,7 +1646,9 @@ impl<'a> ImageJob<'a> {
             crate::Transfer::Pq | crate::Transfer::Hlg(_)
         );
         let format_has_alpha = crate::format::format_has_alpha(&format);
-        let needs_alpha_removal = !target_format.supports_alpha() && format_has_alpha && !hdr;
+        let has_alpha_slot = format.layout.order.has_alpha_slot();
+        let needs_alpha_removal =
+            !target_format.supports_alpha() && (format_has_alpha || has_alpha_slot) && !hdr;
 
         if needs_alpha_removal {
             let matte = decision.matte.unwrap_or([255, 255, 255]);
@@ -1643,12 +1670,26 @@ impl<'a> ImageJob<'a> {
                 }
                 let op = crate::ops::MatteFlattenOp::new(matte[0], matte[1], matte[2]);
                 source = Box::new(crate::sources::TransformSource::new(source).push(op));
-            } else if let Some(conv) =
-                crate::ops::RowConverterOp::new(format.clone(), crate::format::RGB8_SRGB)
-            {
-                source = Box::new(
-                    crate::sources::TransformSource::new(source).push_boxed(Box::new(conv)),
+            } else {
+                // Opaque 4-channel pixels (AlphaMode::Opaque): strip the unused
+                // alpha slot while preserving the source color space (including
+                // opaque ICC profiles under CmsMode::Preserve).
+                let rgb_same_color = crate::format::PixelFormat::new(
+                    zenpixels::SampleLayout::new(
+                        format.layout.sample,
+                        zenpixels::ChannelOrder::Rgb,
+                    ),
+                    format.color.clone().with_alpha(zenpixels::AlphaMode::None),
                 );
+                if let Some(conv) = crate::ops::RowConverterOp::new(format.clone(), rgb_same_color)
+                    .or_else(|| {
+                        crate::ops::RowConverterOp::new(format.clone(), crate::format::RGB8_SRGB)
+                    })
+                {
+                    source = Box::new(
+                        crate::sources::TransformSource::new(source).push_boxed(Box::new(conv)),
+                    );
+                }
             }
         }
 
@@ -1657,33 +1698,35 @@ impl<'a> ImageJob<'a> {
         // Codec-layer limits: encoders enforce output-byte caps and memory
         // budgets (zencodec ResourceLimits::max_output_bytes et al.).
         let codec_limits = self.limits.as_ref().map(Limits::to_codec_limits);
+        let control = self.control();
+
+        // Per-codec hint overrides (?jpeg.quality=, ?webp.effort=, …).
+        let (hint_q, hint_e) = decision_hint_overrides(decision);
+        let effective_quality = hint_q.unwrap_or(decision.quality.quality);
+        let effective_effort = hint_e.or(decision.quality.effort);
 
         // Build streaming encoder via zencodecs.
         let mut encode_request = zencodecs::EncodeRequest::new(target_format)
-            .with_quality(decision.quality.quality)
-            .with_registry(&self.registry);
+            .with_quality(effective_quality)
+            .with_metadata_policy(self.metadata_policy)
+            .with_registry(self.registry)
+            .with_pulse(control.clone());
 
         if decision.lossless {
             encode_request = encode_request.with_lossless(true);
         }
-        if let Some(effort) = decision.quality.effort {
+        if let Some(effort) = effective_effort {
             encode_request = encode_request.with_effort(effort);
+        }
+        if let Some(ref config) = self.codec_config {
+            encode_request = encode_request.with_codec_config(config);
         }
         if let Some(meta) = output.metadata.clone() {
             encode_request = encode_request.with_metadata(meta);
         }
-        // Per-codec hint overrides (?jpeg.quality=, ?webp.effort=, …).
-        let (hint_q, hint_e) = decision_hint_overrides(decision);
-        if let Some(q) = hint_q {
-            encode_request = encode_request.with_quality(q);
-        }
-        if let Some(e) = hint_e {
-            encode_request = encode_request.with_effort(e);
-        }
-        if let Some(ref cl) = codec_limits {
+        if let Some(cl) = codec_limits {
             encode_request = encode_request.with_limits(cl);
         }
-        encode_request = encode_request.with_pulse(self.control());
 
         #[cfg(feature = "io")]
         if let Some(policy) = self.output_policy {
@@ -1768,19 +1811,59 @@ impl<'a> ImageJob<'a> {
         let streaming_result = if has_gain_map_data {
             None // Force one-shot path
         } else {
-            encode_request.build_streaming_encoder(w, h).ok()
+            match encode_request.build_streaming_encoder(w, h) {
+                Ok(enc) => Some(enc),
+                Err(e) => {
+                    if let Some(reason) = crate::error::codec_stop_reason(e.error()) {
+                        return Err(at!(PipeError::Stopped(reason)));
+                    }
+                    None
+                }
+            }
         };
+        // Capture whether the metadata going to the encoder carries the same
+        // ICC profile already attached to `src_format` (e.g. `CmsMode::Preserve`
+        // pass-through). Codec `supported_pixel_formats()` cannot enumerate
+        // runtime `ColorSpace::Icc`, so relabeling to the matching sRGB layout
+        // lets the encoder write the samples verbatim alongside the embedded
+        // ICC profile (and lets `zencodecs` `color_fit` convert/drop for
+        // ICC-less targets).
+        let encoded_icc = output.metadata.as_ref().and_then(|m| m.icc_profile.clone());
+        let encode_format = match &src_format.color {
+            zenpixels::ColorSpace::Icc { profile, alpha, .. }
+                if encoded_icc.as_deref() == Some(profile.as_ref()) =>
+            {
+                let transfer = match src_format.layout.sample {
+                    zenpixels::SampleType::F32 => zenpixels::Transfer::Linear,
+                    _ => zenpixels::Transfer::Srgb,
+                };
+                zenpixels::PixelFormat::new(
+                    src_format.layout,
+                    if src_format.layout.order.is_gray_family() {
+                        zenpixels::ColorSpace::Gray {
+                            transfer,
+                            range: zenpixels::SignalRange::Full,
+                            alpha: *alpha,
+                            white: None,
+                        }
+                    } else {
+                        zenpixels::ColorSpace::Rgb {
+                            primaries: zenpixels::Primaries::Bt709,
+                            transfer,
+                            range: zenpixels::SignalRange::Full,
+                            alpha: *alpha,
+                            white: None,
+                        }
+                    },
+                )
+            }
+            _ => src_format.clone(),
+        };
+
         match streaming_result {
             Some(streaming_enc) => {
-                let mut sink = crate::codec::EncoderSink::new(streaming_enc.encoder, src_format);
-                match self.deadline() {
-                    Some(deadline) => crate::execute_with_pulse(
-                        source.as_mut(),
-                        &mut sink,
-                        Some(&zencodec::how_far::StopOnly::borrowed(&deadline)),
-                    )?,
-                    None => crate::execute(source.as_mut(), &mut sink)?,
-                }
+                let mut sink = crate::codec::EncoderSink::new(streaming_enc.encoder, encode_format);
+                crate::execute_with_pulse(source.as_mut(), &mut sink, Some(control.as_pulse()))?;
                 let encode_output = sink
                     .take_output()
                     .ok_or_else(|| at!(PipeError::Op("encoder produced no output".to_string())))?;
@@ -1790,32 +1873,47 @@ impl<'a> ImageJob<'a> {
                     bytes: encode_output.data().to_vec(),
                     width: w,
                     height: h,
+                    format: target_format,
                     mime_type: target_format.mime_type().to_string(),
                     extension: target_format.extension().to_string(),
                 })
             }
             None => {
-                // One-shot encode (full-frame materialize).
-                let materialized = crate::sources::MaterializedSource::from_source(source)?;
+                // One-shot encode (full-frame materialize), preserving lossless,
+                // effort, metadata, metadata_policy, codec_config, limits, and pulse.
+                let materialized = crate::sources::MaterializedSource::from_source_with_pulse(
+                    source,
+                    Some(control.as_pulse()),
+                )?;
                 let pixels = at_crate!(zenpixels::PixelView::new(
                     materialized.data(),
                     materialized.width(),
                     materialized.height(),
                     materialized.stride(),
-                    &src_format,
+                    &encode_format,
                 ))
                 .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
 
                 let mut oneshot_request = zencodecs::EncodeRequest::new(target_format)
-                    .with_quality(hint_q.unwrap_or(decision.quality.quality))
-                    .with_registry(&self.registry);
-                if let Some(e) = hint_e {
+                    .with_quality(effective_quality)
+                    .with_metadata_policy(self.metadata_policy)
+                    .with_registry(self.registry)
+                    .with_pulse(control);
+                if decision.lossless {
+                    oneshot_request = oneshot_request.with_lossless(true);
+                }
+                if let Some(e) = effective_effort {
                     oneshot_request = oneshot_request.with_effort(e);
                 }
-                if let Some(ref cl) = codec_limits {
+                if let Some(ref config) = self.codec_config {
+                    oneshot_request = oneshot_request.with_codec_config(config);
+                }
+                if let Some(meta) = output.metadata {
+                    oneshot_request = oneshot_request.with_metadata(meta);
+                }
+                if let Some(cl) = codec_limits {
                     oneshot_request = oneshot_request.with_limits(cl);
                 }
-                oneshot_request = oneshot_request.with_pulse(self.control());
 
                 // Re-attach gain map for one-shot encode (only if format supports it).
                 #[cfg(feature = "job-ultrahdr")]
@@ -1827,14 +1925,15 @@ impl<'a> ImageJob<'a> {
                         });
                 }
 
-                let encode_output = at_crate!(oneshot_request.encode(pixels, format_has_alpha))
-                    .map_err_at(|e| PipeError::Codec(Box::new(e)))?;
+                let encode_output =
+                    at_crate!(oneshot_request.encode(pixels)).map_err_at(codec_err_to_pipe)?;
 
                 Ok(EncodeResult {
                     io_id: self.encode_io_id,
                     bytes: encode_output.data().to_vec(),
                     width: materialized.width(),
                     height: materialized.height(),
+                    format: target_format,
                     mime_type: target_format.mime_type().to_string(),
                     extension: target_format.extension().to_string(),
                 })
@@ -1851,7 +1950,14 @@ fn ensure_rgba(source: Box<dyn Source>) -> crate::PipeResult<Box<dyn Source>> {
     let src_format = source.format();
 
     // Build a target that matches the source primaries and transfer function
-    // but has RGBA layout with straight alpha at the same channel precision.
+    // with RGBA layout at the same channel precision. Sources with no active
+    // transparency keep `AlphaMode::Opaque` so opaque wide-gamut / ICC images
+    // aren't misclassified as translucent downstream.
+    let target_alpha = if crate::format::format_has_alpha(&src_format) {
+        src_format.color.alpha()
+    } else {
+        zenpixels::AlphaMode::Opaque
+    };
     let target_layout =
         zenpixels::SampleLayout::new(src_format.layout.sample, zenpixels::ChannelOrder::Rgba);
     let target_color = match &src_format.color {
@@ -1863,11 +1969,11 @@ fn ensure_rgba(source: Box<dyn Source>) -> crate::PipeResult<Box<dyn Source>> {
         } => zenpixels::ColorSpace::Rgb {
             primaries: zenpixels::Primaries::Bt709,
             transfer: *transfer,
-            alpha: zenpixels::AlphaMode::Straight,
+            alpha: target_alpha,
             range: *range,
             white: *white,
         },
-        other => other.clone().with_alpha(zenpixels::AlphaMode::Straight),
+        other => other.clone().with_alpha(target_alpha),
     };
     let target = crate::format::PixelFormat::new(target_layout, target_color);
 
@@ -1927,23 +2033,19 @@ mod tests {
 
     #[test]
     fn default_format_is_auto_with_quality_profile() {
-        let mut intent = zencodecs::CodecIntent {
-            quality_profile: Some(zencodecs::QualityProfile::Good),
-            ..Default::default()
-        };
+        let mut intent =
+            zencodecs::CodecIntent::new().with_quality_profile(zencodecs::QualityProfile::Good);
         resolve_default_format(&mut intent);
         assert_eq!(intent.format, Some(zencodecs::FormatChoice::Auto));
     }
 
     #[test]
     fn explicit_format_is_left_alone() {
-        let mut intent = zencodecs::CodecIntent {
-            format: Some(zencodecs::FormatChoice::Specific(
+        let mut intent = zencodecs::CodecIntent::new()
+            .with_format(zencodecs::FormatChoice::Specific(
                 zencodec::ImageFormat::Png,
-            )),
-            quality_profile: Some(zencodecs::QualityProfile::Good),
-            ..Default::default()
-        };
+            ))
+            .with_quality_profile(zencodecs::QualityProfile::Good);
         resolve_default_format(&mut intent);
         assert_eq!(
             intent.format,
@@ -2061,12 +2163,14 @@ mod tests {
         let mut job = ImageJob::new()
             .with_limits(Limits::NONE.with_max_duration(core::time::Duration::from_secs(3600)));
         // Model a job whose original deadline has already expired. Asking for
-        // the token at another stage must not grant a fresh hour.
-        job.job_stop = Some(zencodec::StopToken::new(crate::limits::Deadline::new(
-            core::time::Duration::ZERO,
-        )));
+        // the control at another stage must not grant a fresh hour.
+        job.run_control = Some(zencodecs::SharedPulse::new(
+            zencodec::how_far::StopOnly::new(crate::limits::Deadline::new(
+                core::time::Duration::ZERO,
+            )),
+        ));
         for _ in 0..3 {
-            assert!(job.deadline().unwrap().check().is_err());
+            assert_eq!(job.control().check(), Err(enough::StopReason::TimedOut));
         }
     }
 
@@ -2160,6 +2264,7 @@ mod tests {
             bytes: vec![0xFF, 0xD8],
             width: 100,
             height: 200,
+            format: zencodec::ImageFormat::Jpeg,
             mime_type: String::from("image/jpeg"),
             extension: String::from("jpg"),
         };
@@ -2167,6 +2272,7 @@ mod tests {
         assert_eq!(er.bytes, vec![0xFF, 0xD8]);
         assert_eq!(er.width, 100);
         assert_eq!(er.height, 200);
+        assert_eq!(er.format, zencodec::ImageFormat::Jpeg);
         assert_eq!(er.mime_type, "image/jpeg");
         assert_eq!(er.extension, "jpg");
     }
@@ -2178,6 +2284,7 @@ mod tests {
             bytes: vec![],
             width: 1,
             height: 1,
+            format: zencodec::ImageFormat::Jpeg,
             mime_type: String::new(),
             extension: String::new(),
         };
@@ -2231,6 +2338,7 @@ mod tests {
                 bytes: vec![1, 2, 3],
                 width: 10,
                 height: 10,
+                format: zencodec::ImageFormat::Png,
                 mime_type: String::from("image/png"),
                 extension: String::from("png"),
             }],
@@ -2243,6 +2351,7 @@ mod tests {
                 has_animation: false,
                 mime_type: String::from("image/png"),
             }],
+            selection: None,
             trace: None,
         };
         assert_eq!(jr.encode_results.len(), 1);
@@ -2256,6 +2365,7 @@ mod tests {
         let jr = JobResult {
             encode_results: vec![],
             decode_infos: vec![],
+            selection: None,
             trace: None,
         };
         let cloned = jr.clone();
@@ -2436,9 +2546,8 @@ mod tests {
             assert_eq!(rl.max_output_bytes, Some(123_456));
         }
 
-        /// An already-expired deadline must surface as the *codec's* cancellation
-        /// ("operation cancelled"), not the strip loop's `PipeError::Cancelled`.
-        /// This proves the job deadline reaches `DecodeRequest`/`EncodeRequest`.
+        /// An already-expired deadline reaches `DecodeRequest`/`EncodeRequest`
+        /// and surfaces with its `StopReason::TimedOut` intact as `PipeError::Stopped`.
         #[test]
         fn expired_deadline_cancels_inside_codec() {
             let jpeg_data = make_test_jpeg();
@@ -2449,10 +2558,12 @@ mod tests {
                 .with_limits(Limits::NONE.with_max_duration(core::time::Duration::ZERO))
                 .run()
                 .expect_err("expired deadline must fail the job");
-            let msg = err.to_string();
             assert!(
-                msg.contains("operation cancelled"),
-                "expected codec-level cancellation, got: {msg}"
+                matches!(
+                    err.error(),
+                    PipeError::Stopped(enough::StopReason::TimedOut)
+                ),
+                "expected PipeError::Stopped(TimedOut), got: {err}"
             );
         }
     }
@@ -2569,7 +2680,7 @@ mod animation_control_tests {
         let (stopped, polls) = control(0);
         match run(&gif, Some(&budget), &stopped) {
             Err(e) => assert!(
-                matches!(e.error(), PipeError::Cancelled),
+                matches!(e.error(), PipeError::Stopped(StopReason::Cancelled)),
                 "expected the control's refusal, got {e}"
             ),
             Ok(_) => panic!("a stopped control must refuse the route"),
@@ -2605,7 +2716,7 @@ mod animation_control_tests {
                 Ok(_) => failures.push(alloc::format!(
                     "poll {fail_at}/{total}: completed after the control stopped"
                 )),
-                Err(e) if !matches!(e.error(), PipeError::Cancelled) => {
+                Err(e) if !matches!(e.error(), PipeError::Stopped(StopReason::Cancelled)) => {
                     failures.push(alloc::format!("poll {fail_at}/{total}: refused as {e}"))
                 }
                 Err(_) => {}
@@ -2623,6 +2734,57 @@ mod animation_control_tests {
             "{} wrong stop points:\n{}",
             failures.len(),
             failures.join("\n")
+        );
+    }
+
+    #[cfg(feature = "nodes-png")]
+    #[test]
+    fn image_job_pulse_stop_policy_lossless_and_selection_trace() {
+        // Minimal 4x4 PNG input.
+        let px = [128u8; 4 * 4 * 3];
+        let view =
+            zenpixels::PixelView::new(&px, 4, 4, 12, &zenpixels::formats::RGB8_SRGB).unwrap();
+        let png_bytes = zencodecs::EncodeRequest::new(zencodec::ImageFormat::Png)
+            .encode(view)
+            .unwrap()
+            .into_vec();
+
+        // 1. with_lossless(false) sets BoolKeep::False rather than None.
+        let job_false = ImageJob::new().with_lossless(false);
+        assert_eq!(job_false.intent.lossless, Some(zencodecs::BoolKeep::False));
+
+        // 2. with_stop preserves exact StopReason (TimedOut).
+        struct TimedOutStop;
+        impl enough::Stop for TimedOutStop {
+            fn check(&self) -> Result<(), StopReason> {
+                Err(StopReason::TimedOut)
+            }
+        }
+        let err = ImageJob::new()
+            .add_input(0, png_bytes.clone())
+            .add_output(1)
+            .with_stop(TimedOutStop)
+            .run()
+            .unwrap_err();
+        assert!(
+            matches!(err.error(), PipeError::Stopped(StopReason::TimedOut)),
+            "expected PipeError::Stopped(TimedOut), got {err:?}"
+        );
+
+        // 3. with_policy, EncodeResult.format, and JobResult.selection are populated.
+        let result = ImageJob::new()
+            .add_input(0, png_bytes)
+            .add_output(1)
+            .with_policy(zencodecs::CodecPolicy::default())
+            .with_intent(zencodecs::CodecIntent::new().with_format(
+                zencodecs::FormatChoice::Specific(zencodec::ImageFormat::Png),
+            ))
+            .run()
+            .expect("ImageJob with policy should succeed");
+        assert_eq!(result.encode_results[0].format, zencodec::ImageFormat::Png);
+        assert!(
+            result.selection.is_some(),
+            "JobResult.selection must preserve FormatDecision.trace"
         );
     }
 }

@@ -198,25 +198,6 @@ mod inner {
             self.stream_with_pulse(source, config, sidecar, source_hash, None)
         }
 
-        /// Compatibility entry point for cancellation-only callers.
-        #[deprecated(note = "use stream_with_pulse; adapt Stop with how_far::StopOnly::borrowed")]
-        pub fn stream_stoppable(
-            &mut self,
-            source: Box<dyn Source>,
-            config: &ProcessConfig<'_>,
-            sidecar: Option<SidecarStream>,
-            source_hash: u64,
-            stop: &dyn enough::Stop,
-        ) -> crate::PipeResult<StreamingOutput> {
-            self.stream_with_pulse(
-                source,
-                config,
-                sidecar,
-                source_hash,
-                Some(&zencodec::how_far::StopOnly::borrowed(stop)),
-            )
-        }
-
         /// Construct a cached pipeline with optional cooperative control.
         ///
         /// Checks before cache changes and while materializing a missed prefix.
@@ -234,7 +215,7 @@ mod inner {
             pulse
                 .unwrap_or(&zencodec::NoPulse)
                 .check()
-                .map_err(|_| whereat::at!(crate::error::PipeError::Cancelled))?;
+                .map_err(|r| whereat::at!(crate::error::PipeError::Stopped(r)))?;
 
             self.generation += 1;
 
@@ -1159,10 +1140,10 @@ mod tests {
         assert!(ca.iter().zip(&cc).all(|(x, y)| x != y));
     }
 
-    // ─── stream_stoppable tests ───
+    // ─── stream_with_pulse tests ───
 
     #[test]
-    fn session_stream_stoppable_cancellation() {
+    fn session_stream_with_pulse_cancellation() {
         use std::sync::Arc;
         use std::sync::atomic::{AtomicBool, Ordering};
 

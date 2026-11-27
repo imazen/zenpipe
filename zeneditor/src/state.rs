@@ -739,14 +739,7 @@ impl EditorState {
         let info = make_source_info(self.source_width, self.source_height);
         let converters: &[&dyn zenpipe::bridge::NodeConverter] =
             &[&crate::pipeline::FILTERS_CONVERTER];
-        let config = ProcessConfig {
-            nodes: &nodes,
-            converters,
-            hdr_mode: "sdr_only",
-            source_info: &info,
-            trace_config: None,
-            limits: None,
-        };
+        let config = ProcessConfig::new(&nodes, &info).with_converters(converters);
 
         self.overview_cancel.store(true, Ordering::Relaxed);
         let fresh = Arc::new(AtomicBool::new(false));
@@ -998,14 +991,7 @@ impl EditorState {
         let info = make_source_info(self.source_width, self.source_height);
         let converters: &[&dyn zenpipe::bridge::NodeConverter] =
             &[&crate::pipeline::FILTERS_CONVERTER];
-        let config = ProcessConfig {
-            nodes: &nodes,
-            converters,
-            hdr_mode: "sdr_only",
-            source_info: &info,
-            trace_config: None,
-            limits: None,
-        };
+        let config = ProcessConfig::new(&nodes, &info).with_converters(converters);
 
         self.overview_cancel.store(true, Ordering::Relaxed);
         let fresh = Arc::new(AtomicBool::new(false));
@@ -1075,14 +1061,7 @@ impl EditorState {
         let info = make_source_info(self.source_width, self.source_height);
         let converters: &[&dyn zenpipe::bridge::NodeConverter] =
             &[&crate::pipeline::FILTERS_CONVERTER];
-        let config = ProcessConfig {
-            nodes: &nodes,
-            converters,
-            hdr_mode: "sdr_only",
-            source_info: &info,
-            trace_config: None,
-            limits: None,
-        };
+        let config = ProcessConfig::new(&nodes, &info).with_converters(converters);
 
         let region_hash = {
             use std::hash::{Hash, Hasher};
@@ -1148,14 +1127,7 @@ impl EditorState {
         let info = make_source_info(self.source_width, self.source_height);
         let converters: &[&dyn zenpipe::bridge::NodeConverter] =
             &[&crate::pipeline::FILTERS_CONVERTER];
-        let config = ProcessConfig {
-            nodes: &nodes,
-            converters,
-            hdr_mode: "sdr_only",
-            source_info: &info,
-            trace_config: None,
-            limits: None,
-        };
+        let config = ProcessConfig::new(&nodes, &info).with_converters(converters);
 
         let output = self
             .overview_session

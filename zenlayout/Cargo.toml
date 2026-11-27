@@ -15,7 +15,6 @@ exclude = ["CLAUDE.md", "CONTEXT-HANDOFF.md", "FEEDBACK.md", ".claude/", ".super
 default = ["std"]
 std = ["num-traits/std"]
 svg = ["std"]
-riapi = []
 smart-crop = []
 # zennode = ["dep:zennode", "alloc"]
 

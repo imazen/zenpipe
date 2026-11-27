@@ -18,21 +18,18 @@
 //! use zenpipe::orchestrate::{ProcessConfig, SourceImageInfo, process};
 //! use zenpipe::format::RGBA8_SRGB;
 //!
-//! let config = ProcessConfig {
-//!     nodes: &nodes,
-//!     converters: &[],
-//!     source_info: &SourceImageInfo {
-//!         width: 4000,
-//!         height: 3000,
-//!         format: RGBA8_SRGB,
-//!         has_alpha: false,
-//!         has_animation: false,
-//!         has_gain_map: false,
-//!         is_hdr: false,
-//!         exif_orientation: 1,
-//!         metadata: None,
-//!     },
+//! let source_info = SourceImageInfo {
+//!     width: 4000,
+//!     height: 3000,
+//!     format: RGBA8_SRGB,
+//!     has_alpha: false,
+//!     has_animation: false,
+//!     has_gain_map: false,
+//!     is_hdr: false,
+//!     exif_orientation: 1,
+//!     metadata: None,
 //! };
+//! let config = ProcessConfig::new(&nodes, &source_info);
 //!
 //! let result = process(decoded_source, &config)?;
 //! // result.primary is a MaterializedSource ready for the encoder
@@ -60,6 +57,7 @@ use zenresize::Filter;
 ///
 /// Groups the zenode node list, extension converters, and source metadata
 /// needed to compile and execute a pixel pipeline.
+#[non_exhaustive]
 pub struct ProcessConfig<'a> {
     /// Zenode node instances defining the processing pipeline.
     ///
@@ -88,6 +86,48 @@ pub struct ProcessConfig<'a> {
     /// is checked (peak memory, output dimensions) BEFORE execution starts,
     /// so over-budget pipelines are rejected without doing pixel work.
     pub limits: Option<&'a crate::Limits>,
+}
+
+impl<'a> ProcessConfig<'a> {
+    /// Create a processing configuration with default converters (`&[]`),
+    /// `hdr_mode = "sdr_only"`, no trace config, and no resource limits.
+    pub fn new(
+        nodes: &'a [Box<dyn zennode::NodeInstance>],
+        source_info: &'a SourceImageInfo,
+    ) -> Self {
+        Self {
+            nodes,
+            converters: &[],
+            hdr_mode: "sdr_only",
+            source_info,
+            trace_config: None,
+            limits: None,
+        }
+    }
+
+    /// Set extension node converters (e.g. zenfilters).
+    pub fn with_converters(mut self, converters: &'a [&'a dyn NodeConverter]) -> Self {
+        self.converters = converters;
+        self
+    }
+
+    /// Set HDR gain map handling mode (`"sdr_only"`, `"hdr_reconstruct"`, or `"preserve"`).
+    pub fn with_hdr_mode(mut self, hdr_mode: &'a str) -> Self {
+        self.hdr_mode = hdr_mode;
+        self
+    }
+
+    /// Enable pipeline execution tracing.
+    pub fn with_trace_config(mut self, trace_config: &'a crate::trace::TraceConfig) -> Self {
+        self.trace_config = Some(trace_config);
+        self
+    }
+
+    /// Set resource limits checked against the compiled graph estimate before execution.
+    pub fn with_limits(mut self, limits: &'a crate::Limits) -> Self {
+        self.limits = Some(limits);
+        self
+    }
 }
 
 /// Probed source image information.

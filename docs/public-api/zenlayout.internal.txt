@@ -9,16 +9,15 @@
 
 ## summary
 #
-#   inherent methods                           12
-#   trait roster entries (type × trait)        32
+#   inherent methods                           11
+#   trait roster entries (type × trait)        29
 #
 # per-module pub lines:
 #   constraint                        3
 #   plan                              7
-#   riapi                             1
 #   smart_crop                        1
 
-## items (12 lines)
+## items (11 lines)
 
 pub fn constraint::Layout::assert_fields_are_eq(&self)
 pub fn constraint::Rect::assert_fields_are_eq(&self)
@@ -30,10 +29,9 @@ pub fn plan::DecoderRequest::assert_fields_are_eq(&self)
 pub fn plan::OutputLimits::assert_fields_are_eq(&self)
 pub fn plan::Padding::assert_fields_are_eq(&self)
 pub fn plan::PlaneLayout::assert_fields_are_eq(&self)
-pub fn riapi::ParseWarning::assert_fields_are_eq(&self)
 pub fn smart_crop::AspectRatio::assert_fields_are_eq(&self)
 
-## trait impls (32 types)
+## trait impls (29 types)
 
 constraint::CanvasColor: TrivialClone
 constraint::ConstraintMode: TrivialClone
@@ -61,9 +59,6 @@ plan::Region: TrivialClone
 plan::RegionCoord: TrivialClone
 plan::Rotation: TrivialClone
 plan::Subsampling: TrivialClone
-riapi::instructions::Anchor1D: TrivialClone
-riapi::instructions::FitMode: TrivialClone
-riapi::instructions::ScaleMode: TrivialClone
 smart_crop::AspectRatio: TrivialClone
 smart_crop::CropMode: TrivialClone
 smart_crop::FocusRect: TrivialClone

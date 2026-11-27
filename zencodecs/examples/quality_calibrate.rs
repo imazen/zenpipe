@@ -363,10 +363,18 @@ where
             a: 255,
         })
         .collect();
-    let rgba_img = Img::new(rgba_pixels.as_slice(), img.width(), img.height());
+    let rgba_bytes: &[u8] = bytemuck::cast_slice(&rgba_pixels);
+    let view = zenpixels::PixelView::new(
+        rgba_bytes,
+        img.width() as u32,
+        img.height() as u32,
+        img.width() * 4,
+        &zenpixels::formats::RGBA8_SRGB,
+    )
+    .map_err(|e| format!("{e}"))?;
 
     let output = config
-        .encode_srgba8_imgref(rgba_img, true)
+        .encode_pixels(view, None, None, zencodecs::SharedPulse::default())
         .map_err(|e| format!("{e}"))?;
     Ok(output.into_vec())
 }

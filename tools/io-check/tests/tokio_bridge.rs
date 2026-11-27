@@ -24,7 +24,7 @@ use zencodec::{CodecSet, NoPulse};
 use zencodec_io::row_encode::{self, Completed, Options};
 use zencodec_io::tokio_io::{AsyncSource, BytesSource};
 use zenpipe::io::tokio_bridge::{BlockingReadAt, DriveError, drive_to_async_writer};
-use zenpipe::io::{DecodeOptions, DecodeSource, PipelineRows};
+use zenpipe::io::{DecodeSource, PipelineRows, SourceOptions};
 use zenpipe::{PipeResult, Source, Strip};
 use zenpixels::PixelView;
 
@@ -59,8 +59,8 @@ fn codecs() -> CodecSet {
     CodecSet::new().with_decoder(zenpng::PngDecoderConfig::new())
 }
 
-fn decode_options() -> DecodeOptions {
-    DecodeOptions::new(StorageBudget::new(64 << 20, 64))
+fn decode_options() -> SourceOptions {
+    SourceOptions::new(StorageBudget::new(64 << 20, 64))
         .with_strip_rows(8)
         .with_queue_slots(256)
 }

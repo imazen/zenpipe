@@ -36,7 +36,7 @@ mod orientation;
 pub mod tokio_bridge;
 
 pub use bytes::SharedBytes;
-pub use decode::{DecodeOptions, DecodeSource, DecodeStats};
+pub use decode::{DecodeSource, DecodeStats, SourceOptions};
 pub use encode::{PipelineRows, RowStats};
 pub use orientation::{OrientationCost, render_orientation};
 
@@ -48,7 +48,7 @@ use core::fmt;
 #[non_exhaustive]
 pub enum Refusal {
     /// The decoder delivered more strips in one step than the queue holds.
-    /// Raise [`DecodeOptions::with_queue_slots`] or the strip height; the
+    /// Raise [`SourceOptions::with_queue_slots`] or the strip height; the
     /// queue never grows on its own.
     StripQueueFull {
         /// Admitted strip slots.

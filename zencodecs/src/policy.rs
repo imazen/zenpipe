@@ -36,6 +36,7 @@ use alloc::vec::Vec;
 /// let policy = CodecPolicy::pure_rust();
 /// ```
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct CodecPolicy {
     /// Explicitly disabled codec IDs. Checked first.
     disabled: Vec<CodecId>,

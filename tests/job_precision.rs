@@ -33,7 +33,7 @@ fn png16_identity_job_preserves_every_sample() {
     .unwrap();
     let input = EncodeRequest::new(ImageFormat::Png)
         .with_lossless(true)
-        .encode(pixels.clone(), true)
+        .encode(pixels.clone())
         .expect("16-bit PNG fixture")
         .into_vec();
     let baseline = DecodeRequest::new(&input).decode_full_frame().unwrap();
@@ -48,11 +48,11 @@ fn png16_identity_job_preserves_every_sample() {
         .add_input(0, input)
         .add_output(1)
         .with_cms(CmsMode::Preserve)
-        .with_intent(CodecIntent {
-            format: Some(FormatChoice::Specific(ImageFormat::Png)),
-            lossless: Some(BoolKeep::True),
-            ..Default::default()
-        })
+        .with_intent(
+            CodecIntent::new()
+                .with_format(FormatChoice::Specific(ImageFormat::Png))
+                .with_lossless(BoolKeep::True),
+        )
         .run()
         .expect("lossless identity job");
     let output = DecodeRequest::new(&result.encode_results[0].bytes)
