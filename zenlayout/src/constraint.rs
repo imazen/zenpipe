@@ -362,6 +362,67 @@ impl Rect {
     pub fn is_full(&self, source_w: u32, source_h: u32) -> bool {
         self.x == 0 && self.y == 0 && self.width == source_w && self.height == source_h
     }
+
+    /// Strict half-open bounds check: returns `true` iff `[x, x + width) ⊆ [0, bounds.width)`
+    /// and `[y, y + height) ⊆ [0, bounds.height)` without `u32` overflow.
+    #[inline]
+    pub const fn checked_within(self, bounds: Size) -> bool {
+        match (self.x.checked_add(self.width), self.y.checked_add(self.height)) {
+            (Some(x_end), Some(y_end)) => x_end <= bounds.width && y_end <= bounds.height,
+            _ => false,
+        }
+    }
+
+    /// Strict half-open intersection of two validated rectangles, or `None` if either
+    /// overflows `u32` or they do not overlap with positive area.
+    pub const fn checked_intersect(self, other: Self) -> Option<Self> {
+        let (Some(ax2), Some(ay2), Some(bx2), Some(by2)) = (
+            self.x.checked_add(self.width),
+            self.y.checked_add(self.height),
+            other.x.checked_add(other.width),
+            other.y.checked_add(other.height),
+        ) else {
+            return None;
+        };
+        let x1 = if self.x > other.x { self.x } else { other.x };
+        let y1 = if self.y > other.y { self.y } else { other.y };
+        let x2 = if ax2 < bx2 { ax2 } else { bx2 };
+        let y2 = if ay2 < by2 { ay2 } else { by2 };
+        if x2 <= x1 || y2 <= y1 {
+            return None;
+        }
+        Some(Self::new(x1, y1, x2 - x1, y2 - y1))
+    }
+
+    /// Expand an in-bounds half-open rectangle by `(halo_x, halo_y)` pixels on each side,
+    /// clamped cleanly to `[0, bounds.width) × [0, bounds.height)`.
+    ///
+    /// Returns `None` if `self` is not strictly within `bounds` (or overflows `u32`).
+    pub const fn checked_expand_halo(
+        self,
+        bounds: Size,
+        halo_x: u32,
+        halo_y: u32,
+    ) -> Option<Self> {
+        if !self.checked_within(bounds) {
+            return None;
+        }
+        let x1 = self.x.saturating_sub(halo_x);
+        let y1 = self.y.saturating_sub(halo_y);
+        let x2_raw = self.x.saturating_add(self.width).saturating_add(halo_x);
+        let y2_raw = self.y.saturating_add(self.height).saturating_add(halo_y);
+        let x2 = if x2_raw < bounds.width {
+            x2_raw
+        } else {
+            bounds.width
+        };
+        let y2 = if y2_raw < bounds.height {
+            y2_raw
+        } else {
+            bounds.height
+        };
+        Some(Self::new(x1, y1, x2 - x1, y2 - y1))
+    }
 }
 
 /// Layout constraint specification.
@@ -779,12 +840,20 @@ impl Constraint {
             (Some(w), Some(h)) => Ok((w, h)),
             (Some(0), None) => Err(at!(LayoutError::ZeroTargetDimension)),
             (Some(w), None) => {
-                let h = (sh as f64 * w as f64 / sw as f64).round().max(1.0) as u32;
+                // Exact u128 half-away-from-zero rounding: floor((sh * w / sw) + 0.5)
+                // avoids f64 mantissa loss near u32::MAX.
+                let num = 2u128 * u128::from(sh) * u128::from(w) + u128::from(sw);
+                let den = 2u128 * u128::from(sw);
+                let rounded = (num / den).max(1);
+                let h = u32::try_from(rounded).map_err(|_| at!(LayoutError::DimensionOverflow))?;
                 Ok((w, h))
             }
             (None, Some(0)) => Err(at!(LayoutError::ZeroTargetDimension)),
             (None, Some(h)) => {
-                let w = (sw as f64 * h as f64 / sh as f64).round().max(1.0) as u32;
+                let num = 2u128 * u128::from(sw) * u128::from(h) + u128::from(sh);
+                let den = 2u128 * u128::from(sh);
+                let rounded = (num / den).max(1);
+                let w = u32::try_from(rounded).map_err(|_| at!(LayoutError::DimensionOverflow))?;
                 Ok((w, h))
             }
             (None, None) => Ok((sw, sh)),

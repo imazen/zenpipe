@@ -39,7 +39,7 @@ pub use dimension::{
     RotateEffect, RotateMode, TrimEffect, WarpEffect, expanded_canvas_dims,
     expanded_canvas_inverse, inscribed_crop_dims, inscribed_crop_inverse, warp_output_dims,
 };
-pub use orientation::Orientation;
+pub use orientation::{Orientation, OrientationExt};
 pub use plan::{
     Align, CodecLayout, Command, DecoderOffer, DecoderRequest, FlipAxis, IdealLayout, LayoutPlan,
     OutputLimits, Padding, Pipeline, PlaneLayout, Region, RegionCoord, ResolvedEffect, Rotation,

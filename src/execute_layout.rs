@@ -10,7 +10,9 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use whereat::{At, ResultAtExt, at};
-use zenlayout::{CanvasColor, DecoderOffer, DecoderRequest, IdealLayout, LayoutPlan, Orientation};
+use zenlayout::{
+    CanvasColor, DecoderOffer, DecoderRequest, IdealLayout, LayoutPlan, Orientation, OrientationExt,
+};
 use zenresize::composite::{Background, CompositeError};
 use zenresize::{AlphaMode, ChannelOrder, PixelFormat, SampleType};
 use zenresize::{Filter, Resizer};

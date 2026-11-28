@@ -21,6 +21,7 @@ whereat::define_at_crate_info!();
 use whereat::at;
 
 pub mod cache;
+pub mod canonical;
 mod error;
 pub(crate) mod execute_layout;
 pub mod format;

@@ -119,6 +119,7 @@ extern crate alloc;
 
 whereat::define_at_crate_info!();
 
+pub mod bundles;
 #[cfg(feature = "cms")]
 pub mod cms;
 pub mod codec_id;
@@ -131,6 +132,7 @@ mod decode;
 mod dispatch;
 mod dyn_dispatch;
 mod encode;
+pub mod engine;
 mod error;
 pub mod estimate;
 mod format_set;
@@ -140,6 +142,8 @@ pub mod intent;
 pub mod inventory;
 mod limits;
 mod macros;
+#[cfg(feature = "media")]
+pub mod media;
 #[cfg(feature = "metadata")]
 pub mod metadata;
 mod orient_fit;
@@ -150,6 +154,7 @@ pub mod policy;
 pub mod quality;
 pub(crate) mod quality_calibration;
 mod registry;
+pub mod routing;
 #[cfg(any(
     feature = "jpeg",
     feature = "webp",
@@ -174,6 +179,19 @@ pub mod zennode_defs;
 
 // Re-exports
 pub use codec_id::CodecId;
+pub use engine::{
+    AlphaPolicy, ChromaPolicy, ChromaSampling, CodecOptions, Coding, ColorTarget, Completion,
+    DecodeNeeds, DecodeOrientation, Effort, Encoded, Engine, EngineError, EngineResult, Failure,
+    FormatPreferences, GainMapAction, GainMapEffect, GainMapEncodePolicy, GainMapFidelity,
+    GainMapRendition, GamutMode, Inspect, Inspection, LoopCount, LoopPolicy, MediaEnvelope,
+    MediaKind, MetadataPolicy as OutputMetadataPolicy, Metric, MetricScorer, MetricTarget,
+    OptionMode, OptionValue, OrientationMode, OutputIntent, PrepareError, PrepareResult,
+    PreparedDecode, ProbeDepth, ProbedInput, PublicationMode, QualityLevel, RejectReason,
+    RouteKind, RouteReport, Run, SelectionEvent, SelectionTrace as RouteTrace, SequencePolicy,
+    Stage, TargetFormat, TimingPolicy, ToneMap, ToneMapMethod,
+    ToneMapPolicy as OutputToneMapPolicy, TrackPolicy, UnspecifiedColor, WorkspacePolicy,
+};
+pub use routing::{Routing, RoutingError, Rule, RuleKey};
 #[cfg(feature = "jpeg")]
 pub use codecs::jpeg::codec_config_for_preset as jpeg_codec_config_for_preset;
 pub use decision::FormatDecision;

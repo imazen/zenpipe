@@ -28,6 +28,7 @@ use alloc::format;
 use alloc::string::String;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
+use crate::orientation::OrientationExt;
 
 use crate::constraint::Size;
 use crate::plan::{IdealLayout, LayoutPlan};

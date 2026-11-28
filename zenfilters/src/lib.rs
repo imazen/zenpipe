@@ -100,6 +100,7 @@ mod pipeline;
 mod planes;
 pub(crate) mod prelude;
 pub mod presets;
+pub mod recipe;
 pub mod regional;
 pub mod resize_pipeline;
 mod scatter_gather;
@@ -244,6 +245,9 @@ pub use fused_params::FusedAdjustParams;
 pub use gamut_map::GamutMapping;
 pub use pipeline::{Pipeline, PipelineConfig, PipelineError, WorkingSpace};
 pub use planes::OklabPlanes;
+pub use recipe::{
+    FilterOp, FilterRecipe, FilterRecipeError, FilterScratchQuote, FilterSupport, PreparedFilter,
+};
 pub use scatter_gather::{
     gather_from_oklab, gather_oklab_to_srgb_u8, scatter_srgb_u8_to_oklab, scatter_to_oklab,
 };

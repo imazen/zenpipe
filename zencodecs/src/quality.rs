@@ -167,8 +167,7 @@ impl QualityIntent {
 
     /// JPEG quality (0-100, native scale).
     pub fn jpeg_quality(&self) -> u8 {
-        interpolate(&JPEG_TABLE, self.quality)
-            .round()
+        round_f32_nonneg(interpolate(&JPEG_TABLE, self.quality))
             .clamp(0.0, 100.0) as u8
     }
 
@@ -179,8 +178,7 @@ impl QualityIntent {
 
     /// WebP method/effort (0-6).
     pub fn webp_method(&self) -> u8 {
-        interpolate(&WEBP_METHOD_TABLE, self.quality)
-            .round()
+        round_f32_nonneg(interpolate(&WEBP_METHOD_TABLE, self.quality))
             .clamp(0.0, 6.0) as u8
     }
 
@@ -191,8 +189,7 @@ impl QualityIntent {
 
     /// AVIF speed (0-10, lower = slower + better).
     pub fn avif_speed(&self) -> u8 {
-        interpolate(&AVIF_SPEED_TABLE, self.quality)
-            .round()
+        round_f32_nonneg(interpolate(&AVIF_SPEED_TABLE, self.quality))
             .clamp(0.0, 10.0) as u8
     }
 
@@ -203,20 +200,26 @@ impl QualityIntent {
 
     /// JXL effort (1-9).
     pub fn jxl_effort(&self) -> u8 {
-        interpolate(&JXL_EFFORT_TABLE, self.quality)
-            .round()
+        round_f32_nonneg(interpolate(&JXL_EFFORT_TABLE, self.quality))
             .clamp(1.0, 9.0) as u8
     }
 
     /// PNG quantization quality range (min, max) for lossy PNG.
     pub fn png_quality_range(&self) -> (u8, u8) {
-        let min = interpolate(&PNG_MIN_TABLE, self.quality)
-            .round()
+        let min = round_f32_nonneg(interpolate(&PNG_MIN_TABLE, self.quality))
             .clamp(0.0, 100.0) as u8;
-        let max = interpolate(&PNG_MAX_TABLE, self.quality)
-            .round()
+        let max = round_f32_nonneg(interpolate(&PNG_MAX_TABLE, self.quality))
             .clamp(0.0, 100.0) as u8;
         (min, max.max(min))
+    }
+}
+
+#[inline]
+fn round_f32_nonneg(v: f32) -> f32 {
+    if !v.is_finite() || v <= 0.0 {
+        0.0
+    } else {
+        ((v + 0.5) as u64) as f32
     }
 }
 

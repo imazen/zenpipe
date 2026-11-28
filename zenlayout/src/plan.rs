@@ -28,7 +28,7 @@ use crate::constraint::{
 };
 #[allow(unused_imports)]
 use crate::float_math::Float;
-use crate::orientation::Orientation;
+use crate::orientation::{Orientation, OrientationExt};
 use whereat::{At, at};
 
 use alloc::vec::Vec;

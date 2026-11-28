@@ -513,10 +513,32 @@ impl Pipeline {
         ctx: &mut FilterContext,
         stop: &dyn how_far::Pulse,
     ) -> Result<(), At<PipelineError>> {
+        let row_elems = (width as usize) * (channels as usize);
+        self.apply_full_frame_strided(
+            src, row_elems, dst, row_elems, width, height, channels, ctx, stop,
+        )
+    }
+
+    /// Full-frame strided Oklab planes with native row-by-row scatter and gather
+    /// directly between strided `src`/`dst` rows and reusable [`FilterContext`] planar
+    /// buffers (zero extra full-frame interleaved allocations).
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn apply_full_frame_strided(
+        &self,
+        src: &[f32],
+        src_stride_elems: usize,
+        dst: &mut [f32],
+        dst_stride_elems: usize,
+        width: u32,
+        height: u32,
+        channels: u32,
+        ctx: &mut FilterContext,
+        stop: &dyn how_far::Pulse,
+    ) -> Result<(), At<PipelineError>> {
         let ch = channels as usize;
         let w = width as usize;
+        let row_elems = w * ch;
 
-        // Full-frame Oklab planes (needed for neighborhood context)
         let mut planes = if ch == 4 {
             OklabPlanes::from_ctx_with_alpha(ctx, width, height)
         } else {
@@ -528,29 +550,25 @@ impl Pipeline {
             WorkingSpace::Srgb | WorkingSpace::LinearRgb
         );
 
-        // Scatter in strips for cache locality
-        let scatter_strip = strip_height(width, ch == 4, 0);
-        for y in (0..height as usize).step_by(scatter_strip) {
-            stop.check().map_err(|r| at!(PipelineError::Cancelled(r)))?;
-            let rows = scatter_strip.min(height as usize - y);
-            let src_off = y * w * ch;
-            let src_len = rows * w * ch;
+        // Scatter directly from strided source rows into planar Oklab buffers.
+        for y in 0..height as usize {
+            if y & 63 == 0 {
+                stop.check().map_err(|r| at!(PipelineError::Cancelled(r)))?;
+            }
+            let src_row = &src[y * src_stride_elems..y * src_stride_elems + row_elems];
             let plane_off = y * w;
-            let plane_len = rows * w;
-
             if is_passthrough {
-                // sRGB passthrough: deinterleave R→L, G→a, B→b
-                for i in 0..plane_len {
-                    planes.l[plane_off + i] = src[src_off + i * ch];
-                    planes.a[plane_off + i] = src[src_off + i * ch + 1];
-                    planes.b[plane_off + i] = src[src_off + i * ch + 2];
+                for i in 0..w {
+                    planes.l[plane_off + i] = src_row[i * ch];
+                    planes.a[plane_off + i] = src_row[i * ch + 1];
+                    planes.b[plane_off + i] = src_row[i * ch + 2];
                 }
             } else {
                 crate::simd::scatter_oklab(
-                    &src[src_off..src_off + src_len],
-                    &mut planes.l[plane_off..plane_off + plane_len],
-                    &mut planes.a[plane_off..plane_off + plane_len],
-                    &mut planes.b[plane_off..plane_off + plane_len],
+                    src_row,
+                    &mut planes.l[plane_off..plane_off + w],
+                    &mut planes.a[plane_off..plane_off + w],
+                    &mut planes.b[plane_off..plane_off + w],
                     channels,
                     &self.m1,
                     self.config.reference_white,
@@ -559,37 +577,34 @@ impl Pipeline {
             if ch == 4
                 && let Some(ref mut alpha) = planes.alpha
             {
-                for i in 0..plane_len {
-                    alpha[plane_off + i] = src[src_off + i * ch + 3];
+                for i in 0..w {
+                    alpha[plane_off + i] = src_row[i * ch + 3];
                 }
             }
         }
 
-        // Apply all filters on full-frame planes
+        // Apply all neighborhood and point filters directly on the full-frame planar buffers.
         self.apply_planar_with_pulse(&mut planes, ctx, Some(stop))?;
 
-        // Gather in strips for cache locality
-        for y in (0..height as usize).step_by(scatter_strip) {
-            stop.check().map_err(|r| at!(PipelineError::Cancelled(r)))?;
-            let rows = scatter_strip.min(height as usize - y);
-            let dst_off = y * w * ch;
-            let dst_len = rows * w * ch;
+        // Gather directly from planar Oklab buffers into strided destination rows.
+        for y in 0..height as usize {
+            if y & 63 == 0 {
+                stop.check().map_err(|r| at!(PipelineError::Cancelled(r)))?;
+            }
+            let dst_row = &mut dst[y * dst_stride_elems..y * dst_stride_elems + row_elems];
             let plane_off = y * w;
-            let plane_len = rows * w;
-
             if is_passthrough {
-                // sRGB passthrough: interleave L→R, a→G, b→B
-                for i in 0..plane_len {
-                    dst[dst_off + i * ch] = planes.l[plane_off + i];
-                    dst[dst_off + i * ch + 1] = planes.a[plane_off + i];
-                    dst[dst_off + i * ch + 2] = planes.b[plane_off + i];
+                for i in 0..w {
+                    dst_row[i * ch] = planes.l[plane_off + i];
+                    dst_row[i * ch + 1] = planes.a[plane_off + i];
+                    dst_row[i * ch + 2] = planes.b[plane_off + i];
                 }
             } else {
                 crate::simd::gather_oklab(
-                    &planes.l[plane_off..plane_off + plane_len],
-                    &planes.a[plane_off..plane_off + plane_len],
-                    &planes.b[plane_off..plane_off + plane_len],
-                    &mut dst[dst_off..dst_off + dst_len],
+                    &planes.l[plane_off..plane_off + w],
+                    &planes.a[plane_off..plane_off + w],
+                    &planes.b[plane_off..plane_off + w],
+                    dst_row,
                     channels,
                     &self.m1_inv,
                     self.config.reference_white,
@@ -598,8 +613,8 @@ impl Pipeline {
             if ch == 4
                 && let Some(ref alpha) = planes.alpha
             {
-                for i in 0..plane_len {
-                    dst[dst_off + i * ch + 3] = alpha[plane_off + i];
+                for i in 0..w {
+                    dst_row[i * ch + 3] = alpha[plane_off + i];
                 }
             }
         }
