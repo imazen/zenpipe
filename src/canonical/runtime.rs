@@ -25,16 +25,17 @@ use core::num::NonZeroU32;
 
 use whereat::at;
 use zencodec::encode::Fidelity;
-use zencodec::time::{FrameDuration, TimeBase};
 #[cfg(feature = "media")]
 use zencodec::time::Timestamp;
-use zencodec::{ImageEncodeRole, ImageFormat, Metadata, ResourceLimits};
+use zencodec::time::{FrameDuration, TimeBase};
+use zencodec::{ImageEncodeRole, ImageFormat, Metadata, ResourceLimits, SharedPulse};
+use zencodecs::Stop;
+#[cfg(feature = "media")]
+use zencodecs::engine::TargetFormat;
 use zencodecs::engine::{
     Coding, DecodeNeeds, Engine, EngineError, LoopCount, LoopPolicy, MediaKind, Metric,
     MetricTarget, QualityLevel, RouteReport, Run, SequencePolicy, TimingPolicy, WorkspacePolicy,
 };
-#[cfg(feature = "media")]
-use zencodecs::engine::TargetFormat;
 use zenlayout::{CanvasColor, Orientation, OrientationExt, Rect, Size};
 use zenpixels::{
     AlphaMode, ColorSpace, DiffuseWhite, PixelBuf, PixelFormat, PixelView, Primaries, SampleLayout,
@@ -146,15 +147,25 @@ impl HostServices {
         lim
     }
 
-    fn build_run<'a>(&'a self, engine: &Engine, job: &CanonicalJob) -> Run<'a> {
+    fn build_run_with_pulse<'a>(
+        &'a self,
+        engine: &Engine,
+        job: &CanonicalJob,
+        pulse: SharedPulse,
+    ) -> Run<'a> {
         let lim = self.effective_limits(engine, job);
-        self.build_run_with_limits(lim)
+        self.build_run_with_limits_and_pulse(lim, pulse)
     }
 
-    fn build_run_with_limits<'a>(&'a self, lim: ResourceLimits) -> Run<'a> {
+    fn build_run_with_limits_and_pulse<'a>(
+        &'a self,
+        lim: ResourceLimits,
+        pulse: SharedPulse,
+    ) -> Run<'a> {
         let mut run = Run::new()
             .with_workspace_policy(self.workspace_policy)
-            .with_limits(lim);
+            .with_limits(lim)
+            .with_pulse(pulse);
         if let Some(ref routing) = self.routing {
             run = run.with_routing(routing);
         }
@@ -547,12 +558,7 @@ enum NodeValue<'io> {
     },
 }
 
-fn check_canvas_limits(
-    w: u32,
-    h: u32,
-    bpp: usize,
-    limits: &ResourceLimits,
-) -> PipeResult<usize> {
+fn check_canvas_limits(w: u32, h: u32, bpp: usize, limits: &ResourceLimits) -> PipeResult<usize> {
     if w == 0 || h == 0 {
         return Err(at!(PipeError::DimensionMismatch(
             "image dimensions must be non-zero".to_string()
@@ -580,12 +586,16 @@ fn check_canvas_limits(
             "pixel count {pixels} exceeds max_pixels {mp}"
         ))));
     }
-    let stride = (w as usize)
-        .checked_mul(bpp)
-        .ok_or_else(|| at!(PipeError::LimitExceeded("row byte stride overflow".to_string())))?;
-    let total = stride
-        .checked_mul(h as usize)
-        .ok_or_else(|| at!(PipeError::LimitExceeded("pixel buffer byte size overflow".to_string())))?;
+    let stride = (w as usize).checked_mul(bpp).ok_or_else(|| {
+        at!(PipeError::LimitExceeded(
+            "row byte stride overflow".to_string()
+        ))
+    })?;
+    let total = stride.checked_mul(h as usize).ok_or_else(|| {
+        at!(PipeError::LimitExceeded(
+            "pixel buffer byte size overflow".to_string()
+        ))
+    })?;
     if let Some(max_mem) = limits.max_memory_bytes
         && (total as u64) > max_mem
     {
@@ -610,8 +620,11 @@ fn alloc_zeroed_checked(
     }
     mem.charge(total as u64)?;
     let mut buf = Vec::new();
-    buf.try_reserve_exact(total)
-        .map_err(|_| at!(PipeError::LimitExceeded("fallible buffer allocation failed".to_string())))?;
+    buf.try_reserve_exact(total).map_err(|_| {
+        at!(PipeError::LimitExceeded(
+            "fallible buffer allocation failed".to_string()
+        ))
+    })?;
     buf.resize(total, 0u8);
     Ok(buf)
 }
@@ -625,9 +638,19 @@ impl<'io> PreparedJob<'io> {
 
     /// Execute the prepared canonical DAG and collect all declared output artifacts.
     pub fn run(self) -> PipeResult<JobResult> {
+        self.run_with_pulse(SharedPulse::default())
+    }
+
+    /// Execute the prepared canonical DAG with cooperative cancellation and deadline
+    /// polling (`pulse`) checked before every graph node, before every output encode,
+    /// and forwarded into every codec, conversion, and `Coding::Verify` scorer call.
+    pub fn run_with_pulse(self, pulse: SharedPulse) -> PipeResult<JobResult> {
+        pulse.check().map_err(|r| at!(PipeError::Stopped(r)))?;
         let limits = self.services.effective_limits(&self.engine, &self.job);
         let mut mem = LiveMemBudget::new(&limits);
-        let run = self.services.build_run(&self.engine, &self.job);
+        let run = self
+            .services
+            .build_run_with_pulse(&self.engine, &self.job, pulse.clone());
         let cs = self
             .services
             .color_services
@@ -638,6 +661,7 @@ impl<'io> PreparedJob<'io> {
         let warnings = self.admission.warnings.clone();
 
         for op in graph.nodes() {
+            pulse.check().map_err(|r| at!(PipeError::Stopped(r)))?;
             let val = match op {
                 ImageOp::Decode(d) => self.exec_decode(d, &run, &limits, &mut mem)?,
                 ImageOp::Canvas { size, fill_rgba } => {
@@ -674,7 +698,9 @@ impl<'io> PreparedJob<'io> {
                 ImageOp::GainMap(gm) => {
                     let src = &values[gm.src.index()];
                     match gm.action {
-                        zencodecs::engine::GainMapAction::BaseOnly => clone_node_value(src, &mut mem)?,
+                        zencodecs::engine::GainMapAction::BaseOnly => {
+                            clone_node_value(src, &mut mem)?
+                        }
                         _ => {
                             return Err(at!(PipeError::Op(
                                 "gain_map reconstruct/carry requires a decoded gain-map attachment (not available in this runtime path)"
@@ -691,11 +717,27 @@ impl<'io> PreparedJob<'io> {
                 }
                 ImageOp::Geometry(g) => {
                     let src_idx = geometry_src(g).index();
-                    exec_geometry(&values[src_idx], g, &cs, &self.engine, &run, &limits, &mut mem)?
+                    exec_geometry(
+                        &values[src_idx],
+                        g,
+                        &cs,
+                        &self.engine,
+                        &run,
+                        &limits,
+                        &mut mem,
+                    )?
                 }
                 ImageOp::Filter(f) => {
                     let src_idx = filter_src(f).index();
-                    exec_filter(&values[src_idx], f, &cs, &self.engine, &run, &limits, &mut mem)?
+                    exec_filter(
+                        &values[src_idx],
+                        f,
+                        &cs,
+                        &self.engine,
+                        &run,
+                        &limits,
+                        &mut mem,
+                    )?
                 }
                 ImageOp::Composite(comp) => {
                     let canvas = &values[comp.canvas.index()];
@@ -708,6 +750,7 @@ impl<'io> PreparedJob<'io> {
 
         let mut outputs = Vec::with_capacity(graph.outputs().len());
         for out in graph.outputs() {
+            pulse.check().map_err(|r| at!(PipeError::Stopped(r)))?;
             match out {
                 OutputOp::Encode(enc) => {
                     let src = &values[enc.src.index()];
@@ -715,15 +758,20 @@ impl<'io> PreparedJob<'io> {
                     outputs.push(artifact);
                 }
                 OutputOp::Pixels { src, slot, format } => {
-                    let mut buf =
-                        materialize_first_still(&values[src.index()], &self.engine, &run, &mut mem)?;
+                    let mut buf = materialize_first_still(
+                        &values[src.index()],
+                        &self.engine,
+                        &run,
+                        &mut mem,
+                    )?;
                     if let Some(target_fmt) = format
                         && buf.format() != target_fmt
                     {
                         let old_sz = (buf.as_view().row_bytes() as u64)
                             .saturating_mul(u64::from(buf.height()));
-                        let converted =
-                            convert_pixel_buf(&buf, target_fmt, &cs, false, &limits, &mut mem)?;
+                        let converted = convert_pixel_buf(
+                            &buf, target_fmt, &cs, false, &limits, &mut mem, &pulse,
+                        )?;
                         drop(buf);
                         mem.release(old_sz);
                         buf = converted;
@@ -758,6 +806,7 @@ impl<'io> PreparedJob<'io> {
             }
         }
 
+        pulse.check().map_err(|r| at!(PipeError::Stopped(r)))?;
         Ok(JobResult { outputs, warnings })
     }
 
@@ -780,7 +829,10 @@ impl<'io> PreparedJob<'io> {
                 if let Some(sel) = op.select {
                     match sel {
                         DecodeSelection::All => {}
-                        DecodeSelection::PresentationIndex { track: None, index: 0 } => {}
+                        DecodeSelection::PresentationIndex {
+                            track: None,
+                            index: 0,
+                        } => {}
                         DecodeSelection::Page(0) => {}
                         _ => {
                             return Err(at!(PipeError::Op(
@@ -823,9 +875,7 @@ impl<'io> PreparedJob<'io> {
                                 )));
                             }
                             let idx = usize::try_from(index).map_err(|_| {
-                                at!(PipeError::Op(
-                                    "presentation_index out of range".to_string()
-                                ))
+                                at!(PipeError::Op("presentation_index out of range".to_string()))
                             })?;
                             let (view, _) = frames.get(idx).ok_or_else(|| {
                                 at!(PipeError::Op(format!(
@@ -929,7 +979,8 @@ impl<'io> PreparedJob<'io> {
                                             comp.output.0.height(),
                                             comp.output.0.format().layout.bytes_per_pixel(),
                                             limits,
-                                        )? as u64;
+                                        )?
+                                            as u64;
                                         mem.charge(poster_bytes)?;
                                         return Ok(NodeValue::Still {
                                             pixels: comp.output.0,
@@ -959,9 +1010,10 @@ impl<'io> PreparedJob<'io> {
                 // instead of collapsing to 1 frame via `DecodeNeeds::primary()`!
                 let probed = self.engine.probe(bytes, run).map_err(map_engine_err)?;
                 if probed.inspection().envelope.kind == MediaKind::Animation {
-                    let anim_run = self
-                        .services
-                        .build_run_with_limits(mem.limits_with_remaining(limits));
+                    let anim_run = self.services.build_run_with_limits_and_pulse(
+                        mem.limits_with_remaining(limits),
+                        run.pulse().clone(),
+                    );
                     let (frames, loops, metadata, source_format) =
                         decode_encoded_animation(&self.engine, bytes, &anim_run, limits, mem)?;
                     #[cfg(feature = "media")]
@@ -1002,7 +1054,9 @@ impl<'io> PreparedJob<'io> {
                                 }
                                 let durs: Vec<FrameDuration> = frames
                                     .iter()
-                                    .map(|(_, d)| d.unwrap_or_else(|| FrameDuration::from_millis(1)))
+                                    .map(|(_, d)| {
+                                        d.unwrap_or_else(|| FrameDuration::from_millis(1))
+                                    })
                                     .collect();
                                 let idx = select_frame_by_time(&durs, sel)?;
                                 let (px, _) = frames.into_iter().nth(idx).expect("valid idx");
@@ -1056,7 +1110,10 @@ impl<'io> PreparedJob<'io> {
                 if let Some(sel) = op.select {
                     match sel {
                         DecodeSelection::All => {}
-                        DecodeSelection::PresentationIndex { track: None, index: 0 } => {}
+                        DecodeSelection::PresentationIndex {
+                            track: None,
+                            index: 0,
+                        } => {}
                         DecodeSelection::Page(0) => {}
                         _ => {
                             return Err(at!(PipeError::Op(
@@ -1076,7 +1133,9 @@ impl<'io> PreparedJob<'io> {
                 }
 
                 let decode_limits = mem.limits_with_remaining(limits);
-                let decode_run = self.services.build_run_with_limits(decode_limits);
+                let decode_run = self
+                    .services
+                    .build_run_with_limits_and_pulse(decode_limits, run.pulse().clone());
                 let probed_still = self
                     .engine
                     .probe(bytes, &decode_run)
@@ -1167,10 +1226,7 @@ impl<'io> PreparedJob<'io> {
 
         match (&enc.intent.target, src) {
             #[cfg(feature = "media")]
-            (
-                TargetFormat::Video { container, codec },
-                NodeValue::VideoStream { bytes, .. },
-            ) => {
+            (TargetFormat::Video { container, codec }, NodeValue::VideoStream { bytes, .. }) => {
                 let comp = transcode_media_bytes(&self.engine, bytes, &enc.intent, run)
                     .map_err(map_engine_err)?;
                 let out_bytes = comp.output.as_bytes().to_vec();
@@ -1244,10 +1300,7 @@ impl<'io> PreparedJob<'io> {
                 })
             }
             #[cfg(feature = "media")]
-            (
-                TargetFormat::Video { container, codec },
-                NodeValue::Still { pixels, .. },
-            ) => {
+            (TargetFormat::Video { container, codec }, NodeValue::Still { pixels, .. }) => {
                 let dur = FrameDuration::from_millis(40);
                 let views = [(pixels.as_view(), dur)];
                 let comp = encode_frames_to_video(
@@ -1364,16 +1417,22 @@ impl<'io> PreparedJob<'io> {
                 match enc.intent.sequence {
                     SequencePolicy::FirstPresentation => {
                         let buf = &frames[0].0;
+                        let still_run = self.services.build_run_with_limits_and_pulse(
+                            mem.limits_with_remaining(limits),
+                            run.pulse().clone(),
+                        );
                         let comp = self
                             .engine
-                            .encode_pixels(&enc.intent, buf.as_view(), metadata, None, run)
+                            .encode_pixels(&enc.intent, buf.as_view(), metadata, None, &still_run)
                             .map_err(map_engine_err)?;
                         let fmt = comp.report.output_format.unwrap_or(ImageFormat::Png);
+                        let out_bytes = comp.output.into_vec();
+                        mem.charge(out_bytes.len() as u64)?;
                         Ok(OutputArtifact {
                             slot: enc.slot.clone(),
                             kind: "still",
                             mime: fmt.mime_type().to_string(),
-                            bytes: comp.output.as_bytes().to_vec(),
+                            bytes: out_bytes,
                             pixels: None,
                             width: buf.width(),
                             height: buf.height(),
@@ -1395,21 +1454,41 @@ impl<'io> PreparedJob<'io> {
                     ),
                 }
             }
-            (_, NodeValue::Still { pixels, metadata, source_format, .. }) => {
+            (
+                _,
+                NodeValue::Still {
+                    pixels,
+                    metadata,
+                    source_format,
+                    ..
+                },
+            ) => {
+                let still_run = self.services.build_run_with_limits_and_pulse(
+                    mem.limits_with_remaining(limits),
+                    run.pulse().clone(),
+                );
                 let comp = self
                     .engine
-                    .encode_pixels(&enc.intent, pixels.as_view(), metadata, *source_format, run)
+                    .encode_pixels(
+                        &enc.intent,
+                        pixels.as_view(),
+                        metadata,
+                        *source_format,
+                        &still_run,
+                    )
                     .map_err(map_engine_err)?;
                 let fmt = comp
                     .report
                     .output_format
                     .or(*source_format)
                     .unwrap_or(ImageFormat::Png);
+                let out_bytes = comp.output.into_vec();
+                mem.charge(out_bytes.len() as u64)?;
                 Ok(OutputArtifact {
                     slot: enc.slot.clone(),
                     kind: "still",
                     mime: fmt.mime_type().to_string(),
-                    bytes: comp.output.as_bytes().to_vec(),
+                    bytes: out_bytes,
                     pixels: None,
                     width: pixels.width(),
                     height: pixels.height(),
@@ -1519,7 +1598,24 @@ impl<'io> PreparedJob<'io> {
             Coding::QualityProfile { level, dpr } => {
                 Some(Fidelity::codec_quality(level.calibrated_quality(*dpr)))
             }
-            Coding::AimFor(t) => Some(Fidelity::codec_quality(aim_seed(t))),
+            Coding::AimFor(t) => {
+                t.validate().map_err(map_engine_err)?;
+                if let Some(ref rev) = t.revision
+                    && rev != zencodecs::engine::AIM_SEED_REVISION
+                {
+                    return Err(map_engine_err(at!(EngineError::simple(
+                        zencodecs::engine::Stage::Admit,
+                        zencodecs::engine::Failure::UnsupportedEffect,
+                        "Coding::AimFor calibration revision does not match pinned target revision",
+                    ))));
+                }
+                let est_q = aim_seed(t);
+                base_report.aim_metric = Some(t.metric);
+                base_report.aim_target = Some(t.value);
+                base_report.aim_revision = Some(zencodecs::engine::AIM_SEED_REVISION.to_string());
+                base_report.aim_estimated_quality = Some(est_q);
+                Some(Fidelity::codec_quality(est_q))
+            }
             Coding::Lossless => Some(Fidelity::Lossless),
             Coding::LosslessOrKeep => Some(Fidelity::codec_quality(
                 QualityLevel::Good.calibrated_quality(1.0),
@@ -1577,9 +1673,17 @@ impl<'io> PreparedJob<'io> {
                     .push_frame_timed(buf.as_view(), dur, Some(eff.resources.pulse()))
                     .map_err(|e| at!(PipeError::Op(format!("animation push_frame failed: {e}"))))?;
             } else {
-                let rgba = convert_pixel_buf(buf, &PixelFormat::RGBA8_SRGB, cs, false, limits, mem)?;
-                let rgba_sz = (rgba.as_view().row_bytes() as u64)
-                    .saturating_mul(u64::from(rgba.height()));
+                let rgba = convert_pixel_buf(
+                    buf,
+                    &PixelFormat::RGBA8_SRGB,
+                    cs,
+                    false,
+                    limits,
+                    mem,
+                    run.pulse(),
+                )?;
+                let rgba_sz =
+                    (rgba.as_view().row_bytes() as u64).saturating_mul(u64::from(rgba.height()));
                 let push_res = anim_enc
                     .push_frame_timed(rgba.as_view(), dur, Some(eff.resources.pulse()))
                     .map_err(|e| at!(PipeError::Op(format!("animation push_frame failed: {e}"))));
@@ -1626,14 +1730,18 @@ fn aim_seed(target: &MetricTarget) -> f32 {
 }
 
 fn map_engine_err(err: whereat::At<EngineError>) -> whereat::At<PipeError> {
-    at!(PipeError::Op(err.error().to_string()))
+    let (engine_err, _trace) = err.decompose();
+    match engine_err.failure() {
+        zencodecs::engine::Failure::Stopped(reason) => at!(PipeError::Stopped(*reason)),
+        zencodecs::engine::Failure::ResourceLimit => {
+            at!(PipeError::LimitExceeded(engine_err.to_string()))
+        }
+        _ => at!(PipeError::Codec(alloc::boxed::Box::new(engine_err))),
+    }
 }
 
 #[cfg(feature = "media")]
-fn select_frame_by_time(
-    durs: &[FrameDuration],
-    selection: DecodeSelection,
-) -> PipeResult<usize> {
+fn select_frame_by_time(durs: &[FrameDuration], selection: DecodeSelection) -> PipeResult<usize> {
     let mut lcm_den: u128 = 1;
     for d in durs {
         let num = u128::from(d.numerator());
@@ -1641,9 +1749,11 @@ fn select_frame_by_time(
         let g = gcd_u128(num, den);
         let red_den = den / g;
         let lg = gcd_u128(lcm_den, red_den);
-        lcm_den = (lcm_den / lg)
-            .checked_mul(red_den)
-            .ok_or_else(|| at!(PipeError::Op("frame timeline denominator overflow".to_string())))?;
+        lcm_den = (lcm_den / lg).checked_mul(red_den).ok_or_else(|| {
+            at!(PipeError::Op(
+                "frame timeline denominator overflow".to_string()
+            ))
+        })?;
         if lcm_den > u128::from(u32::MAX) {
             return Err(at!(PipeError::Op(
                 "frame timeline common denominator exceeds TimeBase range".to_string()
@@ -1724,7 +1834,11 @@ fn quantize_endpoints_exact_ms(
             .ok_or_else(|| at!(PipeError::Op("timeline denominator overflow".to_string())))?;
         let new_num = acc_num
             .checked_mul(d_den / g)
-            .and_then(|a| d_num.checked_mul(acc_den / g).and_then(|b| a.checked_add(b)))
+            .and_then(|a| {
+                d_num
+                    .checked_mul(acc_den / g)
+                    .and_then(|b| a.checked_add(b))
+            })
             .ok_or_else(|| at!(PipeError::Op("timeline numerator overflow".to_string())))?;
         let rg = gcd(new_num, lcm);
         acc_num = new_num / rg;
@@ -1750,7 +1864,10 @@ fn quantize_endpoints_exact_ms(
                 q_floor
             }
             TimingPolicy::QuantizeEndpoints { max_boundary_error } => {
-                let q_ticks = if rem.checked_mul(2).is_none_or(|two_rem| two_rem >= den_ticks) {
+                let q_ticks = if rem
+                    .checked_mul(2)
+                    .is_none_or(|two_rem| two_rem >= den_ticks)
+                {
                     q_floor
                         .checked_add(1)
                         .ok_or_else(|| at!(PipeError::Op("quantized tick overflow".to_string())))?
@@ -1760,14 +1877,18 @@ fn quantize_endpoints_exact_ms(
                 let lhs = q_ticks
                     .checked_mul(tb_num)
                     .and_then(|v| v.checked_mul(acc_den))
-                    .ok_or_else(|| at!(PipeError::Op("quantization error lhs overflow".to_string())))?;
-                let rhs = acc_num
-                    .checked_mul(tb_den)
-                    .ok_or_else(|| at!(PipeError::Op("quantization error rhs overflow".to_string())))?;
+                    .ok_or_else(|| {
+                        at!(PipeError::Op("quantization error lhs overflow".to_string()))
+                    })?;
+                let rhs = acc_num.checked_mul(tb_den).ok_or_else(|| {
+                    at!(PipeError::Op("quantization error rhs overflow".to_string()))
+                })?;
                 let err_num = lhs.abs_diff(rhs);
-                let err_den = tb_den
-                    .checked_mul(acc_den)
-                    .ok_or_else(|| at!(PipeError::Op("quantization error denom overflow".to_string())))?;
+                let err_den = tb_den.checked_mul(acc_den).ok_or_else(|| {
+                    at!(PipeError::Op(
+                        "quantization error denom overflow".to_string()
+                    ))
+                })?;
                 let m_num = u128::from(max_boundary_error.numerator());
                 let m_den = u128::from(max_boundary_error.denominator());
                 if mul_u128_wide(err_num, m_den) > mul_u128_wide(m_num, err_den) {
@@ -1779,7 +1900,9 @@ fn quantize_endpoints_exact_ms(
                 q_ticks
             }
             _ => {
-                return Err(at!(PipeError::Op("unsupported TimingPolicy variant".to_string())));
+                return Err(at!(PipeError::Op(
+                    "unsupported TimingPolicy variant".to_string()
+                )));
             }
         };
         let delta = u64::try_from(target_ticks.saturating_sub(prev_ticks))
@@ -1878,11 +2001,11 @@ fn decode_encoded_animation(
     Option<ImageFormat>,
 )> {
     let probed = engine.probe(bytes, run).map_err(map_engine_err)?;
-    let fmt = probed
-        .inspection()
-        .envelope
-        .image_format
-        .ok_or_else(|| at!(PipeError::Op("animated input missing image format".to_string())))?;
+    let fmt = probed.inspection().envelope.image_format.ok_or_else(|| {
+        at!(PipeError::Op(
+            "animated input missing image format".to_string()
+        ))
+    })?;
     let mut eff = engine.resolve_run(run).map_err(map_engine_err)?;
     let offers = engine
         .decode_offers(&probed, &DecodeNeeds::primary(), run)
@@ -1896,8 +2019,7 @@ fn decode_encoded_animation(
     eff.admit_workspace(offer.id().as_str(), offer.workspace(), &mut report)
         .map_err(map_engine_err)?;
     let ws_bytes = match offer.workspace() {
-        zencodec::source::NativeBound::Exact(b)
-        | zencodec::source::NativeBound::UpperBound(b) => b,
+        zencodec::source::NativeBound::Exact(b) | zencodec::source::NativeBound::UpperBound(b) => b,
         _ => 0,
     };
     // For GIF decoders whose offer reports NativeBound::Unknown, reserve BOTH the owned
@@ -1920,7 +2042,7 @@ fn decode_encoded_animation(
     } else {
         0
     };
-    let gif_input_copy = if ws_bytes == 0 && fmt == ImageFormat::Gif {
+    let gif_input_copy = if fmt == ImageFormat::Gif {
         bytes.len() as u64
     } else {
         0
@@ -2063,8 +2185,11 @@ fn clone_pixel_view(
     mem.charge(total as u64)?;
     let row_bytes = (w as usize) * bpp;
     let mut raw = Vec::new();
-    raw.try_reserve_exact(total)
-        .map_err(|_| at!(PipeError::LimitExceeded("pixel clone allocation failed".to_string())))?;
+    raw.try_reserve_exact(total).map_err(|_| {
+        at!(PipeError::LimitExceeded(
+            "pixel clone allocation failed".to_string()
+        ))
+    })?;
     for y in 0..h {
         raw.extend_from_slice(&view.row(y)[..row_bytes]);
     }
@@ -2082,7 +2207,8 @@ fn clone_node_value<'io>(
             source_format,
             raw_bytes,
         } => {
-            let sz = (pixels.as_view().row_bytes() as u64).saturating_mul(u64::from(pixels.height()));
+            let sz =
+                (pixels.as_view().row_bytes() as u64).saturating_mul(u64::from(pixels.height()));
             mem.charge(sz)?;
             Ok(NodeValue::Still {
                 pixels: pixels.clone(),
@@ -2132,15 +2258,14 @@ fn materialize_first_still(
 ) -> PipeResult<PixelBuf> {
     match val {
         NodeValue::Still { pixels, .. } => {
-            let sz = (pixels.as_view().row_bytes() as u64)
-                .saturating_mul(u64::from(pixels.height()));
+            let sz =
+                (pixels.as_view().row_bytes() as u64).saturating_mul(u64::from(pixels.height()));
             mem.charge(sz)?;
             Ok(pixels.clone())
         }
         NodeValue::Sequence { frames, .. } => {
             let first = &frames[0].0;
-            let sz = (first.as_view().row_bytes() as u64)
-                .saturating_mul(u64::from(first.height()));
+            let sz = (first.as_view().row_bytes() as u64).saturating_mul(u64::from(first.height()));
             mem.charge(sz)?;
             Ok(first.clone())
         }
@@ -2234,7 +2359,10 @@ fn decode_all_video_frames(
             &[]
         };
         let prog = demux
-            .step(Input::new(offset as u64, slice).with_total_len(total_len), pulse)
+            .step(
+                Input::new(offset as u64, slice).with_total_len(total_len),
+                pulse,
+            )
             .map_err(|e| at!(PipeError::Op(format!("demux step failed: {e}"))))?;
         if prog.consumed > slice.len() {
             return Err(at!(PipeError::Op(
@@ -2283,8 +2411,11 @@ fn decode_all_video_frames(
     let mut dec = dec_factory
         .open(&dec_plan, &eff.resources)
         .map_err(|e| at!(PipeError::Op(format!("video decoder open failed: {e}"))))?;
-    dec.configure(&cfg, pulse)
-        .map_err(|e| at!(PipeError::Op(format!("video decoder configure failed: {e}"))))?;
+    dec.configure(&cfg, pulse).map_err(|e| {
+        at!(PipeError::Op(format!(
+            "video decoder configure failed: {e}"
+        )))
+    })?;
 
     let mut tl = TimelineBridge::prepare(
         track,
@@ -2371,7 +2502,11 @@ fn decode_all_video_frames(
                 Ok(Receive::Progress { .. }) => {}
                 Ok(Receive::NeedInput | Receive::EndOfStream) => break,
                 Ok(_) => {}
-                Err(e) => return Err(at!(PipeError::Op(format!("video decode receive failed: {e}")))),
+                Err(e) => {
+                    return Err(at!(PipeError::Op(format!(
+                        "video decode receive failed: {e}"
+                    ))));
+                }
             }
         }
     }
@@ -2386,7 +2521,11 @@ fn decode_all_video_frames(
             Ok(Receive::Progress { .. }) => {}
             Ok(Receive::EndOfStream | Receive::NeedInput) => break,
             Ok(_) => {}
-            Err(e) => return Err(at!(PipeError::Op(format!("video decode drain failed: {e}")))),
+            Err(e) => {
+                return Err(at!(PipeError::Op(format!(
+                    "video decode drain failed: {e}"
+                ))));
+            }
         }
     }
     tl.finish().map_err(map_engine_err)?;
@@ -2518,7 +2657,9 @@ fn convert_pixel_buf(
     strict_icc: bool,
     limits: &ResourceLimits,
     mem: &mut LiveMemBudget,
+    pulse: &SharedPulse,
 ) -> PipeResult<PixelBuf> {
+    pulse.check().map_err(|r| at!(PipeError::Stopped(r)))?;
     let w = src.width();
     let h = src.height();
     let bpp = dst_fmt.layout.bytes_per_pixel();
@@ -2539,11 +2680,15 @@ fn convert_pixel_buf(
         .map_err(|e| at!(PipeError::Op(format!("color conversion plan failed: {e}"))))?;
     let src_view = src.as_view();
     for y in 0..h {
+        if y & 63 == 0 {
+            pulse.check().map_err(|r| at!(PipeError::Stopped(r)))?;
+        }
         let srow = src_view.row(y);
         let d0 = (y as usize) * dst_stride;
         plan.convert_row(srow, &mut dst_raw[d0..d0 + dst_stride], w)
             .map_err(|e| at!(PipeError::Op(format!("row color conversion failed: {e}"))))?;
     }
+    pulse.check().map_err(|r| at!(PipeError::Stopped(r)))?;
     PixelBuf::from_bytes(dst_raw, w, h, dst_fmt.clone())
         .map_err(|e| at!(PipeError::Op(e.to_string())))
 }
@@ -2576,7 +2721,9 @@ fn exec_color_ingest<'io>(
         ColorIngestMode::KeepTagged => clone_node_value(src, mem),
         ColorIngestMode::Assign => {
             let tgt = target.ok_or_else(|| {
-                at!(PipeError::Op("color_ingest.assign requires target".to_string()))
+                at!(PipeError::Op(
+                    "color_ingest.assign requires target".to_string()
+                ))
             })?;
             map_frames(src, engine, run, limits, mem, |buf, mem| {
                 let new_fmt = PixelFormat::new(buf.format().layout, tgt.clone());
@@ -2589,11 +2736,21 @@ fn exec_color_ingest<'io>(
         }
         ColorIngestMode::Convert => {
             let tgt = target.ok_or_else(|| {
-                at!(PipeError::Op("color_ingest.convert requires target".to_string()))
+                at!(PipeError::Op(
+                    "color_ingest.convert requires target".to_string()
+                ))
             })?;
             map_frames(src, engine, run, limits, mem, |buf, mem| {
                 let new_fmt = PixelFormat::new(buf.format().layout, tgt.clone());
-                convert_pixel_buf(buf, &new_fmt, cs, strict_invalid_icc, limits, mem)
+                convert_pixel_buf(
+                    buf,
+                    &new_fmt,
+                    cs,
+                    strict_invalid_icc,
+                    limits,
+                    mem,
+                    run.pulse(),
+                )
             })
         }
     }
@@ -2609,7 +2766,7 @@ fn exec_color_space<'io>(
     mem: &mut LiveMemBudget,
 ) -> PipeResult<NodeValue<'io>> {
     map_frames(src, engine, run, limits, mem, |buf, mem| {
-        convert_pixel_buf(buf, to, cs, false, limits, mem)
+        convert_pixel_buf(buf, to, cs, false, limits, mem, run.pulse())
     })
 }
 
@@ -2641,7 +2798,7 @@ fn exec_tone_map<'io>(
             }
         };
         let target_fmt = PixelFormat::new(buf.format().layout, target_cs);
-        convert_pixel_buf(buf, &target_fmt, cs, false, limits, mem)
+        convert_pixel_buf(buf, &target_fmt, cs, false, limits, mem, run.pulse())
     })
 }
 
@@ -2714,7 +2871,9 @@ fn exec_geometry<'io>(
     mem: &mut LiveMemBudget,
 ) -> PipeResult<NodeValue<'io>> {
     map_frames(src, engine, run, limits, mem, |buf, mem| match op {
-        GeometryOp::Orient { orientation, .. } => apply_orient(buf, *orientation, limits, mem),
+        GeometryOp::Orient { orientation, .. } => {
+            apply_orient(buf, *orientation, limits, mem, run.pulse())
+        }
         GeometryOp::Crop { rect, .. } => apply_crop(buf, *rect, limits, mem),
         GeometryOp::Resize {
             width,
@@ -2765,8 +2924,7 @@ fn exec_geometry<'io>(
             let (cropped, cropped_owned) = if let Some(crop_rect) = layout.source_crop {
                 (apply_crop(buf, crop_rect, limits, mem)?, true)
             } else {
-                let sz = (buf.as_view().row_bytes() as u64)
-                    .saturating_mul(u64::from(buf.height()));
+                let sz = (buf.as_view().row_bytes() as u64).saturating_mul(u64::from(buf.height()));
                 mem.charge(sz)?;
                 (buf.clone(), true)
             };
@@ -2805,6 +2963,7 @@ fn exec_geometry<'io>(
                     cs,
                     limits,
                     mem,
+                    run.pulse(),
                 )?;
                 drop(resized);
                 mem.release(old_sz);
@@ -2820,7 +2979,15 @@ fn exec_geometry<'io>(
             fill_rgba,
             ..
         } => apply_extend_canvas(
-            buf, *canvas, *offset_x, *offset_y, *fill_rgba, cs, limits, mem,
+            buf,
+            *canvas,
+            *offset_x,
+            *offset_y,
+            *fill_rgba,
+            cs,
+            limits,
+            mem,
+            run.pulse(),
         ),
     })
 }
@@ -2830,7 +2997,9 @@ fn apply_orient(
     orientation: Orientation,
     limits: &ResourceLimits,
     mem: &mut LiveMemBudget,
+    pulse: &SharedPulse,
 ) -> PipeResult<PixelBuf> {
+    pulse.check().map_err(|r| at!(PipeError::Stopped(r)))?;
     let (sw, sh) = (buf.width(), buf.height());
     let bpp = buf.format().layout.bytes_per_pixel();
     if orientation == Orientation::Identity {
@@ -2844,6 +3013,9 @@ fn apply_orient(
     let mut dst = alloc_zeroed_checked(total, limits, mem)?;
     let view = buf.as_view();
     for sy in 0..sh {
+        if sy & 63 == 0 {
+            pulse.check().map_err(|r| at!(PipeError::Stopped(r)))?;
+        }
         let srow = view.row(sy);
         for sx in 0..sw {
             let (dx, dy) = orientation.map_pixel_coordinates((sx, sy), (sw, sh));
@@ -2852,6 +3024,7 @@ fn apply_orient(
             dst[d0..d0 + bpp].copy_from_slice(&srow[s0..s0 + bpp]);
         }
     }
+    pulse.check().map_err(|r| at!(PipeError::Stopped(r)))?;
     PixelBuf::from_bytes(dst, out_size.width, out_size.height, buf.format().clone())
         .map_err(|e| at!(PipeError::Op(e.to_string())))
 }
@@ -2886,8 +3059,11 @@ fn apply_crop(
     mem.charge(total as u64)?;
     let row_bytes = (rect.width as usize) * bpp;
     let mut dst = Vec::new();
-    dst.try_reserve_exact(total)
-        .map_err(|_| at!(PipeError::LimitExceeded("crop buffer allocation failed".to_string())))?;
+    dst.try_reserve_exact(total).map_err(|_| {
+        at!(PipeError::LimitExceeded(
+            "crop buffer allocation failed".to_string()
+        ))
+    })?;
     let view = buf.as_view();
     let sx0 = (rect.x as usize) * bpp;
     for y in rect.y..y_end {
@@ -2924,10 +3100,11 @@ fn apply_resize(
         .format(buf.format().clone())
         .build();
     cfg.linear = linear_light;
-    let raw = buf
-        .as_view()
-        .to_contiguous_bytes()
-        .map_err(|e| at!(PipeError::Op(format!("resize input contiguous failed: {e}"))))?;
+    let raw = buf.as_view().to_contiguous_bytes().map_err(|e| {
+        at!(PipeError::Op(format!(
+            "resize input contiguous failed: {e}"
+        )))
+    })?;
     let out = Resizer::new(&cfg).resize(&raw);
     mem.charge(out.len() as u64)?;
     PixelBuf::from_bytes(out, tw, th, buf.format().clone())
@@ -2944,8 +3121,11 @@ fn make_solid_canvas(
     mem.charge(total as u64)?;
     let px = (size.width as usize) * (size.height as usize);
     let mut raw = Vec::new();
-    raw.try_reserve_exact(total)
-        .map_err(|_| at!(PipeError::LimitExceeded("canvas allocation failed".to_string())))?;
+    raw.try_reserve_exact(total).map_err(|_| {
+        at!(PipeError::LimitExceeded(
+            "canvas allocation failed".to_string()
+        ))
+    })?;
     for _ in 0..px {
         raw.extend_from_slice(&fill_rgba);
     }
@@ -2984,6 +3164,7 @@ fn apply_extend_canvas(
     cs: &ColorServices,
     limits: &ResourceLimits,
     mem: &mut LiveMemBudget,
+    pulse: &SharedPulse,
 ) -> PipeResult<PixelBuf> {
     let orig_fmt = buf.format().clone();
     // Keep existing source samples in their exact original color space and bit depth!
@@ -3021,7 +3202,9 @@ fn apply_extend_canvas(
     let promoted_src = if dst_fmt == orig_fmt {
         None
     } else {
-        Some(convert_pixel_buf(buf, &dst_fmt, cs, false, limits, mem)?)
+        Some(convert_pixel_buf(
+            buf, &dst_fmt, cs, false, limits, mem, pulse,
+        )?)
     };
     let promoted_bytes = promoted_src.as_ref().map_or(0u64, |b| {
         (b.as_view().row_bytes() as u64).saturating_mul(u64::from(b.height()))
@@ -3030,8 +3213,11 @@ fn apply_extend_canvas(
     mem.charge(dst_total as u64)?;
     let px_count = (canvas.width as usize) * (canvas.height as usize);
     let mut raw = Vec::new();
-    raw.try_reserve_exact(dst_total)
-        .map_err(|_| at!(PipeError::LimitExceeded("extend canvas allocation failed".to_string())))?;
+    raw.try_reserve_exact(dst_total).map_err(|_| {
+        at!(PipeError::LimitExceeded(
+            "extend canvas allocation failed".to_string()
+        ))
+    })?;
     for _ in 0..px_count {
         raw.extend_from_slice(&fill_px);
     }
@@ -3142,9 +3328,9 @@ fn exec_filter<'io>(
                     },
                 },
             );
-            let lin_buf = convert_pixel_buf(buf, &linear_fmt, cs, false, limits, mem)?;
-            let lin_size = (lin_buf.as_view().row_bytes() as u64)
-                .saturating_mul(u64::from(lin_buf.height()));
+            let lin_buf = convert_pixel_buf(buf, &linear_fmt, cs, false, limits, mem, run.pulse())?;
+            let lin_size =
+                (lin_buf.as_view().row_bytes() as u64).saturating_mul(u64::from(lin_buf.height()));
             let prepared = recipe
                 .prepare(primaries, white, buf.width(), buf.height(), has_alpha)
                 .map_err(|e| at!(PipeError::Op(format!("filter prepare failed: {e}"))))?;
@@ -3166,9 +3352,15 @@ fn exec_filter<'io>(
             })?;
             dst_f32.resize(src_f32.len(), 0.0f32);
             let mut ctx = zenfilters::FilterContext::new();
+            run.pulse()
+                .check()
+                .map_err(|r| at!(PipeError::Stopped(r)))?;
             prepared
                 .apply_with_pulse(src_f32, &mut dst_f32, &mut ctx, None)
                 .map_err(|e| at!(PipeError::Op(format!("filter execution failed: {e}"))))?;
+            run.pulse()
+                .check()
+                .map_err(|r| at!(PipeError::Stopped(r)))?;
             drop(ctx);
             drop(lin_bytes);
             drop(lin_buf);
@@ -3188,7 +3380,8 @@ fn exec_filter<'io>(
             let filtered_lin =
                 PixelBuf::from_bytes(out_bytes, buf.width(), buf.height(), linear_fmt)
                     .map_err(|e| at!(PipeError::Op(e.to_string())))?;
-            let result = convert_pixel_buf(&filtered_lin, &src_fmt, cs, false, limits, mem)?;
+            let result =
+                convert_pixel_buf(&filtered_lin, &src_fmt, cs, false, limits, mem, run.pulse())?;
             drop(filtered_lin);
             mem.release(f32_bytes);
             Ok(result)
@@ -3208,14 +3401,14 @@ fn exec_composite<'io>(
     mem: &mut LiveMemBudget,
 ) -> PipeResult<NodeValue<'io>> {
     let fg_buf = materialize_first_still(fg_val, engine, run, mem)?;
-    let fg_buf_sz = (fg_buf.as_view().row_bytes() as u64)
-        .saturating_mul(u64::from(fg_buf.height()));
+    let fg_buf_sz =
+        (fg_buf.as_view().row_bytes() as u64).saturating_mul(u64::from(fg_buf.height()));
     let lin_fmt = PixelFormat::RGBAF32_LINEAR;
-    let fg_lin = convert_pixel_buf(&fg_buf, &lin_fmt, cs, false, limits, mem)?;
+    let fg_lin = convert_pixel_buf(&fg_buf, &lin_fmt, cs, false, limits, mem, run.pulse())?;
     drop(fg_buf);
     mem.release(fg_buf_sz);
-    let fg_lin_sz = (fg_lin.as_view().row_bytes() as u64)
-        .saturating_mul(u64::from(fg_lin.height()));
+    let fg_lin_sz =
+        (fg_lin.as_view().row_bytes() as u64).saturating_mul(u64::from(fg_lin.height()));
     let fw = fg_lin.width() as i64;
     let fh = fg_lin.height() as i64;
     let fg_bytes = fg_lin
@@ -3226,15 +3419,18 @@ fn exec_composite<'io>(
 
     let out_val = map_frames(canvas_val, engine, run, limits, mem, |canvas_buf, mem| {
         let orig_fmt = canvas_buf.format().clone();
-        let mut dst_lin = convert_pixel_buf(canvas_buf, &lin_fmt, cs, false, limits, mem)?;
-        let dst_lin_sz = (dst_lin.as_view().row_bytes() as u64)
-            .saturating_mul(u64::from(dst_lin.height()));
+        let mut dst_lin =
+            convert_pixel_buf(canvas_buf, &lin_fmt, cs, false, limits, mem, run.pulse())?;
+        let dst_lin_sz =
+            (dst_lin.as_view().row_bytes() as u64).saturating_mul(u64::from(dst_lin.height()));
         let cw = dst_lin.width() as i64;
         let ch = dst_lin.height() as i64;
         {
             let mut dst_view = dst_lin.as_view_mut();
             let dst_raw = dst_view.as_contiguous_bytes_mut().ok_or_else(|| {
-                at!(PipeError::Op("composite destination not contiguous".to_string()))
+                at!(PipeError::Op(
+                    "composite destination not contiguous".to_string()
+                ))
             })?;
             let dst_f32: &mut [f32] = bytemuck::cast_slice_mut(dst_raw);
 
@@ -3313,7 +3509,8 @@ fn exec_composite<'io>(
                 }
             }
         }
-        let converted = convert_pixel_buf(&dst_lin, &orig_fmt, cs, false, limits, mem)?;
+        let converted =
+            convert_pixel_buf(&dst_lin, &orig_fmt, cs, false, limits, mem, run.pulse())?;
         drop(dst_lin);
         mem.release(dst_lin_sz);
         Ok(converted)

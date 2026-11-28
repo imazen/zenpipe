@@ -140,6 +140,12 @@ pub mod gainmap;
 mod info;
 pub mod intent;
 pub mod inventory;
+#[cfg(any(
+    feature = "iqa-zensim",
+    feature = "iqa-ssimulacra2",
+    feature = "iqa-butteraugli"
+))]
+pub mod iqa;
 mod limits;
 mod macros;
 #[cfg(feature = "media")]
@@ -179,25 +185,25 @@ pub mod zennode_defs;
 
 // Re-exports
 pub use codec_id::CodecId;
-pub use engine::{
-    AlphaPolicy, ChromaPolicy, ChromaSampling, CodecOptions, Coding, ColorTarget, Completion,
-    DecodeNeeds, DecodeOrientation, Effort, Encoded, Engine, EngineError, EngineResult, Failure,
-    FormatPreferences, GainMapAction, GainMapEffect, GainMapEncodePolicy, GainMapFidelity,
-    GainMapRendition, GamutMode, Inspect, Inspection, LoopCount, LoopPolicy, MediaEnvelope,
-    MediaKind, MetadataPolicy as OutputMetadataPolicy, Metric, MetricScorer, MetricTarget,
-    OptionMode, OptionValue, OrientationMode, OutputIntent, PrepareError, PrepareResult,
-    PreparedDecode, ProbeDepth, ProbedInput, PublicationMode, QualityLevel, RejectReason,
-    RouteKind, RouteReport, Run, SelectionEvent, SelectionTrace as RouteTrace, SequencePolicy,
-    Stage, TargetFormat, TimingPolicy, ToneMap, ToneMapMethod,
-    ToneMapPolicy as OutputToneMapPolicy, TrackPolicy, UnspecifiedColor, WorkspacePolicy,
-};
-pub use routing::{Routing, RoutingError, Rule, RuleKey};
 #[cfg(feature = "jpeg")]
 pub use codecs::jpeg::codec_config_for_preset as jpeg_codec_config_for_preset;
 pub use decision::FormatDecision;
 pub use decode::{DecodeOutput, DecodeRequest};
 pub use dispatch::{AnyEncoder, ConfiguredJob, StreamingEncoder};
 pub use encode::{EncodeOutput, EncodeRequest};
+pub use engine::{
+    AIM_SEED_REVISION, AlphaPolicy, ChromaPolicy, ChromaSampling, CodecOptions, Coding,
+    ColorTarget, Completion, DecodeNeeds, DecodeOrientation, Effort, Encoded, Engine, EngineError,
+    EngineResult, Failure, FormatPreferences, GainMapAction, GainMapEffect, GainMapEncodePolicy,
+    GainMapFidelity, GainMapRendition, GamutMode, Inspect, Inspection, LoopCount, LoopPolicy,
+    MediaEnvelope, MediaKind, MetadataPolicy as OutputMetadataPolicy, Metric, MetricScorer,
+    MetricScorerMetadata, MetricTarget, OptionMode, OptionValue, OrientationMode, OutputIntent,
+    PrepareError, PrepareResult, PreparedDecode, PreparedMetricScorer, ProbeDepth, ProbedInput,
+    PublicationMode, QualityLevel, RegisteredMetricInfo, RejectReason, RouteKind, RouteReport, Run,
+    SelectionEvent, SelectionTrace as RouteTrace, SequencePolicy, Stage, TargetFormat,
+    TimingPolicy, ToneMap, ToneMapMethod, ToneMapPolicy as OutputToneMapPolicy, TrackPolicy,
+    UnspecifiedColor, WorkspacePolicy,
+};
 pub use error::{CodecError, Result};
 pub use estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 pub use estimate::{
@@ -216,6 +222,7 @@ pub use picker::MlpFormatPicker;
 pub use picker::OfferPick;
 pub use policy::CodecPolicy;
 pub use quality::{QualityIntent, QualityProfile};
+pub use routing::{Routing, RoutingError, Rule, RuleKey};
 pub use speed::EncodeSpeed;
 // quality_calibration is `pub(crate)` for now — the measured tables/helpers are
 // internal until the public quality-conversion surface is finalized. Reach them

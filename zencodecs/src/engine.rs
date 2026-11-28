@@ -30,8 +30,8 @@ use zencodec::{
     ImageInfo, JobResources, Metadata, MetadataFields, RegistrationId, ResourceLimits, SharedPulse,
 };
 use zenpixels::{
-    AlphaMode, DiffuseWhite, HlgRendering, Nits, Orientation, PeakSource, PixelBuf, PixelFormat,
-    PixelView, Primaries,
+    AlphaMode, BitPacking, ColorSpace, DiffuseWhite, HlgRendering, Nits, Orientation, PeakSource,
+    PixelBuf, PixelFormat, PixelView, Primaries, SampleLayout, SignalRange, Transfer,
 };
 use zenpixels_convert::{
     CmsChoice, ColorServices, ConvertPolicy, OutputPlan, OutputSignaling, RowPlan,
@@ -163,7 +163,25 @@ pub enum Metric {
     ZensimB,
 }
 
+/// Revision token for the one-shot heuristic seed estimate used by [`Coding::AimFor`].
+///
+/// [`Coding::AimFor`] maps a metric target to a single encoder quality seed without running
+/// closed-loop verification. Hosts pinning a revision on `Coding::AimFor` must match this
+/// identifier (or use [`Coding::Verify`] for closed-loop measured convergence).
+pub const AIM_SEED_REVISION: &str = "zencodecs.aim_seed.v1";
+
 impl Metric {
+    /// Canonical lowercase wire token shared across `zencodecs`, `zenpipe`, and `imageflow`.
+    #[must_use]
+    pub const fn as_token(self) -> &'static str {
+        match self {
+            Self::Ssimulacra2 => "ssimulacra2",
+            Self::ButteraugliMax => "butteraugli_max",
+            Self::ZensimA => "zensim_a",
+            Self::ZensimB => "zensim_b",
+        }
+    }
+
     /// Whether higher scalar values indicate better visual fidelity.
     #[must_use]
     pub const fn higher_is_better(self) -> bool {
@@ -173,9 +191,44 @@ impl Metric {
         }
     }
 
-    /// Check whether `observed` satisfies `target`.
+    /// Ideal score for two identical images.
+    #[must_use]
+    pub const fn perfect_score(self) -> f64 {
+        if self.higher_is_better() { 100.0 } else { 0.0 }
+    }
+
+    /// Validate that `value` is finite and lies within the metric's mathematical domain.
+    pub fn validate_target_value(self, value: f32) -> EngineResult<()> {
+        if !value.is_finite() {
+            return Err(at!(EngineError::simple(
+                Stage::Inspect,
+                Failure::InvalidRequest,
+                "metric target value must be finite",
+            )));
+        }
+        let valid = match self {
+            Self::Ssimulacra2 | Self::ZensimA | Self::ZensimB => value <= 100.0,
+            Self::ButteraugliMax => value >= 0.0,
+        };
+        if !valid {
+            return Err(at!(EngineError::simple(
+                Stage::Inspect,
+                Failure::InvalidRequest,
+                "metric target value is outside metric domain",
+            )));
+        }
+        Ok(())
+    }
+
+    /// Check whether `observed` satisfies `target` (f32 compatibility helper).
     #[must_use]
     pub fn satisfies(self, observed: f32, target: f32) -> bool {
+        self.satisfies_f64(f64::from(observed), f64::from(target))
+    }
+
+    /// Check whether native `f64` `observed` satisfies `target` without `f32` rounding drift.
+    #[must_use]
+    pub fn satisfies_f64(self, observed: f64, target: f64) -> bool {
         if !observed.is_finite() || !target.is_finite() {
             return false;
         }
@@ -188,11 +241,15 @@ impl Metric {
 }
 
 /// Validated scalar metric target for calibrated aim or closed-loop verification.
+///
+/// Target thresholds are stored as `f32` on the portable request struct; closed-loop
+/// verification compares native `f64` scorer observations against `f64::from(self.value)`
+/// to prevent narrowing false passes.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MetricTarget {
     /// Metric identifier.
     pub metric: Metric,
-    /// Optional pinned scorer revision string.
+    /// Optional pinned scorer or calibration revision string.
     pub revision: Option<String>,
     /// Target scalar value (finite, within metric domain).
     pub value: f32,
@@ -201,29 +258,27 @@ pub struct MetricTarget {
 impl MetricTarget {
     /// Construct a validated metric target.
     pub fn new(metric: Metric, value: f32) -> EngineResult<Self> {
-        if !value.is_finite() {
-            return Err(at!(EngineError::simple(
-                Stage::Inspect,
-                Failure::InvalidRequest,
-                "metric target value must be finite",
-            )));
-        }
-        let valid = match metric {
-            Metric::Ssimulacra2 | Metric::ZensimA | Metric::ZensimB => value <= 100.0,
-            Metric::ButteraugliMax => value >= 0.0,
-        };
-        if !valid {
-            return Err(at!(EngineError::simple(
-                Stage::Inspect,
-                Failure::InvalidRequest,
-                "metric target value is outside metric domain",
-            )));
-        }
+        metric.validate_target_value(value)?;
         Ok(Self {
             metric,
             revision: None,
             value,
         })
+    }
+
+    /// Re-validate domain and pinned revision consistency (guards struct literal construction).
+    pub fn validate(&self) -> EngineResult<()> {
+        self.metric.validate_target_value(self.value)?;
+        if let Some(ref rev) = self.revision
+            && rev.trim().is_empty()
+        {
+            return Err(at!(EngineError::simple(
+                Stage::Inspect,
+                Failure::InvalidRequest,
+                "metric target revision pin must not be empty",
+            )));
+        }
+        Ok(())
     }
 
     /// Pin an exact scorer revision string.
@@ -234,7 +289,44 @@ impl MetricTarget {
     }
 }
 
-/// Score-only scalar perceptual metric provider for [`Coding::Verify`].
+/// Stable identity metadata for a registered [`MetricScorer`] (portable mirror of `zenpsy-api`'s `MetricId`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MetricScorerMetadata {
+    /// Metric family (e.g. `"zensim"`, `"ssimulacra2"`, `"butteraugli"`).
+    pub family: &'static str,
+    /// Optional variant within the family (e.g. `Some("zensim-a")`).
+    pub variant: Option<&'static str>,
+    /// Reproduced reference specification or model weight provenance (empty when unset).
+    pub reference: String,
+    /// Implementing crate name (`CARGO_PKG_NAME`).
+    pub crate_name: &'static str,
+    /// Implementing crate version (`CARGO_PKG_VERSION`).
+    pub crate_version: &'static str,
+    /// Numeric score definition revision (distinct from crate version).
+    pub score_revision: u32,
+    /// Compute backend label (`"cpu"` or GPU API name).
+    pub backend: &'static str,
+    /// Optional build identifier.
+    pub build: Option<&'static str>,
+    /// Sorted score-affecting configuration key/value pairs.
+    pub config: Vec<(String, String)>,
+}
+
+/// Job-local prepared perceptual metric scorer holding a precomputed reference and reusable
+/// scratch across repeated candidate trials in [`Coding::Verify`].
+///
+/// Strictly score-only; never allocates diagnostic diffmaps.
+pub trait PreparedMetricScorer: Send {
+    /// Score `candidate` (in the parent scorer's `comparison_format()`) against the
+    /// prepared reference, returning the native `f64` scalar score.
+    fn score_candidate_f64(
+        &mut self,
+        candidate: PixelView<'_>,
+        resources: &JobResources,
+    ) -> EngineResult<f64>;
+}
+
+/// Score-only scalar perceptual metric provider for [`Coding::Verify`] and direct comparison.
 ///
 /// Only scalar scores are returned; diffmaps and diagnostic arrays are never produced.
 pub trait MetricScorer: Send + Sync {
@@ -251,6 +343,41 @@ pub trait MetricScorer: Send + Sync {
         candidate: PixelView<'_>,
         resources: &JobResources,
     ) -> EngineResult<f32>;
+
+    /// Score `candidate` against `reference`, returning the native `f64` scalar score.
+    ///
+    /// Default widens [`Self::score`] to `f64` for compatibility with legacy scorers.
+    fn score_f64(
+        &self,
+        reference: PixelView<'_>,
+        candidate: PixelView<'_>,
+        resources: &JobResources,
+    ) -> EngineResult<f64> {
+        self.score(reference, candidate, resources).map(f64::from)
+    }
+
+    /// Optionally prepare `reference` once for repeated candidate scoring during [`Coding::Verify`].
+    ///
+    /// Returning `Ok(None)` falls back to cold per-trial scoring via [`Self::score_f64`].
+    fn prepare_reference(
+        &self,
+        _reference: PixelView<'_>,
+        _resources: &JobResources,
+    ) -> EngineResult<Option<Box<dyn PreparedMetricScorer>>> {
+        Ok(None)
+    }
+
+    /// Conservative upper bound on bytes retained by prepared reference state plus scoring scratch.
+    fn estimated_scratch_bytes(&self, width: u32, height: u32) -> u64 {
+        u64::from(width.max(8))
+            .saturating_mul(u64::from(height.max(8)))
+            .saturating_mul(16)
+    }
+
+    /// Optional structured identity metadata mirroring `zenpsy-api::MetricId`.
+    fn metadata(&self) -> Option<MetricScorerMetadata> {
+        None
+    }
 }
 
 /// Portable encoding fidelity / coding mode.
@@ -269,7 +396,11 @@ pub enum Coding {
         /// Target device pixel ratio (e.g. `1.0`, `2.0`).
         dpr: f32,
     },
-    /// One-shot calibrated aim targeting a scalar perceptual metric (no verification loop).
+    /// One-shot heuristic estimate targeting a scalar perceptual metric (no verification loop).
+    ///
+    /// Uses the pinned clamped seed heuristic (`AIM_SEED_REVISION = "zencodecs.aim_seed.v1"`),
+    /// recording requested metric, target, revision, and estimated quality in [`RouteReport`]
+    /// without measuring the encoded output. Use [`Coding::Verify`] for closed-loop verification.
     AimFor(MetricTarget),
     /// Closed-loop verified still-SDR encode converging on a scalar metric target.
     Verify(MetricTarget),
@@ -948,7 +1079,10 @@ impl OutputIntent {
                         "Lossless conflicts with HDR tone mapping",
                     )));
                 }
-                if matches!(self.chroma, ChromaPolicy::Require(ChromaSampling::Cs420 | ChromaSampling::Cs422)) {
+                if matches!(
+                    self.chroma,
+                    ChromaPolicy::Require(ChromaSampling::Cs420 | ChromaSampling::Cs422)
+                ) {
                     return Err(at!(EngineError::simple(
                         Stage::Inspect,
                         Failure::InvalidRequest,
@@ -956,14 +1090,11 @@ impl OutputIntent {
                     )));
                 }
             }
+            Coding::AimFor(target) => {
+                target.validate()?;
+            }
             Coding::Verify(target) => {
-                if !target.value.is_finite() {
-                    return Err(at!(EngineError::simple(
-                        Stage::Inspect,
-                        Failure::InvalidRequest,
-                        "Verify metric target must be finite",
-                    )));
-                }
+                target.validate()?;
                 if matches!(self.publication, PublicationMode::Incremental) {
                     return Err(at!(EngineError::simple(
                         Stage::Inspect,
@@ -1199,7 +1330,9 @@ pub enum Failure {
     Stopped(StopReason),
     /// Input bitstream or container is structurally malformed.
     InvalidData,
-    /// Verified output failed postcondition or metric convergence checks.
+    /// Closed-loop [`Coding::Verify`] exhausted its attempt budget without meeting the requested metric target.
+    TargetUnmet,
+    /// Verified output failed postcondition or structural readback checks.
     CorruptOutput,
     /// Underlying registered backend returned an error.
     BackendFailure,
@@ -1383,10 +1516,28 @@ pub struct RouteReport {
     pub tone_mapped: bool,
     /// Gain-map disposition.
     pub gain_map: GainMapEffect,
-    /// Final measured scalar metric score when `Coding::Verify` ran.
+    /// Requested metric when `Coding::Verify` ran.
+    pub verified_metric: Option<Metric>,
+    /// Effective scorer revision when `Coding::Verify` ran.
+    pub verified_revision: Option<String>,
+    /// Requested scalar metric target when `Coding::Verify` ran.
+    pub verified_target: Option<f32>,
+    /// Final measured scalar metric score when `Coding::Verify` ran (f32 compatibility field).
     pub verified_score: Option<f32>,
+    /// Final measured native `f64` scalar metric score when `Coding::Verify` ran.
+    pub verified_score_f64: Option<f64>,
+    /// Selected calibrated quality parameter when `Coding::Verify` converged.
+    pub verified_quality: Option<f32>,
     /// Number of verify attempts executed.
     pub verify_attempts: u32,
+    /// Requested metric when one-shot `Coding::AimFor` ran.
+    pub aim_metric: Option<Metric>,
+    /// Requested target threshold when one-shot `Coding::AimFor` ran.
+    pub aim_target: Option<f32>,
+    /// Calibration heuristic revision when `Coding::AimFor` ran.
+    pub aim_revision: Option<String>,
+    /// Heuristic estimated quality selected when `Coding::AimFor` ran (unverified).
+    pub aim_estimated_quality: Option<f32>,
     /// Components admitted with unknown native workspace bounds (non-empty ONLY under explicit best-effort policy).
     pub unknown_workspace_components: Vec<String>,
     /// Structured advisory warnings (e.g. unsupported advisory codec options).
@@ -1770,6 +1921,12 @@ impl<'a> Run<'a> {
     pub const fn workspace_policy(&self) -> WorkspacePolicy {
         self.workspace_policy
     }
+
+    /// Borrow the cooperative stop/progress pulse bound to this run.
+    #[must_use]
+    pub const fn pulse(&self) -> &SharedPulse {
+        &self.pulse
+    }
 }
 
 /// Frozen effective execution state resolved from [`Engine`] + [`Run`].
@@ -1857,9 +2014,7 @@ impl EffectiveRun {
                     return Err(at!(EngineError::simple(
                         Stage::Admit,
                         Failure::PolicyRefusal,
-                        alloc::format!(
-                            "{component} unknown native workspace refused by PolicySet"
-                        ),
+                        alloc::format!("{component} unknown native workspace refused by PolicySet"),
                     )));
                 }
                 match self.workspace_policy {
@@ -1871,7 +2026,9 @@ impl EffectiveRun {
                         ),
                     ))),
                     WorkspacePolicy::BestEffort => {
-                        report.unknown_workspace_components.push(component.to_string());
+                        report
+                            .unknown_workspace_components
+                            .push(component.to_string());
                         self.trace_event(SelectionEvent::UnknownWorkspaceAdmitted {
                             component: component.to_string(),
                         });
@@ -1893,6 +2050,17 @@ impl EffectiveRun {
 struct RegisteredScorer {
     scorer: Arc<dyn MetricScorer>,
     max_attempts: NonZeroU32,
+}
+
+/// Borrowed descriptor for one registered score-only [`MetricScorer`] on an [`Engine`].
+#[derive(Clone, Copy)]
+pub struct RegisteredMetricInfo<'a> {
+    /// Registered metric enum variant.
+    pub metric: Metric,
+    /// Bound score-only scorer implementation.
+    pub scorer: &'a Arc<dyn MetricScorer>,
+    /// Per-job attempt cap enforced for [`Coding::Verify`].
+    pub max_attempts: NonZeroU32,
 }
 
 /// Immutable codec engine holding one [`CodecSet`], routing ceiling, resource ceilings,
@@ -2074,24 +2242,27 @@ impl<'io> PreparedDecode<'io> {
         let decoder = job
             .into_decoder(Cow::Borrowed(self.input.bytes), &preferred)
             .map_err(|e| {
-                at!(EngineError::simple(
+                classify_backend_error(
                     Stage::Execute,
                     Failure::BackendFailure,
                     "decoder construction failed",
+                    e,
+                    &self.effective,
+                    Some(&self.report),
                 )
-                .with_boxed_cause(e)
-                .with_diagnostics(self.report.clone(), self.effective.trace.clone()))
             })?;
         self.effective.check_stop(Stage::Execute)?;
         let decoded = decoder.decode().map_err(|e| {
-            at!(EngineError::simple(
+            classify_backend_error(
                 Stage::Execute,
                 Failure::BackendFailure,
                 "decode execution failed",
+                e,
+                &self.effective,
+                Some(&self.report),
             )
-            .with_boxed_cause(e)
-            .with_diagnostics(self.report.clone(), self.effective.trace.clone()))
         })?;
+        self.effective.check_stop(Stage::Execute)?;
 
         self.report.route = Some(RouteKind::Raster);
         self.report.decoder = Some(self.offer.id.clone());
@@ -2152,6 +2323,27 @@ impl Engine {
     #[must_use]
     pub const fn color_services(&self) -> &ColorServices {
         &self.color_services
+    }
+
+    /// Iterate over all registered score-only [`MetricScorer`] bindings in deterministic [`Metric`] order.
+    pub fn registered_metric_scorers(&self) -> impl Iterator<Item = RegisteredMetricInfo<'_>> {
+        self.scorers
+            .iter()
+            .map(|(&metric, reg)| RegisteredMetricInfo {
+                metric,
+                scorer: &reg.scorer,
+                max_attempts: reg.max_attempts,
+            })
+    }
+
+    /// Look up the registered score-only [`MetricScorer`] binding for `metric`.
+    #[must_use]
+    pub fn metric_scorer(&self, metric: Metric) -> Option<RegisteredMetricInfo<'_>> {
+        self.scorers.get(&metric).map(|reg| RegisteredMetricInfo {
+            metric,
+            scorer: &reg.scorer,
+            max_attempts: reg.max_attempts,
+        })
     }
 
     /// Set the engine's trusted ceiling [`Routing`].
@@ -2221,7 +2413,10 @@ impl Engine {
     /// Resolve and freeze an [`EffectiveRun`] by intersecting `run` under `self`'s ceilings.
     pub fn resolve_run(&self, run: &Run<'_>) -> EngineResult<EffectiveRun> {
         let routing = match run.routing {
-            Some(child) => self.routing.merge(child).map_err(|e| at!(EngineError::from(e)))?,
+            Some(child) => self
+                .routing
+                .merge(child)
+                .map_err(|e| at!(EngineError::from(e)))?,
             None => self.routing.clone(),
         };
 
@@ -2376,12 +2571,14 @@ impl Engine {
             job.set_limits(*eff.resources.limits());
             job.set_pulse(eff.resources.pulse().clone());
             let info = job.probe(bytes).map_err(|e| {
-                at!(EngineError::simple(
+                classify_backend_error(
                     Stage::Inspect,
                     Failure::InvalidData,
                     "decoder header probe failed",
+                    e,
+                    &eff,
+                    None,
                 )
-                .with_boxed_cause(e))
             })?;
             (info, Some(id.clone()))
         } else if !has_named_decoders
@@ -2394,12 +2591,14 @@ impl Engine {
             job.set_limits(*eff.resources.limits());
             job.set_pulse(eff.resources.pulse().clone());
             let info = job.probe(bytes).map_err(|e| {
-                at!(EngineError::simple(
+                classify_backend_error(
                     Stage::Inspect,
                     Failure::InvalidData,
                     "decoder header probe failed",
+                    e,
+                    &eff,
+                    None,
                 )
-                .with_boxed_cause(e))
             })?;
             (info, None)
         } else {
@@ -2491,15 +2690,30 @@ impl Engine {
                 .factories::<ImageDecodeRole>(&format)
                 .map(|entry| (entry.id.clone(), entry)),
         );
+        let env = &src.inspection.envelope;
+        let dec_fmt = decode_pixel_format_from_info(
+            src.inspection.image_info.as_ref(),
+            need.output_format.as_ref(),
+            env.has_alpha,
+        );
         let offers: Vec<DecodeOffer> = ranked
             .into_iter()
-            .map(|(id, entry)| DecodeOffer {
-                engine_id: self.engine_id,
-                id,
-                revision: entry.revision,
-                format,
-                config: Arc::clone(&entry.factory),
-                workspace: NativeBound::Unknown,
+            .map(|(id, entry)| {
+                let workspace = qualified_still_decode_workspace(
+                    entry.factory.as_ref(),
+                    format,
+                    env.width,
+                    env.height,
+                    &dec_fmt,
+                );
+                DecodeOffer {
+                    engine_id: self.engine_id,
+                    id,
+                    revision: entry.revision,
+                    format,
+                    config: Arc::clone(&entry.factory),
+                    workspace,
+                }
             })
             .collect();
         if offers.is_empty() {
@@ -2563,13 +2777,27 @@ impl Engine {
                     .factories::<ImageEncodeRole>(&format)
                     .map(|entry| (entry.id.clone(), entry)),
             );
+            let offer_fmt = if media.has_alpha {
+                PixelFormat::RGBA8_SRGB
+            } else {
+                PixelFormat::RGB8_SRGB
+            };
+            let offer_fidelity = fidelity_for_coding(&intent.coding);
             for (id, entry) in ranked {
+                let workspace = qualified_still_encode_workspace(
+                    entry.factory.config(),
+                    format,
+                    media.width,
+                    media.height,
+                    &offer_fmt,
+                    offer_fidelity,
+                );
                 offers.push(EncodeOffer {
                     id,
                     revision: entry.revision,
                     format,
                     factory: Arc::clone(&entry.factory),
-                    workspace: NativeBound::Unknown,
+                    workspace,
                 });
             }
         }
@@ -2663,13 +2891,26 @@ impl Engine {
         };
         // Rebind config and canonical workspace directly from the validated registry entry so
         // offer identity, decoder config, and workspace bound can never diverge.
+        let env = &src.inspection.envelope;
+        let dec_fmt = decode_pixel_format_from_info(
+            src.inspection.image_info.as_ref(),
+            needs.output_format.as_ref(),
+            env.has_alpha,
+        );
+        let workspace = qualified_still_decode_workspace(
+            entry.factory.as_ref(),
+            offer.format,
+            env.width,
+            env.height,
+            &dec_fmt,
+        );
         let validated_offer = DecodeOffer {
             engine_id: self.engine_id,
             id: entry.id.clone(),
             revision: entry.revision,
             format: offer.format,
             config: Arc::clone(&entry.factory),
-            workspace: NativeBound::Unknown,
+            workspace,
         };
 
         // Refuse multi-frame sequence if caller requested still-only without primary selection.
@@ -2690,9 +2931,11 @@ impl Engine {
             ..Default::default()
         };
         // Admit canonical decoder workspace bound against WorkspacePolicy + PolicySet.
-        if let Err(err) =
-            effective.admit_workspace(validated_offer.id.as_str(), validated_offer.workspace, &mut report)
-        {
+        if let Err(err) = effective.admit_workspace(
+            validated_offer.id.as_str(),
+            validated_offer.workspace,
+            &mut report,
+        ) {
             return Err(PrepareError::Capability {
                 cause: err,
                 lease: src,
@@ -2780,8 +3023,31 @@ impl Engine {
             )));
         }
 
+        // Enforce original still-SDR eligibility for `Coding::Verify` BEFORE any orientation
+        // bake, color conversion, or alpha flattening can erase HDR/unknown/invalid evidence!
+        if matches!(intent.coding, Coding::Verify(_)) {
+            validate_sdr_verify_view(&pixels, "original source")?;
+            validate_sdr_verify_metadata(metadata, "original source")?;
+        }
+
         let offers = self.encode_offers(intent, &envelope, run)?;
         let mut report = RouteReport::default();
+        let mut live_pre_bytes: u64 = 0;
+
+        let check_pre_alloc = |live: &mut u64, add: u64, eff: &EffectiveRun| -> EngineResult<()> {
+            let next = live.saturating_add(add);
+            if let Some(max_mem) = eff.resources.limits().max_memory_bytes
+                && next > max_mem
+            {
+                return Err(at!(EngineError::simple(
+                    Stage::Admit,
+                    Failure::ResourceLimit,
+                    "pre-encode pixel transform allocation exceeds max_memory_bytes",
+                )));
+            }
+            *live = next;
+            Ok(())
+        };
 
         // Bake D4 orientation onto pixels when `OrientationMode::Bake` is requested on
         // non-identity metadata orientation (and reconcile metadata orientation to Identity).
@@ -2790,7 +3056,14 @@ impl Engine {
         let oriented_view: PixelView<'_> = if intent.orientation == OrientationMode::Bake
             && metadata.orientation != Orientation::Identity
         {
-            let b = bake_orientation_pixels(pixels, metadata.orientation)?;
+            let (dw, dh) = metadata
+                .orientation
+                .output_dimensions(pixels.width(), pixels.height());
+            let bake_bytes = u64::from(dw)
+                .saturating_mul(u64::from(dh))
+                .saturating_mul(pixels.format().layout.bytes_per_pixel() as u64);
+            check_pre_alloc(&mut live_pre_bytes, bake_bytes, &eff)?;
+            let b = bake_orientation_pixels(pixels, metadata.orientation, &eff)?;
             effective_meta.orientation = Orientation::Identity;
             baked_buf = Some(b);
             baked_buf.as_ref().expect("just set").as_view()
@@ -2798,18 +3071,115 @@ impl Engine {
             pixels
         };
 
+        let meta_has_color_signal = |m: &Metadata| -> bool {
+            m.icc_profile.as_ref().is_some_and(|b| !b.is_empty())
+                || m.cicp.is_some()
+                || m.content_light_level.is_some()
+                || m.mastering_display.is_some()
+                || m.diffuse_white.is_some()
+        };
+
+        // Resolve authoritative source format (honoring embedded ICC when authoritative) BEFORE
+        // any format-equality shortcut, color conversion, alpha flattening, or PreserveBytes check!
+        let oriented_eff_fmt =
+            effective_format_with_metadata(oriented_view.format(), &effective_meta)?;
+
         // Prepare color conversion if explicit target format requested.
         let converted_buf: Option<PixelBuf>;
-        let encode_view: PixelView<'_> = match &intent.color {
-            ColorTarget::Preserve => oriented_view,
-            ColorTarget::ConvertTo(target_fmt) if target_fmt == oriented_view.format() => {
-                oriented_view
+        let (colored_view, colored_eff_fmt): (PixelView<'_>, PixelFormat) = match &intent.color {
+            ColorTarget::Preserve => (oriented_view, oriented_eff_fmt),
+            ColorTarget::ConvertTo(target_fmt) if *target_fmt == oriented_eff_fmt => {
+                (oriented_view, oriented_eff_fmt)
             }
             ColorTarget::ConvertTo(target_fmt) => {
-                let buf =
-                    convert_pixel_view(oriented_view, target_fmt.clone(), &mut eff, &mut report)?;
+                if intent.metadata.requires_byte_exact_payloads()
+                    && (meta_has_color_signal(&effective_meta)
+                        || *oriented_view.format() != oriented_eff_fmt)
+                {
+                    return Err(at!(EngineError::simple(
+                        Stage::Admit,
+                        Failure::UnsupportedEffect,
+                        "MetadataPolicy::PreserveBytes forbids pixel color conversion that alters or drops embedded color profile metadata",
+                    )));
+                }
+                let conv_bytes = u64::from(oriented_view.width())
+                    .saturating_mul(u64::from(oriented_view.height()))
+                    .saturating_mul(target_fmt.layout.bytes_per_pixel() as u64);
+                check_pre_alloc(&mut live_pre_bytes, conv_bytes, &eff)?;
+                let buf = convert_pixel_view_with_src_format(
+                    oriented_view,
+                    &oriented_eff_fmt,
+                    target_fmt.clone(),
+                    &mut eff,
+                    &mut report,
+                )?;
+                reconcile_converted_metadata(&mut effective_meta, target_fmt);
                 converted_buf = Some(buf);
-                converted_buf.as_ref().expect("just set").as_view()
+                (
+                    converted_buf.as_ref().expect("just set").as_view(),
+                    target_fmt.clone(),
+                )
+            }
+        };
+
+        // Enforce explicit AlphaPolicy (`RequireOpaque` or `FlattenSrgb` in linear light).
+        let flattened_buf: Option<PixelBuf>;
+        let encode_view: PixelView<'_> = match intent.alpha {
+            AlphaPolicy::Preserve => colored_view,
+            AlphaPolicy::RequireOpaque => {
+                if pixel_view_has_translucent_alpha(&colored_view, &eff)? {
+                    return Err(at!(EngineError::simple(
+                        Stage::Admit,
+                        Failure::UnsupportedEffect,
+                        "AlphaPolicy::RequireOpaque refused input with non-opaque alpha",
+                    )));
+                }
+                colored_view
+            }
+            AlphaPolicy::FlattenSrgb(matte) => {
+                if matches!(
+                    colored_eff_fmt.color.alpha(),
+                    AlphaMode::Straight | AlphaMode::Premultiplied
+                ) {
+                    if intent.metadata.requires_byte_exact_payloads()
+                        && (meta_has_color_signal(&effective_meta)
+                            || *colored_view.format() != colored_eff_fmt)
+                    {
+                        return Err(at!(EngineError::simple(
+                            Stage::Admit,
+                            Failure::UnsupportedEffect,
+                            "MetadataPolicy::PreserveBytes forbids AlphaPolicy::FlattenSrgb conversion that alters or drops embedded color profile metadata",
+                        )));
+                    }
+                    let rgba_scratch = if colored_eff_fmt == PixelFormat::RGBA8_SRGB {
+                        0u64
+                    } else {
+                        u64::from(colored_view.width())
+                            .saturating_mul(u64::from(colored_view.height()))
+                            .saturating_mul(4)
+                    };
+                    let flat_bytes = u64::from(colored_view.width())
+                        .saturating_mul(u64::from(colored_view.height()))
+                        .saturating_mul(3);
+                    check_pre_alloc(
+                        &mut live_pre_bytes,
+                        rgba_scratch.saturating_add(flat_bytes),
+                        &eff,
+                    )?;
+                    let b = flatten_alpha_onto_srgb_matte(
+                        colored_view,
+                        &colored_eff_fmt,
+                        matte,
+                        &mut eff,
+                        &mut report,
+                    )?;
+                    live_pre_bytes = live_pre_bytes.saturating_sub(rgba_scratch);
+                    reconcile_converted_metadata(&mut effective_meta, &PixelFormat::RGB8_SRGB);
+                    flattened_buf = Some(b);
+                    flattened_buf.as_ref().expect("just set").as_view()
+                } else {
+                    colored_view
+                }
             }
         };
 
@@ -2820,15 +3190,44 @@ impl Engine {
                 target,
                 encode_view,
                 &effective_meta,
+                live_pre_bytes,
                 &offers,
                 eff,
                 report,
             );
         }
 
-        // Select top admissible offer respecting `WorkspacePolicy`.
+        // Narrow remaining memory budget for ordinary still encode by subtracting live
+        // pre-encode buffers, and re-evaluate workspace bounds for the actual emitted raster
+        // and resolved fidelity configuration.
+        let orig_limits = *eff.resources.limits();
+        let orig_storage = eff.resources.storage().clone();
+        let orig_pulse = eff.resources.pulse().clone();
+        if let Some(max_mem) = orig_limits.max_memory_bytes {
+            let Some(rem) = max_mem.checked_sub(live_pre_bytes) else {
+                return Err(at!(EngineError::simple(
+                    Stage::Admit,
+                    Failure::ResourceLimit,
+                    "pre-encode pixel working set exceeds max_memory_bytes",
+                )));
+            };
+            let mut narrowed = orig_limits;
+            narrowed.max_memory_bytes = Some(rem);
+            eff.resources = JobResources::new(narrowed, orig_storage, orig_pulse);
+        }
+
+        // Select top admissible offer respecting `WorkspacePolicy` for the actual emitted raster.
+        let resolved_fidelity = fidelity_for_coding(&intent.coding);
         let mut selected = None;
-        for offer in offers {
+        for mut offer in offers {
+            offer.workspace = qualified_still_encode_workspace(
+                offer.factory.config(),
+                offer.format,
+                encode_view.width(),
+                encode_view.height(),
+                encode_view.format(),
+                resolved_fidelity,
+            );
             let mut probe_report = report.clone();
             match eff.admit_workspace(offer.id.as_str(), offer.workspace, &mut probe_report) {
                 Ok(()) => {
@@ -2861,7 +3260,7 @@ impl Engine {
         let out = self.run_single_encode(
             &offer,
             intent,
-            encode_view,
+            encode_view.clone(),
             &effective_meta,
             None,
             &mut eff,
@@ -2876,6 +3275,7 @@ impl Engine {
             &mut eff,
             &mut report,
         )?;
+        eff.check_stop(Stage::Verify)?;
 
         report.route = Some(RouteKind::Raster);
         report.output_format = Some(offer.format);
@@ -2963,7 +3363,9 @@ impl Engine {
                     || i.source_color.mastering_display.is_some();
                 match intent.metadata {
                     MetadataPolicy::StripAll => {
-                        has_exif_or_xmp || has_color_or_hdr || i.orientation != Orientation::Identity
+                        has_exif_or_xmp
+                            || has_color_or_hdr
+                            || i.orientation != Orientation::Identity
                     }
                     MetadataPolicy::Web | MetadataPolicy::ColorAndRotation => has_exif_or_xmp,
                     MetadataPolicy::Preserve | MetadataPolicy::PreserveBytes => false,
@@ -3073,6 +3475,21 @@ impl Engine {
             });
         }
 
+        // Standard pixel transcode: validate original still-SDR eligibility for Coding::Verify
+        // BEFORE decoding or converting pixels so HDR/gain-map evidence cannot be lost!
+        if matches!(intent.coding, Coding::Verify(_)) {
+            if probed.inspection.envelope.has_gain_map {
+                return Err(at!(EngineError::simple(
+                    Stage::Admit,
+                    Failure::UnsupportedEffect,
+                    "Coding::Verify refuses HDR gain-map inputs",
+                )));
+            }
+            if let Some(info) = probed.inspection.image_info.as_ref() {
+                validate_sdr_verify_source_color(&info.source_color, "probed source")?;
+            }
+        }
+
         // Standard pixel transcode: decode -> encode_pixels using exact same metadata & orientation.
         let decode_needs = DecodeNeeds {
             output_format: None,
@@ -3121,7 +3538,7 @@ impl Engine {
         metadata: &Metadata,
         quality_override: Option<f32>,
         eff: &mut EffectiveRun,
-        _report: &mut RouteReport,
+        report: &mut RouteReport,
     ) -> EngineResult<EncodeOutput> {
         eff.check_stop(Stage::Execute)?;
         let fidelity = match quality_override {
@@ -3132,7 +3549,24 @@ impl Engine {
                 Coding::QualityProfile { level, dpr } => {
                     Some(Fidelity::codec_quality(level.calibrated_quality(*dpr)))
                 }
-                Coding::AimFor(t) => Some(Fidelity::codec_quality(calibrated_aim_seed(t))),
+                Coding::AimFor(t) => {
+                    t.validate()?;
+                    if let Some(ref expected_rev) = t.revision
+                        && expected_rev != AIM_SEED_REVISION
+                    {
+                        return Err(at!(EngineError::simple(
+                            Stage::Admit,
+                            Failure::UnsupportedEffect,
+                            "Coding::AimFor calibration revision does not match pinned target revision",
+                        )));
+                    }
+                    let est_q = calibrated_aim_seed(t);
+                    report.aim_metric = Some(t.metric);
+                    report.aim_target = Some(t.value);
+                    report.aim_revision = Some(AIM_SEED_REVISION.to_string());
+                    report.aim_estimated_quality = Some(est_q);
+                    Some(Fidelity::codec_quality(est_q))
+                }
                 Coding::Verify(t) => Some(Fidelity::codec_quality(calibrated_aim_seed(t))),
                 Coding::Lossless => Some(Fidelity::Lossless),
                 Coding::LosslessOrKeep => Some(Fidelity::codec_quality(
@@ -3159,22 +3593,27 @@ impl Engine {
         job.set_unfiltered_metadata(filtered_meta);
 
         let encoder = job.into_encoder().map_err(|e| {
-            at!(EngineError::simple(
+            classify_backend_error(
                 Stage::Prepare,
                 Failure::BackendFailure,
                 "encoder instantiation failed",
+                e,
+                eff,
+                Some(report),
             )
-            .with_boxed_cause(e))
         })?;
         eff.check_stop(Stage::Execute)?;
         let encoded = encoder.encode(pixels).map_err(|e| {
-            at!(EngineError::simple(
+            classify_backend_error(
                 Stage::Execute,
                 Failure::BackendFailure,
                 "encode execution failed",
+                e,
+                eff,
+                Some(report),
             )
-            .with_boxed_cause(e))
         })?;
+        eff.check_stop(Stage::Execute)?;
 
         if let Some(max_out) = eff.resources.limits().max_output_bytes
             && (encoded.data().len() as u64) > max_out
@@ -3196,18 +3635,22 @@ impl Engine {
         target: &MetricTarget,
         pixels: PixelView<'_>,
         metadata: &Metadata,
+        live_pre_bytes: u64,
         offers: &[EncodeOffer],
         mut eff: EffectiveRun,
         mut report: RouteReport,
     ) -> EngineResult<Completion<Encoded>> {
-        // Gate Verify to still SDR images in v1 (Decision 5).
-        if pixels.format().color.is_hdr() {
-            return Err(at!(EngineError::simple(
-                Stage::Admit,
-                Failure::UnsupportedEffect,
-                "Coding::Verify is qualified for still SDR images only",
-            )));
-        }
+        const Q_MIN: f32 = 5.0;
+        const Q_MAX: f32 = 100.0;
+        const Q_TOL: f32 = 0.5;
+
+        target.validate()?;
+        eff.check_stop(Stage::Admit)?;
+
+        // 1. Validate emitted SDR interpretation, HDR view signaling, and metadata BEFORE any shortcut.
+        validate_sdr_verify_view(&pixels, "emitted")?;
+        validate_sdr_verify_metadata(metadata, "emitted")?;
+
         let reg = self.scorers.get(&target.metric).ok_or_else(|| {
             at!(EngineError::simple(
                 Stage::Admit,
@@ -3225,97 +3668,790 @@ impl Engine {
             )));
         }
 
-        let offer = offers.first().ok_or_else(|| {
-            at!(EngineError::simple(
-                Stage::Admit,
-                Failure::NoBackend(ImageFormat::Jpeg),
-                "no eligible encoder offer for Verify",
-            ))
-        })?;
-        eff.admit_workspace(offer.id.as_str(), offer.workspace, &mut report)?;
-
-        // Prepare reference raster in scorer's declared comparison format once.
+        // Compute upright reference dimensions upfront before any allocation or readback selection.
         let cmp_fmt = reg.scorer.comparison_format();
-        let ref_buf: Option<PixelBuf>;
-        let ref_view = if *pixels.format() == cmp_fmt {
-            pixels.clone()
+        let needs_upright_bake = intent.orientation == OrientationMode::PreserveStored
+            && metadata.orientation != Orientation::Identity;
+        let (ref_w, ref_h) = if needs_upright_bake {
+            metadata
+                .orientation
+                .output_dimensions(pixels.width(), pixels.height())
         } else {
-            let b = convert_pixel_view(pixels.clone(), cmp_fmt.clone(), &mut eff, &mut report)?;
-            ref_buf = Some(b);
-            ref_buf.as_ref().expect("just set").as_view()
+            (pixels.width(), pixels.height())
         };
+        // Resolve authoritative reference format (honoring embedded ICC profile if authoritative).
+        let ref_src_fmt = effective_format_with_metadata(pixels.format(), metadata)?;
+        validate_sdr_verify_interpretation(&ref_src_fmt, "authoritative reference")?;
 
-        // Deterministic bounded binary search over calibrated quality [5.0, 100.0].
-        let max_attempts = reg.max_attempts.get();
-        let mut lo = 5.0f32;
-        let mut hi = 100.0f32;
-        let mut q = calibrated_aim_seed(target);
-        let mut best_passing: Option<(EncodeOutput, f32)> = None;
+        // 2. Qualify still-SDR encoder across quality-resolved configurations, calibrated quality
+        //    dial endpoints, AND exact bound workspace-admissible readback decoder BEFORE allocating.
+        type SelectedVerifyRoute<'a> = (
+            &'a EncodeOffer,
+            NativeBound<u64>,
+            RegistrationId,
+            Arc<dyn DynDecoderConfig>,
+            NativeBound<u64>,
+        );
+        let mut selected: Option<SelectedVerifyRoute<'_>> = None;
+        let mut last_admit_err: Option<At<EngineError>> = None;
 
-        for attempt in 1..=max_attempts {
-            eff.check_stop(Stage::Verify)?;
-            let encoded = self.run_single_encode(
-                offer,
-                intent,
-                pixels.clone(),
-                metadata,
-                Some(q),
-                &mut eff,
-                &mut report,
-            )?;
-
-            // Decode candidate back through the same Engine + Run routing, policy, and limits.
-            let cand_run = Run::new()
-                .with_pulse(eff.resources.pulse().clone())
-                .with_limits(*eff.resources.limits())
-                .with_storage(eff.resources.storage().clone())
-                .with_routing(&eff.routing)
-                .with_policy_set(eff.policy)
-                .with_color_services(eff.color_services.clone())
-                .with_workspace_policy(eff.workspace_policy);
-            let decoded = self.decode(&DecodeNeeds::still(), encoded.data(), &cand_run)?;
-            let cand_raw = decoded.output.pixels();
-            let cand_buf: Option<PixelBuf>;
-            let cand_view = if *cand_raw.format() == cmp_fmt {
-                cand_raw
+        // Readback decode expects `cmp_fmt` (or native emitted layout if wider); pick the wider
+        // descriptor for upfront decode workspace admission so sample depth is never under-estimated.
+        let upfront_dec_fmt =
+            if pixels.format().layout.bytes_per_pixel() > cmp_fmt.layout.bytes_per_pixel() {
+                pixels.format().clone()
             } else {
-                let b = convert_pixel_view(cand_raw, cmp_fmt.clone(), &mut eff, &mut report)?;
-                cand_buf = Some(b);
-                cand_buf.as_ref().expect("just set").as_view()
+                cmp_fmt.clone()
             };
 
-            let observed = reg
-                .scorer
-                .score(ref_view.clone(), cand_view, &eff.resources)?;
-            eff.trace_event(SelectionEvent::MetricMeasured {
-                metric: target.metric,
-                target: target.value,
-                observed,
-                attempt,
-            });
-            report.verify_attempts = attempt;
+        for candidate in offers {
+            let mut probe_report = report.clone();
+            let mut probe_eff = EffectiveRun {
+                routing: eff.routing.clone(),
+                resources: eff.resources.clone(),
+                color_services: eff.color_services.clone(),
+                workspace_policy: eff.workspace_policy,
+                policy: eff.policy,
+                admitted_workspace_bytes: eff.admitted_workspace_bytes,
+                trace: None,
+            };
+            // Qualify calibrated quality dial across endpoints AND midpoint AND take the worst-case
+            // quality-resolved encoder workspace bound across those configurations.
+            let mut dial_ok = true;
+            let mut worst_enc_ws: Option<NativeBound<u64>> = None;
+            for test_q in [Q_MIN, 50.0, Q_MAX] {
+                if let Err(e) = resolve_effective_verify_setting(candidate.factory.config(), test_q)
+                {
+                    eff.trace_event(SelectionEvent::Rejected {
+                        id: Some(candidate.id.clone()),
+                        reason: RejectReason::MissingCapability,
+                    });
+                    last_admit_err = Some(e);
+                    dial_ok = false;
+                    break;
+                }
+                let q_ws = qualified_still_encode_workspace(
+                    candidate.factory.config(),
+                    candidate.format,
+                    pixels.width(),
+                    pixels.height(),
+                    pixels.format(),
+                    Some(Fidelity::codec_quality(test_q)),
+                );
+                worst_enc_ws = Some(match (worst_enc_ws, q_ws) {
+                    (None, b) => b,
+                    (Some(NativeBound::Unknown), _) | (_, NativeBound::Unknown) => {
+                        NativeBound::Unknown
+                    }
+                    (Some(a), b) => {
+                        let av = match a {
+                            NativeBound::Exact(v) | NativeBound::UpperBound(v) => v,
+                            _ => 0,
+                        };
+                        let bv = match b {
+                            NativeBound::Exact(v) | NativeBound::UpperBound(v) => v,
+                            _ => 0,
+                        };
+                        NativeBound::UpperBound(av.max(bv))
+                    }
+                });
+            }
+            if !dial_ok {
+                if !eff
+                    .routing
+                    .allows_fallback(&RuleKey::ImageEncode(candidate.format))
+                {
+                    return Err(last_admit_err.unwrap());
+                }
+                continue;
+            }
+            let enc_ws = worst_enc_ws.unwrap_or(NativeBound::Unknown);
+            if let Err(e) =
+                probe_eff.admit_workspace(candidate.id.as_str(), enc_ws, &mut probe_report)
+            {
+                eff.trace_event(SelectionEvent::Rejected {
+                    id: Some(candidate.id.clone()),
+                    reason: RejectReason::Limits,
+                });
+                last_admit_err = Some(e);
+                if !eff
+                    .routing
+                    .allows_fallback(&RuleKey::ImageEncode(candidate.format))
+                {
+                    return Err(last_admit_err.unwrap());
+                }
+                continue;
+            }
+            // Verify matching routed readback decoder exists, satisfies WorkspacePolicy,
+            // and bind that exact decoder for every Verify readback probe + decode.
+            if !eff.routing.permits_input_format(candidate.format) {
+                last_admit_err = Some(at!(EngineError::simple(
+                    Stage::Admit,
+                    Failure::PolicyRefusal,
+                    "Coding::Verify readback format is denied by active Routing",
+                )));
+                if !eff
+                    .routing
+                    .allows_fallback(&RuleKey::ImageEncode(candidate.format))
+                {
+                    return Err(last_admit_err.unwrap());
+                }
+                continue;
+            }
+            let dec_key = RuleKey::ImageDecode(candidate.format);
+            let dec_ranked = eff.routing.rank_candidates(
+                &dec_key,
+                self.codecs
+                    .factories::<ImageDecodeRole>(&candidate.format)
+                    .map(|entry| (entry.id.clone(), entry)),
+            );
+            let mut dec_bound: Option<(
+                RegistrationId,
+                Arc<dyn DynDecoderConfig>,
+                NativeBound<u64>,
+            )> = None;
+            let mut dec_admit_err: Option<At<EngineError>> = None;
+            for (dec_id, dec_entry) in dec_ranked {
+                let pb = qualified_still_probe_bound(dec_entry.factory.as_ref(), 0);
+                let db = qualified_still_decode_workspace(
+                    dec_entry.factory.as_ref(),
+                    candidate.format,
+                    ref_w,
+                    ref_h,
+                    &upfront_dec_fmt,
+                );
+                let mut dec_probe_report = probe_report.clone();
+                let mut dec_probe_eff = EffectiveRun {
+                    routing: eff.routing.clone(),
+                    resources: eff.resources.clone(),
+                    color_services: eff.color_services.clone(),
+                    workspace_policy: eff.workspace_policy,
+                    policy: eff.policy,
+                    admitted_workspace_bytes: probe_eff.admitted_workspace_bytes,
+                    trace: None,
+                };
+                match dec_probe_eff
+                    .admit_workspace(dec_id.as_str(), pb, &mut dec_probe_report)
+                    .and_then(|()| {
+                        dec_probe_eff.admit_workspace(dec_id.as_str(), db, &mut dec_probe_report)
+                    }) {
+                    Ok(()) => {
+                        probe_report = dec_probe_report;
+                        dec_bound = Some((dec_id, Arc::clone(&dec_entry.factory), db));
+                        break;
+                    }
+                    Err(e) => {
+                        dec_admit_err = Some(e);
+                        if !eff.routing.allows_fallback(&dec_key) {
+                            break;
+                        }
+                    }
+                }
+            }
+            let Some((dec_id, dec_cfg, db)) = dec_bound else {
+                eff.trace_event(SelectionEvent::Rejected {
+                    id: Some(candidate.id.clone()),
+                    reason: RejectReason::MissingCapability,
+                });
+                last_admit_err = Some(dec_admit_err.unwrap_or_else(|| {
+                    at!(EngineError::simple(
+                        Stage::Admit,
+                        Failure::UnsupportedEffect,
+                        "Coding::Verify requires an eligible workspace-admissible readback decoder",
+                    ))
+                }));
+                if !eff
+                    .routing
+                    .allows_fallback(&RuleKey::ImageEncode(candidate.format))
+                {
+                    return Err(last_admit_err.unwrap());
+                }
+                continue;
+            };
+            report = probe_report;
+            eff.admitted_workspace_bytes = probe_eff.admitted_workspace_bytes;
+            selected = Some((candidate, enc_ws, dec_id, dec_cfg, db));
+            break;
+        }
+        let (offer, enc_ws_bound, readback_dec_id, readback_dec_cfg, readback_dec_bound) = selected
+            .ok_or_else(|| {
+                last_admit_err.unwrap_or_else(|| {
+                    at!(EngineError::simple(
+                        Stage::Admit,
+                        Failure::NoBackend(ImageFormat::Jpeg),
+                        "no eligible encoder/decoder route satisfied Coding::Verify admission",
+                    ))
+                })
+            })?;
 
-            if target.metric.satisfies(observed, target.value) {
-                best_passing = Some((encoded, observed));
-                hi = q;
-            } else {
-                lo = q;
-            }
-            if (hi - lo) < 0.5 {
-                break;
-            }
-            q = 0.5 * (lo + hi);
+        // Refuse opaque-only target formats when non-opaque alpha is present without FlattenSrgb.
+        if matches!(intent.alpha, AlphaPolicy::Preserve)
+            && matches!(offer.format, ImageFormat::Jpeg | ImageFormat::Bmp)
+            && pixel_view_has_translucent_alpha(&pixels, &eff)?
+        {
+            return Err(at!(EngineError::simple(
+                Stage::Admit,
+                Failure::UnsupportedEffect,
+                "opaque-only output format cannot preserve non-opaque alpha without AlphaPolicy::FlattenSrgb",
+            )));
         }
 
-        let (accepted, score) = best_passing.ok_or_else(|| {
-            at!(EngineError::simple(
-                Stage::Verify,
-                Failure::CorruptOutput,
-                "Coding::Verify exhausted attempt cap without meeting metric target",
-            )
-            .with_diagnostics(report.clone(), eff.trace.clone()))
-        })?;
+        // 3. Admit combined peak memory BEFORE allocating upright reference, normalized reference,
+        //    prepared scorer reference, or executing any encode/readback trial.
+        let orig_limits = *eff.resources.limits();
+        let orig_storage = eff.resources.storage().clone();
+        let orig_pulse = eff.resources.pulse().clone();
 
+        let upright_bytes = if needs_upright_bake {
+            u64::from(ref_w)
+                .saturating_mul(u64::from(ref_h))
+                .saturating_mul(pixels.format().layout.bytes_per_pixel() as u64)
+        } else {
+            0
+        };
+        let cmp_bpp = cmp_fmt.layout.bytes_per_pixel() as u64;
+        let cmp_raster_bytes = u64::from(ref_w)
+            .saturating_mul(u64::from(ref_h))
+            .saturating_mul(cmp_bpp);
+        let ref_conv_bytes = if ref_src_fmt == cmp_fmt {
+            0
+        } else {
+            cmp_raster_bytes
+        };
+        let scorer_scratch = reg.scorer.estimated_scratch_bytes(ref_w, ref_h);
+        let enc_ws_bytes = match enc_ws_bound {
+            NativeBound::Exact(b) | NativeBound::UpperBound(b) => b,
+            _ => 0,
+        };
+        let readback_ws_bytes = match readback_dec_bound {
+            NativeBound::Exact(b) | NativeBound::UpperBound(b) => b,
+            _ => 0,
+        };
+        let live_ref_hold = live_pre_bytes
+            .saturating_add(upright_bytes)
+            .saturating_add(ref_conv_bytes);
+        let trial_stage_peak = enc_ws_bytes.max(readback_ws_bytes.saturating_add(cmp_raster_bytes));
+        let base_peak_bytes = live_ref_hold
+            .saturating_add(scorer_scratch)
+            .saturating_add(trial_stage_peak);
+        if let Some(max_mem) = orig_limits.max_memory_bytes
+            && base_peak_bytes > max_mem
+        {
+            return Err(at!(EngineError::simple(
+                Stage::Admit,
+                Failure::ResourceLimit,
+                alloc::format!(
+                    "Coding::Verify combined peak memory ({base_peak_bytes} B) exceeds max_memory_bytes ({max_mem} B)"
+                ),
+            )));
+        }
+
+        let make_remaining_resources =
+            |held_bytes: u64, cap_output: bool| -> EngineResult<JobResources> {
+                let mut limits = orig_limits;
+                if let Some(max_mem) = orig_limits.max_memory_bytes {
+                    let Some(rem) = max_mem.checked_sub(held_bytes) else {
+                        return Err(at!(EngineError::simple(
+                            Stage::Verify,
+                            Failure::ResourceLimit,
+                            "Coding::Verify live working set exceeds max_memory_bytes",
+                        )));
+                    };
+                    limits.max_memory_bytes = Some(rem);
+                    if cap_output {
+                        limits.max_output_bytes =
+                            intersect_opt_u64(orig_limits.max_output_bytes, Some(rem));
+                    }
+                }
+                Ok(JobResources::new(
+                    limits,
+                    orig_storage.clone(),
+                    orig_pulse.clone(),
+                ))
+            };
+
+        // Run upright preparation, warm scorer preparation, and bounded trial search inside an
+        // explicit inner block so `prepared`, `ref_buf`, and `upright_buf` are unconditionally
+        // released BEFORE the final `verify_preserve_bytes_readback` probe executes.
+        let (accepted, score_f64, selected_q) = {
+            // 4. Build upright reference view matching actual emitted presentation orientation
+            //    (with cooperative cancellation polling inside the orientation loop).
+            let upright_buf: Option<PixelBuf>;
+            let upright_ref: PixelView<'_> = if needs_upright_bake {
+                let b = bake_orientation_pixels(pixels.clone(), metadata.orientation, &eff)?;
+                upright_buf = Some(b);
+                upright_buf.as_ref().expect("just set").as_view()
+            } else {
+                pixels.clone()
+            };
+
+            // 5. Normalize reference raster once (honoring authoritative ICC if present) and prepare
+            //    reusable metric reference once with remaining memory budget.
+            let ref_buf: Option<PixelBuf>;
+            let ref_view = if ref_src_fmt == cmp_fmt {
+                upright_ref
+            } else {
+                let b = convert_pixel_view_with_src_format(
+                    upright_ref,
+                    &ref_src_fmt,
+                    cmp_fmt.clone(),
+                    &mut eff,
+                    &mut report,
+                )?;
+                ref_buf = Some(b);
+                ref_buf.as_ref().expect("just set").as_view()
+            };
+            eff.check_stop(Stage::Prepare)?;
+            let prep_resources = make_remaining_resources(live_ref_hold, false)?;
+            let mut prepared = reg
+                .scorer
+                .prepare_reference(ref_view.clone(), &prep_resources)?;
+
+            // 6. Bracket-and-bisect bounded search over calibrated quality [5.0, 100.0],
+            //    keyed by post-quantization effective encoder setting.
+            let max_attempts = reg.max_attempts.get();
+            let target_f64 = f64::from(target.value);
+            let mut attempts: u32 = 0;
+            let mut tested_keys: Vec<u32> = Vec::with_capacity(max_attempts as usize);
+            let mut best_passing: Option<(EncodeOutput, f64, f32)> = None;
+            let mut best_observed: Option<(f64, f32)> = None;
+
+            report.verified_metric = Some(target.metric);
+            report.verified_revision = Some(reg.scorer.revision().to_string());
+            report.verified_target = Some(target.value);
+
+            let mut run_trial = |req_q: f32,
+                                 eff_q: f32,
+                                 attempts: &mut u32,
+                                 best_passing: &mut Option<(EncodeOutput, f64, f32)>,
+                                 best_observed: &mut Option<(f64, f32)>,
+                                 eff: &mut EffectiveRun,
+                                 report: &mut RouteReport|
+             -> EngineResult<bool> {
+                eff.check_stop(Stage::Verify)?;
+                *attempts = attempts.saturating_add(1);
+                let attempt = *attempts;
+
+                // Re-admit the exact trial quality-resolved encoder configuration through
+                // `admit_workspace` so WorkspacePolicy (Strict) AND PolicySet both apply!
+                let retained_bytes = best_passing
+                    .as_ref()
+                    .map_or(0u64, |(b, _, _)| b.data().len() as u64);
+                let pre_enc_live = live_ref_hold
+                    .saturating_add(scorer_scratch)
+                    .saturating_add(retained_bytes);
+                let trial_enc_bound = qualified_still_encode_workspace(
+                    offer.factory.config(),
+                    offer.format,
+                    pixels.width(),
+                    pixels.height(),
+                    pixels.format(),
+                    Some(Fidelity::codec_quality(req_q)),
+                );
+                let trial_enc_resources = make_remaining_resources(pre_enc_live, true)?;
+                let mut trial_enc_check = EffectiveRun {
+                    routing: eff.routing.clone(),
+                    resources: trial_enc_resources.clone(),
+                    color_services: eff.color_services.clone(),
+                    workspace_policy: eff.workspace_policy,
+                    policy: eff.policy,
+                    admitted_workspace_bytes: 0,
+                    trace: None,
+                };
+                trial_enc_check.admit_workspace(offer.id.as_str(), trial_enc_bound, report)?;
+
+                eff.resources = trial_enc_resources;
+                let encoded_res = self.run_single_encode(
+                    offer,
+                    intent,
+                    pixels.clone(),
+                    metadata,
+                    Some(req_q),
+                    eff,
+                    report,
+                );
+                eff.resources =
+                    JobResources::new(orig_limits, orig_storage.clone(), orig_pulse.clone());
+                let encoded = encoded_res?;
+
+                // Admit provider-specific header-probe workspace bound BEFORE calling `probe`.
+                let trial_bytes = encoded.data().len() as u64;
+                let pre_dec_live = pre_enc_live.saturating_add(trial_bytes);
+                let dec_resources = make_remaining_resources(pre_dec_live, false)?;
+                let probe_bound =
+                    qualified_still_probe_bound(readback_dec_cfg.as_ref(), trial_bytes);
+                let mut probe_check_eff = EffectiveRun {
+                    routing: eff.routing.clone(),
+                    resources: dec_resources.clone(),
+                    color_services: eff.color_services.clone(),
+                    workspace_policy: eff.workspace_policy,
+                    policy: eff.policy,
+                    admitted_workspace_bytes: 0,
+                    trace: None,
+                };
+                probe_check_eff.admit_workspace(readback_dec_id.as_str(), probe_bound, report)?;
+
+                // Probe via the exact admitted readback decoder BEFORE decoding.
+                let mut probe_job = readback_dec_cfg.dyn_job();
+                probe_job.set_limits(*dec_resources.limits());
+                probe_job.set_pulse(dec_resources.pulse().clone());
+                let probe_info = probe_job.probe(encoded.data()).map_err(|e| {
+                    classify_backend_error(
+                        Stage::Verify,
+                        Failure::CorruptOutput,
+                        "Coding::Verify readback header probe failed",
+                        e,
+                        eff,
+                        Some(report),
+                    )
+                })?;
+                eff.check_stop(Stage::Verify)?;
+
+                if probe_info.supplements.gain_map {
+                    return Err(at!(EngineError::simple(
+                        Stage::Verify,
+                        Failure::UnsupportedEffect,
+                        "Coding::Verify readback output unexpectedly contains HDR gain map",
+                    )));
+                }
+                if probe_info.is_animation() {
+                    return Err(at!(EngineError::simple(
+                        Stage::Verify,
+                        Failure::CorruptOutput,
+                        "Coding::Verify readback output unexpectedly probed as animation",
+                    )));
+                }
+                let (probe_up_w, probe_up_h) = probe_info
+                    .orientation
+                    .output_dimensions(probe_info.width, probe_info.height);
+                if probe_up_w != ref_w || probe_up_h != ref_h {
+                    return Err(at!(EngineError::simple(
+                        Stage::Verify,
+                        Failure::CorruptOutput,
+                        alloc::format!(
+                            "Coding::Verify readback probed upright dimensions {probe_up_w}x{probe_up_h} do not match reference {ref_w}x{ref_h}",
+                        ),
+                    )));
+                }
+                validate_sdr_verify_source_color(&probe_info.source_color, "readback candidate")?;
+
+                // Re-admit full readback decode workspace using probed sample depth/channels +
+                // requested output format before constructing the decoder.
+                let probed_native_fmt =
+                    decode_pixel_format_from_info(Some(&probe_info), None, probe_info.has_alpha);
+                let probed_dec_fmt = if probed_native_fmt.layout.bytes_per_pixel()
+                    > cmp_fmt.layout.bytes_per_pixel()
+                {
+                    probed_native_fmt
+                } else {
+                    cmp_fmt.clone()
+                };
+                let probed_dec_bound = qualified_still_decode_workspace(
+                    readback_dec_cfg.as_ref(),
+                    offer.format,
+                    probe_info.width,
+                    probe_info.height,
+                    &probed_dec_fmt,
+                );
+                let mut dec_check_eff = EffectiveRun {
+                    routing: eff.routing.clone(),
+                    resources: dec_resources.clone(),
+                    color_services: eff.color_services.clone(),
+                    workspace_policy: eff.workspace_policy,
+                    policy: eff.policy,
+                    admitted_workspace_bytes: 0,
+                    trace: None,
+                };
+                dec_check_eff.admit_workspace(
+                    readback_dec_id.as_str(),
+                    probed_dec_bound,
+                    report,
+                )?;
+
+                // Decode candidate back to upright pixels through the exact admitted readback decoder.
+                let mut dec_job = readback_dec_cfg.dyn_job();
+                dec_job.set_limits(*dec_resources.limits());
+                dec_job.set_pulse(dec_resources.pulse().clone());
+                dec_job.set_orientation(zencodec::OrientationHint::Correct);
+                let preferred = [cmp_fmt.clone()];
+                let decoder = dec_job
+                    .into_decoder(Cow::Borrowed(encoded.data()), &preferred)
+                    .map_err(|e| {
+                        classify_backend_error(
+                            Stage::Verify,
+                            Failure::BackendFailure,
+                            "Coding::Verify readback decoder construction failed",
+                            e,
+                            eff,
+                            Some(report),
+                        )
+                    })?;
+                eff.check_stop(Stage::Verify)?;
+                let decoded = decoder.decode().map_err(|e| {
+                    classify_backend_error(
+                        Stage::Verify,
+                        Failure::BackendFailure,
+                        "Coding::Verify readback decode execution failed",
+                        e,
+                        eff,
+                        Some(report),
+                    )
+                })?;
+                eff.check_stop(Stage::Verify)?;
+                let cand_raw = decoded.pixels();
+
+                // Verify upright dimensions, view HDR signaling, and SDR interpretation BEFORE shortcut.
+                if cand_raw.width() != ref_w || cand_raw.height() != ref_h {
+                    return Err(at!(EngineError::simple(
+                        Stage::Verify,
+                        Failure::CorruptOutput,
+                        alloc::format!(
+                            "Coding::Verify readback upright dimensions {}x{} do not match reference {}x{}",
+                            cand_raw.width(),
+                            cand_raw.height(),
+                            ref_w,
+                            ref_h,
+                        ),
+                    )));
+                }
+                validate_sdr_verify_view(&cand_raw, "decoded candidate")?;
+                let cand_src_fmt = effective_format_with_source_color(
+                    cand_raw.format(),
+                    &probe_info.source_color,
+                )?;
+                validate_sdr_verify_interpretation(&cand_src_fmt, "authoritative candidate")?;
+
+                let cand_raw_bytes =
+                    (cand_raw.row_bytes() as u64).saturating_mul(u64::from(cand_raw.height()));
+                let cand_conv_bytes = if cand_src_fmt == cmp_fmt {
+                    0
+                } else {
+                    cmp_raster_bytes
+                };
+                if let Some(max_mem) = orig_limits.max_memory_bytes
+                    && pre_dec_live
+                        .saturating_add(cand_raw_bytes)
+                        .saturating_add(cand_conv_bytes)
+                        > max_mem
+                {
+                    return Err(at!(EngineError::simple(
+                        Stage::Verify,
+                        Failure::ResourceLimit,
+                        "Coding::Verify decoded candidate conversion exceeds max_memory_bytes",
+                    )));
+                }
+
+                let cand_buf: Option<PixelBuf>;
+                let cand_view = if cand_src_fmt == cmp_fmt {
+                    cand_raw
+                } else {
+                    let b = convert_pixel_view_with_src_format(
+                        cand_raw,
+                        &cand_src_fmt,
+                        cmp_fmt.clone(),
+                        eff,
+                        report,
+                    )?;
+                    cand_buf = Some(b);
+                    cand_buf.as_ref().expect("just set").as_view()
+                };
+
+                let score_held = live_ref_hold
+                    .saturating_add(retained_bytes)
+                    .saturating_add(trial_bytes)
+                    .saturating_add(cand_raw_bytes)
+                    .saturating_add(cand_conv_bytes);
+                let score_resources = make_remaining_resources(score_held, false)?;
+
+                let observed = match prepared.as_mut() {
+                    Some(p) => p.score_candidate_f64(cand_view, &score_resources)?,
+                    None => reg
+                        .scorer
+                        .score_f64(ref_view.clone(), cand_view, &score_resources)?,
+                };
+                if !observed.is_finite() {
+                    return Err(at!(EngineError::simple(
+                        Stage::Verify,
+                        Failure::BackendFailure,
+                        "MetricScorer returned non-finite scalar score",
+                    )));
+                }
+
+                eff.trace_event(SelectionEvent::MetricMeasured {
+                    metric: target.metric,
+                    target: target.value,
+                    observed: observed as f32,
+                    attempt,
+                });
+                report.verify_attempts = attempt;
+
+                let better_obs = match best_observed {
+                    None => true,
+                    Some((prev_obs, _)) => match target.metric {
+                        Metric::ButteraugliMax => observed < *prev_obs,
+                        Metric::Ssimulacra2 | Metric::ZensimA | Metric::ZensimB => {
+                            observed > *prev_obs
+                        }
+                    },
+                };
+                if better_obs {
+                    *best_observed = Some((observed, eff_q));
+                }
+
+                let passed = target.metric.satisfies_f64(observed, target_f64);
+                if passed {
+                    let replace = match best_passing {
+                        None => true,
+                        Some((prev_enc, _, prev_q)) => {
+                            eff_q < *prev_q
+                                || ((eff_q - *prev_q).abs() < 1e-6
+                                    && encoded.data().len() < prev_enc.data().len())
+                        }
+                    };
+                    if replace {
+                        *best_passing = Some((encoded, observed, eff_q));
+                    }
+                }
+                Ok(passed)
+            };
+
+            let mut fail_lo: Option<(f32, u32)> = None;
+            let mut pass_hi: Option<(f32, u32)> = None;
+
+            // Probe 1: calibrated seed.
+            let seed_q = calibrated_aim_seed(target).clamp(Q_MIN, Q_MAX);
+            let (seed_key, seed_eff_q) =
+                resolve_effective_verify_setting(offer.factory.config(), seed_q)?;
+            tested_keys.push(seed_key);
+            if run_trial(
+                seed_q,
+                seed_eff_q,
+                &mut attempts,
+                &mut best_passing,
+                &mut best_observed,
+                &mut eff,
+                &mut report,
+            )? {
+                pass_hi = Some((seed_q, seed_key));
+            } else {
+                fail_lo = Some((seed_q, seed_key));
+            }
+
+            // Probe 2: endpoint bracketing while budget remains, deduplicated by effective setting.
+            if attempts < max_attempts {
+                if let Some((hi, _)) = pass_hi {
+                    if (hi - Q_MIN) >= Q_TOL {
+                        let (min_key, min_eff_q) =
+                            resolve_effective_verify_setting(offer.factory.config(), Q_MIN)?;
+                        if !tested_keys.contains(&min_key) {
+                            tested_keys.push(min_key);
+                            if run_trial(
+                                Q_MIN,
+                                min_eff_q,
+                                &mut attempts,
+                                &mut best_passing,
+                                &mut best_observed,
+                                &mut eff,
+                                &mut report,
+                            )? {
+                                pass_hi = Some((Q_MIN, min_key));
+                            } else {
+                                fail_lo = Some((Q_MIN, min_key));
+                            }
+                        }
+                    }
+                } else if let Some((lo, _)) = fail_lo
+                    && (Q_MAX - lo) >= Q_TOL
+                {
+                    let (max_key, max_eff_q) =
+                        resolve_effective_verify_setting(offer.factory.config(), Q_MAX)?;
+                    if !tested_keys.contains(&max_key) {
+                        tested_keys.push(max_key);
+                        if run_trial(
+                            Q_MAX,
+                            max_eff_q,
+                            &mut attempts,
+                            &mut best_passing,
+                            &mut best_observed,
+                            &mut eff,
+                            &mut report,
+                        )? {
+                            pass_hi = Some((Q_MAX, max_key));
+                        } else {
+                            fail_lo = Some((Q_MAX, max_key));
+                        }
+                    }
+                }
+            }
+
+            // Probes 3..=max_attempts: bisect observed [fail_lo, pass_hi] bracket without ever
+            // spending a trial on an already-evaluated effective encoder setting.
+            while attempts < max_attempts {
+                let (Some((lo, lo_key)), Some((hi, hi_key))) = (fail_lo, pass_hi) else {
+                    break;
+                };
+                if (hi - lo) < Q_TOL {
+                    break;
+                }
+                let mid = (0.5 * (lo + hi)).clamp(Q_MIN, Q_MAX);
+                let (mid_key, mid_eff_q) =
+                    resolve_effective_verify_setting(offer.factory.config(), mid)?;
+                if mid_key == lo_key {
+                    fail_lo = Some((mid, lo_key));
+                    continue;
+                }
+                if mid_key == hi_key {
+                    pass_hi = Some((mid, hi_key));
+                    continue;
+                }
+                if tested_keys.contains(&mid_key) {
+                    break;
+                }
+                tested_keys.push(mid_key);
+                if run_trial(
+                    mid,
+                    mid_eff_q,
+                    &mut attempts,
+                    &mut best_passing,
+                    &mut best_observed,
+                    &mut eff,
+                    &mut report,
+                )? {
+                    pass_hi = Some((mid, mid_key));
+                } else {
+                    fail_lo = Some((mid, mid_key));
+                }
+            }
+
+            // Check cancellation before committing/returning the selected candidate.
+            eff.check_stop(Stage::Verify)?;
+
+            best_passing.ok_or_else(|| {
+                let obs_note = match best_observed {
+                    Some((obs, q)) => alloc::format!(" (best observed {obs:.4} at q={q:.1})"),
+                    None => alloc::string::String::new(),
+                };
+                at!(EngineError::simple(
+                    Stage::Verify,
+                    Failure::TargetUnmet,
+                    alloc::format!(
+                        "Coding::Verify exhausted {} attempt(s) without meeting {} target {}{}",
+                        attempts,
+                        target.metric.as_token(),
+                        target.value,
+                        obs_note,
+                    ),
+                )
+                .with_diagnostics(report.clone(), eff.trace.clone()))
+            })?
+        };
+        // `prepared`, `ref_buf`, and `upright_buf` are now explicitly dropped!
+
+        let preserve_resources = make_remaining_resources(
+            live_pre_bytes.saturating_add(accepted.data().len() as u64),
+            false,
+        )?;
+        eff.resources = preserve_resources;
         self.verify_preserve_bytes_readback(
             intent,
             offer.format,
@@ -3324,11 +4460,14 @@ impl Engine {
             &mut eff,
             &mut report,
         )?;
+        eff.check_stop(Stage::Verify)?;
 
         report.route = Some(RouteKind::Raster);
         report.output_format = Some(offer.format);
         report.encoder = Some(offer.id.clone());
-        report.verified_score = Some(score);
+        report.verified_score = Some(score_f64 as f32);
+        report.verified_score_f64 = Some(score_f64);
+        report.verified_quality = Some(selected_q);
         eff.trace_event(SelectionEvent::Selected {
             id: offer.id.clone(),
             route: RouteKind::Raster,
@@ -3343,8 +4482,9 @@ impl Engine {
     }
 
     /// Enforce Decision 2 postcondition shared across both ordinary and `Verify` still encode paths:
-    /// selects the readback decoder through the active `Routing`, admits its workspace under `eff`,
-    /// and verifies every requested EXIF/XMP/ICC byte payload survived verbatim.
+    /// selects a decoder with a proven header-probe bound through active `Routing`, binds its exact
+    /// probe execution, and verifies every requested EXIF/XMP/ICC byte payload survived verbatim.
+    #[allow(clippy::too_many_arguments)]
     fn verify_preserve_bytes_readback(
         &self,
         intent: &OutputIntent,
@@ -3366,6 +4506,7 @@ impl Engine {
         if !needs_verify {
             return Ok(());
         }
+        eff.check_stop(Stage::Verify)?;
         if !eff.routing.permits_input_format(format) {
             return Err(at!(EngineError::simple(
                 Stage::Verify,
@@ -3380,25 +4521,49 @@ impl Engine {
                 .factories::<ImageDecodeRole>(&format)
                 .map(|entry| (entry.id.clone(), entry)),
         );
-        let Some((dec_id, dec_entry)) = ranked.into_iter().next() else {
-            return Err(at!(EngineError::simple(
-                Stage::Verify,
-                Failure::UnsupportedEffect,
-                "MetadataPolicy::PreserveBytes requires an eligible routed decoder to verify byte-exact metadata retention",
-            )));
-        };
-        eff.admit_workspace(dec_id.as_str(), NativeBound::Unknown, report)?;
-        let mut probe_job = dec_entry.factory.dyn_job();
+        let mut selected_dec = None;
+        let mut last_err = None;
+        for (dec_id, dec_entry) in ranked {
+            let pb =
+                qualified_still_probe_bound(dec_entry.factory.as_ref(), encoded_bytes.len() as u64);
+            let mut probe_report = report.clone();
+            match eff.admit_workspace(dec_id.as_str(), pb, &mut probe_report) {
+                Ok(()) => {
+                    *report = probe_report;
+                    selected_dec = Some(Arc::clone(&dec_entry.factory));
+                    break;
+                }
+                Err(e) => {
+                    last_err = Some(e);
+                    if !eff.routing.allows_fallback(&key) {
+                        return Err(last_err.unwrap());
+                    }
+                }
+            }
+        }
+        let dec_cfg = selected_dec.ok_or_else(|| {
+            last_err.unwrap_or_else(|| {
+                at!(EngineError::simple(
+                    Stage::Verify,
+                    Failure::UnsupportedEffect,
+                    "MetadataPolicy::PreserveBytes requires an eligible workspace-admissible decoder to verify byte-exact metadata retention",
+                ))
+            })
+        })?;
+        let mut probe_job = dec_cfg.dyn_job();
         probe_job.set_limits(*eff.resources.limits());
         probe_job.set_pulse(eff.resources.pulse().clone());
         let readback = probe_job.probe(encoded_bytes).map_err(|e| {
-            at!(EngineError::simple(
+            classify_backend_error(
                 Stage::Verify,
                 Failure::CorruptOutput,
                 "encoded output failed MetadataPolicy::PreserveBytes readback probe",
+                e,
+                eff,
+                Some(report),
             )
-            .with_boxed_cause(e))
         })?;
+        eff.check_stop(Stage::Verify)?;
         if let Some(expected) = effective_meta.exif.as_deref().filter(|b| !b.is_empty())
             && readback.embedded_metadata.exif.as_deref() != Some(expected)
         {
@@ -3435,13 +4600,16 @@ impl Engine {
 
 /// Convert a [`PixelView`] to `target` using frozen [`ColorServices`] (`CmsChoice::StrictNoIcc`
 /// refuses arbitrary ICC conversions cleanly with [`Failure::MissingCms`]).
-fn convert_pixel_view(
+fn convert_pixel_view_with_src_format(
     src: PixelView<'_>,
+    src_fmt: &PixelFormat,
     target: PixelFormat,
     eff: &mut EffectiveRun,
     report: &mut RouteReport,
 ) -> EngineResult<PixelBuf> {
-    let mut policy = ConvertPolicy::default();
+    let mut policy = ConvertPolicy::default()
+        .with_depth(zenpixels_convert::DepthPolicy::Round)
+        .with_gamut(zenpixels_convert::GamutPolicy::Clip);
     match eff.color_services.cms_choice() {
         CmsChoice::Use(binding) => {
             policy = policy.with_cms(Arc::clone(binding.backend()));
@@ -3456,7 +4624,7 @@ fn convert_pixel_view(
     }
 
     let _output_plan = OutputPlan::build(
-        src.format(),
+        src_fmt,
         &target,
         &policy,
         PeakSource::Declared,
@@ -3476,7 +4644,7 @@ fn convert_pixel_view(
         .with_cause(e))
     })?;
 
-    let row_plan = RowPlan::build(src.format(), &target, &policy, None).map_err(|e| {
+    let row_plan = RowPlan::build(src_fmt, &target, &policy, None).map_err(|e| {
         at!(EngineError::simple(
             Stage::Prepare,
             Failure::UnsupportedEffect,
@@ -3488,12 +4656,20 @@ fn convert_pixel_view(
     let width = src.width();
     let height = src.height();
     let bpp = target.layout.bytes_per_pixel();
-    let stride = (width as usize)
-        .checked_mul(bpp)
-        .ok_or_else(|| at!(EngineError::simple(Stage::Prepare, Failure::ResourceLimit, "stride overflow")))?;
-    let total = stride
-        .checked_mul(height as usize)
-        .ok_or_else(|| at!(EngineError::simple(Stage::Prepare, Failure::ResourceLimit, "buffer size overflow")))?;
+    let stride = (width as usize).checked_mul(bpp).ok_or_else(|| {
+        at!(EngineError::simple(
+            Stage::Prepare,
+            Failure::ResourceLimit,
+            "stride overflow"
+        ))
+    })?;
+    let total = stride.checked_mul(height as usize).ok_or_else(|| {
+        at!(EngineError::simple(
+            Stage::Prepare,
+            Failure::ResourceLimit,
+            "buffer size overflow"
+        ))
+    })?;
 
     let mut dst = vec![0u8; total];
     for y in 0..height {
@@ -3525,7 +4701,9 @@ fn convert_pixel_view(
 fn bake_orientation_pixels(
     view: PixelView<'_>,
     orientation: Orientation,
+    eff: &EffectiveRun,
 ) -> EngineResult<PixelBuf> {
+    eff.check_stop(Stage::Execute)?;
     let (sw, sh) = (view.width(), view.height());
     let (dw, dh) = orientation.output_dimensions(sw, sh);
     let bpp = view.format().layout.bytes_per_pixel();
@@ -3553,6 +4731,9 @@ fn bake_orientation_pixels(
     })?;
     dst.resize(total, 0u8);
     for sy in 0..sh {
+        if sy & 63 == 0 {
+            eff.check_stop(Stage::Execute)?;
+        }
         let srow = view.row(sy);
         for sx in 0..sw {
             let (dx, dy) = orientation.map_pixel_coordinates((sx, sy), (sw, sh));
@@ -3561,6 +4742,7 @@ fn bake_orientation_pixels(
             dst[d0..d0 + bpp].copy_from_slice(&srow[s0..s0 + bpp]);
         }
     }
+    eff.check_stop(Stage::Execute)?;
     PixelBuf::from_bytes(dst, dw, dh, view.format().clone()).map_err(|e| {
         at!(EngineError::simple(
             Stage::Execute,
@@ -3577,6 +4759,948 @@ fn calibrated_aim_seed(target: &MetricTarget) -> f32 {
         Metric::ZensimA | Metric::ZensimB => target.value.clamp(10.0, 99.0),
         Metric::ButteraugliMax => (100.0 - target.value * 12.0).clamp(15.0, 98.0),
     }
+}
+
+/// Validate both [`PixelView::hdr`] sideband HDR signaling and [`PixelFormat`] SDR eligibility.
+fn validate_sdr_verify_view(view: &PixelView<'_>, role: &str) -> EngineResult<()> {
+    if !view.hdr().is_empty() {
+        return Err(at!(EngineError::simple(
+            Stage::Admit,
+            Failure::UnsupportedEffect,
+            alloc::format!("Coding::Verify refuses PixelView HDR metadata on {role}"),
+        )));
+    }
+    validate_sdr_verify_interpretation(view.format(), role)
+}
+
+/// Parse an optional ICC v4.4 `cicp` tag directly from structurally validated ICC bytes
+/// (works in both `cms` and `no_std` builds without relying on external CMS parsing).
+fn parse_icc_embedded_cicp(icc: &[u8]) -> Option<(u8, u8, u8, bool)> {
+    if icc.len() < 132 {
+        return None;
+    }
+    let declared_size = u32::from_be_bytes([icc[0], icc[1], icc[2], icc[3]]) as usize;
+    let limit = declared_size.min(icc.len());
+    let tag_count = u32::from_be_bytes([icc[128], icc[129], icc[130], icc[131]]) as usize;
+    let table_end = tag_count.checked_mul(12)?.checked_add(132)?;
+    if table_end > limit {
+        return None;
+    }
+    for i in 0..tag_count {
+        let base = 132 + i * 12;
+        if &icc[base..base + 4] != b"cicp" {
+            continue;
+        }
+        let off = u32::from_be_bytes([icc[base + 4], icc[base + 5], icc[base + 6], icc[base + 7]])
+            as usize;
+        let len = u32::from_be_bytes([icc[base + 8], icc[base + 9], icc[base + 10], icc[base + 11]])
+            as usize;
+        if len >= 12
+            && off >= table_end
+            && off.checked_add(len).is_some_and(|end| end <= limit)
+            && &icc[off..off + 4] == b"cicp"
+        {
+            return Some((
+                icc[off + 8],
+                icc[off + 9],
+                icc[off + 10],
+                icc[off + 11] != 0,
+            ));
+        }
+    }
+    None
+}
+
+/// Structurally validate ICC profile bytes and verify they describe a full-range RGB/Gray SDR space.
+fn validate_sdr_icc_bytes(icc: &[u8], role: &str) -> EngineResult<()> {
+    if let Err(e) = zenpixels::validate_icc_structure(icc) {
+        return Err(at!(EngineError::simple(
+            Stage::Admit,
+            Failure::InvalidData,
+            alloc::format!(
+                "Coding::Verify refuses structurally invalid ICC profile on {role}: {e}"
+            ),
+        )));
+    }
+    match zenpixels::IccColorSpace::from_icc(icc) {
+        Some(zenpixels::IccColorSpace::Rgb | zenpixels::IccColorSpace::Gray) => {}
+        Some(_) => {
+            return Err(at!(EngineError::simple(
+                Stage::Admit,
+                Failure::UnsupportedEffect,
+                alloc::format!("Coding::Verify refuses non-RGB/Gray ICC profile on {role}"),
+            )));
+        }
+        None => {
+            return Err(at!(EngineError::simple(
+                Stage::Admit,
+                Failure::InvalidData,
+                alloc::format!(
+                    "Coding::Verify refuses unrecognized ICC profile color space on {role}"
+                ),
+            )));
+        }
+    }
+    // Check embedded ICC v4.4 `cicp` tag directly in ALL feature builds (including without `cms`).
+    if let Some((_primaries, tf, _matrix, full_range)) = parse_icc_embedded_cicp(icc) {
+        if tf == 16 || tf == 18 {
+            return Err(at!(EngineError::simple(
+                Stage::Admit,
+                Failure::UnsupportedEffect,
+                alloc::format!(
+                    "Coding::Verify refuses HDR ICC embedded CICP transfer {tf} on {role}"
+                ),
+            )));
+        }
+        if tf == 8 || tf == 2 || tf == 0 {
+            return Err(at!(EngineError::simple(
+                Stage::Admit,
+                Failure::UnsupportedEffect,
+                alloc::format!(
+                    "Coding::Verify refuses ambiguous/linear/unspecified ICC CICP transfer {tf} on {role}"
+                ),
+            )));
+        }
+        if !full_range {
+            return Err(at!(EngineError::simple(
+                Stage::Admit,
+                Failure::UnsupportedEffect,
+                alloc::format!("Coding::Verify requires full-range SDR ICC CICP on {role}"),
+            )));
+        }
+    }
+    #[cfg(not(feature = "cms"))]
+    {
+        return Err(at!(EngineError::simple(
+            Stage::Admit,
+            Failure::MissingCms,
+            alloc::format!(
+                "Coding::Verify requires the cms feature to validate and transform embedded ICC profiles on {role}"
+            ),
+        )));
+    }
+    #[cfg(feature = "cms")]
+    {
+        let profile = moxcms::ColorProfile::new_from_slice(icc).map_err(|e| {
+            at!(EngineError::simple(
+                Stage::Admit,
+                Failure::InvalidData,
+                alloc::format!("Coding::Verify refuses malformed ICC profile on {role}: {e:?}"),
+            ))
+        })?;
+        match profile.color_space {
+            moxcms::DataColorSpace::Rgb | moxcms::DataColorSpace::Gray => {}
+            other => {
+                return Err(at!(EngineError::simple(
+                    Stage::Admit,
+                    Failure::UnsupportedEffect,
+                    alloc::format!(
+                        "Coding::Verify refuses non-RGB/Gray ICC data space {other:?} on {role}"
+                    ),
+                )));
+            }
+        }
+        if let Some(cicp) = &profile.cicp {
+            let tf = cicp.transfer_characteristics as u8;
+            if tf == 16 || tf == 18 {
+                return Err(at!(EngineError::simple(
+                    Stage::Admit,
+                    Failure::UnsupportedEffect,
+                    alloc::format!(
+                        "Coding::Verify refuses HDR ICC embedded CICP transfer {tf} on {role}"
+                    ),
+                )));
+            }
+            if tf == 8 || tf == 2 || tf == 0 {
+                return Err(at!(EngineError::simple(
+                    Stage::Admit,
+                    Failure::UnsupportedEffect,
+                    alloc::format!(
+                        "Coding::Verify refuses ambiguous/linear/unspecified ICC CICP transfer {tf} on {role}"
+                    ),
+                )));
+            }
+            if !cicp.full_range {
+                return Err(at!(EngineError::simple(
+                    Stage::Admit,
+                    Failure::UnsupportedEffect,
+                    alloc::format!("Coding::Verify requires full-range SDR ICC CICP on {role}"),
+                )));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Validate that `fmt` carries a known, full-packed, full-range SDR color interpretation
+/// before allowing any `Coding::Verify` format-equality shortcut or conversion.
+fn validate_sdr_verify_interpretation(fmt: &PixelFormat, role: &str) -> EngineResult<()> {
+    if fmt.layout.packing != BitPacking::Full {
+        return Err(at!(EngineError::simple(
+            Stage::Admit,
+            Failure::UnsupportedEffect,
+            alloc::format!("Coding::Verify {role} must use full-packed pixel layout"),
+        )));
+    }
+    if fmt.color.is_hdr() {
+        return Err(at!(EngineError::simple(
+            Stage::Admit,
+            Failure::UnsupportedEffect,
+            alloc::format!("Coding::Verify is qualified for still SDR images only ({role} is HDR)"),
+        )));
+    }
+    match &fmt.color {
+        ColorSpace::Rgb {
+            primaries,
+            transfer,
+            range,
+            alpha,
+            white,
+        } => {
+            if *primaries == zenpixels::Primaries::Unknown {
+                return Err(at!(EngineError::simple(
+                    Stage::Admit,
+                    Failure::UnknownInterpretation,
+                    alloc::format!("Coding::Verify refuses unknown RGB primaries on {role}"),
+                )));
+            }
+            if *transfer == Transfer::Unknown {
+                return Err(at!(EngineError::simple(
+                    Stage::Admit,
+                    Failure::UnknownInterpretation,
+                    alloc::format!("Coding::Verify refuses unknown transfer on {role}"),
+                )));
+            }
+            if matches!(transfer, Transfer::Pq | Transfer::Hlg(_)) {
+                return Err(at!(EngineError::simple(
+                    Stage::Admit,
+                    Failure::UnsupportedEffect,
+                    alloc::format!("Coding::Verify refuses HDR transfer on SDR {role}"),
+                )));
+            }
+            if *range != SignalRange::Full {
+                return Err(at!(EngineError::simple(
+                    Stage::Admit,
+                    Failure::UnsupportedEffect,
+                    alloc::format!("Coding::Verify requires full-range SDR pixels on {role}"),
+                )));
+            }
+            if white.is_some() {
+                return Err(at!(EngineError::simple(
+                    Stage::Admit,
+                    Failure::UnsupportedEffect,
+                    alloc::format!("Coding::Verify refuses HDR DiffuseWhite anchor on SDR {role}"),
+                )));
+            }
+            if *alpha == AlphaMode::Premultiplied {
+                return Err(at!(EngineError::simple(
+                    Stage::Admit,
+                    Failure::UnsupportedEffect,
+                    alloc::format!(
+                        "Coding::Verify requires straight/opaque alpha (or AlphaPolicy::FlattenSrgb) on {role}"
+                    ),
+                )));
+            }
+            Ok(())
+        }
+        ColorSpace::Gray {
+            transfer,
+            range,
+            alpha,
+            white,
+        } => {
+            if *transfer == Transfer::Unknown {
+                return Err(at!(EngineError::simple(
+                    Stage::Admit,
+                    Failure::UnknownInterpretation,
+                    alloc::format!("Coding::Verify refuses unknown grayscale transfer on {role}"),
+                )));
+            }
+            if matches!(transfer, Transfer::Pq | Transfer::Hlg(_))
+                || *range != SignalRange::Full
+                || white.is_some()
+                || *alpha == AlphaMode::Premultiplied
+            {
+                return Err(at!(EngineError::simple(
+                    Stage::Admit,
+                    Failure::UnsupportedEffect,
+                    alloc::format!(
+                        "Coding::Verify refuses unsupported grayscale SDR interpretation on {role}"
+                    ),
+                )));
+            }
+            Ok(())
+        }
+        ColorSpace::Icc {
+            profile,
+            color_channels,
+            alpha,
+            ..
+        } => {
+            if !matches!(*color_channels, 1 | 3) {
+                return Err(at!(EngineError::simple(
+                    Stage::Admit,
+                    Failure::UnsupportedEffect,
+                    alloc::format!(
+                        "Coding::Verify refuses {color_channels}-channel ICC color space on {role}"
+                    ),
+                )));
+            }
+            if *alpha == AlphaMode::Premultiplied {
+                return Err(at!(EngineError::simple(
+                    Stage::Admit,
+                    Failure::UnsupportedEffect,
+                    alloc::format!("Coding::Verify refuses premultiplied ICC alpha on {role}"),
+                )));
+            }
+            validate_sdr_icc_bytes(profile, role)
+        }
+        _ => Err(at!(EngineError::simple(
+            Stage::Admit,
+            Failure::UnsupportedEffect,
+            alloc::format!(
+                "Coding::Verify requires RGB, Gray, or SDR ICC interpretation on {role}"
+            ),
+        ))),
+    }
+}
+
+/// Returns `true` if `view` has meaningful alpha (`Straight` or `Premultiplied`) AND
+/// at least one pixel has a non-opaque alpha value.
+fn pixel_view_has_translucent_alpha(
+    view: &PixelView<'_>,
+    eff: &EffectiveRun,
+) -> EngineResult<bool> {
+    let fmt = view.format();
+    if !matches!(
+        fmt.color.alpha(),
+        AlphaMode::Straight | AlphaMode::Premultiplied
+    ) {
+        return Ok(false);
+    }
+    let (w, h) = (view.width() as usize, view.height());
+    match fmt.layout {
+        SampleLayout::RGBA8 | SampleLayout::BGRA8 => {
+            for y in 0..h {
+                if y & 63 == 0 {
+                    eff.check_stop(Stage::Admit)?;
+                }
+                let row = view.row(y);
+                for px in row[..w * 4].as_chunks::<4>().0 {
+                    if px[3] != 255 {
+                        return Ok(true);
+                    }
+                }
+            }
+            Ok(false)
+        }
+        SampleLayout::GRAYA8 => {
+            for y in 0..h {
+                if y & 63 == 0 {
+                    eff.check_stop(Stage::Admit)?;
+                }
+                let row = view.row(y);
+                for px in row[..w * 2].as_chunks::<2>().0 {
+                    if px[1] != 255 {
+                        return Ok(true);
+                    }
+                }
+            }
+            Ok(false)
+        }
+        SampleLayout::RGBA16 => {
+            for y in 0..h {
+                if y & 63 == 0 {
+                    eff.check_stop(Stage::Admit)?;
+                }
+                let row = view.row(y);
+                for px in row[..w * 8].as_chunks::<8>().0 {
+                    if u16::from_ne_bytes([px[6], px[7]]) != u16::MAX {
+                        return Ok(true);
+                    }
+                }
+            }
+            Ok(false)
+        }
+        SampleLayout::RGBAF32 => {
+            for y in 0..h {
+                if y & 63 == 0 {
+                    eff.check_stop(Stage::Admit)?;
+                }
+                let row = view.row(y);
+                for px in row[..w * 16].as_chunks::<16>().0 {
+                    let a = f32::from_ne_bytes([px[12], px[13], px[14], px[15]]);
+                    if !a.is_finite() || a.to_bits() != 1.0_f32.to_bits() {
+                        return Ok(true);
+                    }
+                }
+            }
+            Ok(false)
+        }
+        _ => Ok(true),
+    }
+}
+
+/// Composite an alpha-bearing SDR view (honoring its resolved authoritative `src_fmt`) onto an
+/// sRGB matte color in linear light, emitting opaque [`PixelFormat::RGB8_SRGB`].
+fn flatten_alpha_onto_srgb_matte(
+    src: PixelView<'_>,
+    src_fmt: &PixelFormat,
+    matte: [u8; 3],
+    eff: &mut EffectiveRun,
+    report: &mut RouteReport,
+) -> EngineResult<PixelBuf> {
+    let rgba_buf: Option<PixelBuf>;
+    let rgba_view = if *src_fmt == PixelFormat::RGBA8_SRGB {
+        src
+    } else {
+        let b =
+            convert_pixel_view_with_src_format(src, src_fmt, PixelFormat::RGBA8_SRGB, eff, report)?;
+        rgba_buf = Some(b);
+        rgba_buf.as_ref().expect("just set").as_view()
+    };
+
+    let (w, h) = (rgba_view.width(), rgba_view.height());
+    let stride = (w as usize).checked_mul(3).ok_or_else(|| {
+        at!(EngineError::simple(
+            Stage::Execute,
+            Failure::ResourceLimit,
+            "matte flatten stride overflow",
+        ))
+    })?;
+    let total = stride.checked_mul(h as usize).ok_or_else(|| {
+        at!(EngineError::simple(
+            Stage::Execute,
+            Failure::ResourceLimit,
+            "matte flatten buffer overflow",
+        ))
+    })?;
+    let mut out = Vec::new();
+    out.try_reserve_exact(total).map_err(|_| {
+        at!(EngineError::simple(
+            Stage::Execute,
+            Failure::ResourceLimit,
+            "matte flatten allocation failed",
+        ))
+    })?;
+    out.resize(total, 0u8);
+
+    let bg_lin = [
+        linear_srgb::default::srgb_u8_to_linear(matte[0]),
+        linear_srgb::default::srgb_u8_to_linear(matte[1]),
+        linear_srgb::default::srgb_u8_to_linear(matte[2]),
+    ];
+    for y in 0..h {
+        if y & 63 == 0 {
+            eff.check_stop(Stage::Execute)?;
+        }
+        let srow = rgba_view.row(y);
+        let drow = &mut out[(y as usize) * stride..(y as usize + 1) * stride];
+        for x in 0..(w as usize) {
+            let sp = &srow[x * 4..x * 4 + 4];
+            let dp = &mut drow[x * 3..x * 3 + 3];
+            let a = sp[3];
+            if a == 255 {
+                dp.copy_from_slice(&sp[..3]);
+            } else if a == 0 {
+                dp.copy_from_slice(&matte);
+            } else {
+                let af = f32::from(a) * (1.0 / 255.0);
+                let inv_a = 1.0 - af;
+                for c in 0..3 {
+                    let fg = linear_srgb::default::srgb_u8_to_linear(sp[c]);
+                    let lin = fg * af + bg_lin[c] * inv_a;
+                    dp[c] = linear_srgb::default::linear_to_srgb_u8(lin);
+                }
+            }
+        }
+    }
+
+    PixelBuf::from_bytes(out, w, h, PixelFormat::RGB8_SRGB).map_err(|e| {
+        at!(EngineError::simple(
+            Stage::Execute,
+            Failure::BackendFailure,
+            "flattened PixelBuf validation failed",
+        )
+        .with_cause(e))
+    })
+}
+
+fn active_compute_env() -> zencodec::estimate::ComputeEnvironment {
+    #[cfg(feature = "std")]
+    {
+        zencodec::estimate::ComputeEnvironment::host()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        zencodec::estimate::ComputeEnvironment::conservative()
+    }
+}
+
+/// Derive the expected decoded [`PixelFormat`] from probed [`ImageInfo`] (preserving bit depth
+/// and channel count so 16-bit and wide decode buffers are accurately bounded) and any explicit
+/// caller-requested `output_format`.
+fn decode_pixel_format_from_info(
+    info: Option<&ImageInfo>,
+    requested: Option<&PixelFormat>,
+    has_alpha: bool,
+) -> PixelFormat {
+    if let Some(req) = requested {
+        return req.clone();
+    }
+    let wide = info
+        .and_then(|i| i.source_color.bit_depth)
+        .is_some_and(|b| b > 8);
+    let ch = info.and_then(|i| i.source_color.channel_count);
+    let alpha = has_alpha || info.is_some_and(|i| i.has_alpha);
+    match (wide, ch, alpha) {
+        (true, Some(1), false) => PixelFormat::GRAY16_SRGB,
+        (false, Some(1), false) => PixelFormat::GRAY8_SRGB,
+        (true, _, true) => PixelFormat::RGBA16_SRGB,
+        (true, _, false) => PixelFormat::RGB16_SRGB,
+        (false, _, true) => PixelFormat::RGBA8_SRGB,
+        (false, _, false) => PixelFormat::RGB8_SRGB,
+    }
+}
+
+/// Resolve the [`Fidelity`] that [`Coding`] selects for an ordinary still encode.
+fn fidelity_for_coding(coding: &Coding) -> Option<Fidelity> {
+    match coding {
+        Coding::Auto | Coding::KeepBytes | Coding::ExactJpegRoundTrip => None,
+        Coding::CalibratedQuality(q) => Some(Fidelity::codec_quality(*q)),
+        Coding::QualityProfile { level, dpr } => {
+            Some(Fidelity::codec_quality(level.calibrated_quality(*dpr)))
+        }
+        Coding::AimFor(t) | Coding::Verify(t) => {
+            Some(Fidelity::codec_quality(calibrated_aim_seed(t)))
+        }
+        Coding::Lossless => Some(Fidelity::Lossless),
+        Coding::LosslessOrKeep => Some(Fidelity::codec_quality(
+            QualityLevel::Good.calibrated_quality(1.0),
+        )),
+    }
+}
+
+/// Qualified pure-Rust still decoder workspace bound for the actual decoded [`PixelFormat`]
+/// and active host compute environment.
+///
+/// Only accepts concrete built-in pure-Rust still decoders (verified by `TypeId`) that report
+/// a conservative worst-case `peak_memory_bytes_max()` from `estimate_decode_resources`.
+/// Never promotes p50 `peak_memory_bytes_est()` or uncalibrated fallback multipliers into
+/// `NativeBound::UpperBound`; unqualified / third-party decoders return [`NativeBound::Unknown`],
+/// keeping [`WorkspacePolicy::Strict`] strictly honest.
+fn qualified_still_decode_workspace(
+    config: &dyn DynDecoderConfig,
+    format: ImageFormat,
+    width: u32,
+    height: u32,
+    pixel_format: &PixelFormat,
+) -> NativeBound<u64> {
+    if format == ImageFormat::Gif || !is_qualified_builtin_still_decoder(config) {
+        return NativeBound::Unknown;
+    }
+    let chars = zencodec::estimate::ImageCharacteristics::new(
+        width.max(1),
+        height.max(1),
+        pixel_format.clone(),
+    );
+    let est = config.estimate_decode_resources(&chars, &active_compute_env());
+    let bpp = pixel_format.layout.bytes_per_pixel().max(1) as u64;
+    let frame_bytes = u64::from(width.max(1))
+        .saturating_mul(u64::from(height.max(1)))
+        .saturating_mul(bpp);
+    match est.peak_memory_bytes_max() {
+        Some(peak_max) => NativeBound::UpperBound(peak_max.max(frame_bytes)),
+        None => NativeBound::Unknown,
+    }
+}
+
+/// Provider-specific header-probe workspace upper bound for built-in still decoders whose
+/// `probe()` implementation allocates strictly bounded memory without unbounded decompression.
+///
+/// - `zenjpeg`: JPEG APP/COM markers are uncompressed slices of `encoded_len`, and `probe()` runs
+///   with `PreserveConfig::all()`. Every retained APP/COM segment consumes at least 4 encoded
+///   bytes (`FF <marker> 00 02`), so `extras.segments: Vec<PreservedSegment>` holds at most
+///   `encoded_len / 4` entries. The bound sums:
+///   - `Vec<PreservedSegment>` capacity doubling + transient realloc peak:
+///     `≤ 3 × (encoded_len / 4) × size_of::<PreservedSegment>()`,
+///   - per-segment allocator chunk rounding for tiny non-empty segment payloads:
+///     `≤ (encoded_len / 4) × 32`,
+///   - raw segment payload copies, parser `icc_profile`, reassembled `icc_cache`/`xmp_cache`
+///     (+ transient reassembly buffer), `JpegInfo` clones, and `ImageInfo` `Arc<[u8]>` copies:
+///     `≤ 6 × encoded_len`,
+///   - fixed parser/Huffman/DQT/scanner tables and initial `Vec` minimum capacity (`512 KiB`).
+/// - `zenbitmaps`: fixed BMP header struct (≤ 64 KiB, zero compressed metadata chunks).
+/// - `zenpng` (inflates `iCCP` up to 1 MiB and accumulates decompressed `zTXt`/`iTXt` chunks),
+///   `zenwebp`, `zengif`, `zenavif`, `zenjxl`, and third-party decoders return
+///   [`NativeBound::Unknown`] so [`WorkspacePolicy::Strict`] never admits an unproven probe.
+fn qualified_still_probe_bound(
+    config: &dyn DynDecoderConfig,
+    encoded_len: u64,
+) -> NativeBound<u64> {
+    let any = config.as_any();
+    let _ = (any, encoded_len);
+    #[cfg(feature = "jpeg")]
+    if any.is::<zenjpeg::JpegDecoderConfig>() {
+        let max_segments = encoded_len / 4;
+        let seg_entry = core::mem::size_of::<zenjpeg::decoder::PreservedSegment>() as u64;
+        let segment_table = max_segments.saturating_mul(3).saturating_mul(seg_entry);
+        let segment_alloc_overhead = max_segments.saturating_mul(32);
+        let metadata_copies = encoded_len.saturating_mul(6);
+        return NativeBound::UpperBound(
+            segment_table
+                .saturating_add(segment_alloc_overhead)
+                .saturating_add(metadata_copies)
+                .saturating_add(512 * 1024),
+        );
+    }
+    #[cfg(feature = "bitmaps-bmp")]
+    if any.is::<zenbitmaps::BmpDecoderConfig>() {
+        return NativeBound::UpperBound(64 * 1024);
+    }
+    NativeBound::Unknown
+}
+
+/// Qualified pure-Rust still encoder workspace bound for the actual emitted [`PixelFormat`],
+/// quality/fidelity-resolved concrete encoder configuration, and active host compute environment.
+///
+/// Only accepts concrete built-in pure-Rust encoders (verified by `TypeId`) that report a
+/// conservative worst-case `peak_memory_bytes_max()` from `estimate_encode_resources`.
+/// Never promotes p50 `peak_memory_bytes_est()` or uncalibrated fallback multipliers into
+/// `NativeBound::UpperBound`; unqualified / third-party encoders return [`NativeBound::Unknown`].
+fn qualified_still_encode_workspace(
+    config: &dyn zencodec::encode::DynEncoderConfig,
+    _format: ImageFormat,
+    width: u32,
+    height: u32,
+    pixel_format: &PixelFormat,
+    fidelity: Option<Fidelity>,
+) -> NativeBound<u64> {
+    let chars = zencodec::estimate::ImageCharacteristics::new(
+        width.max(1),
+        height.max(1),
+        pixel_format.clone(),
+    );
+    let compute = active_compute_env();
+    let bpp = pixel_format.layout.bytes_per_pixel().max(1) as u64;
+    let frame_bytes = u64::from(width.max(1))
+        .saturating_mul(u64::from(height.max(1)))
+        .saturating_mul(bpp);
+
+    let est = estimate_qualified_builtin_encoder(config, &chars, &compute, fidelity);
+    match est.and_then(|e| e.peak_memory_bytes_max()) {
+        Some(peak_max) => NativeBound::UpperBound(peak_max.max(frame_bytes)),
+        None => NativeBound::Unknown,
+    }
+}
+
+fn estimate_qualified_builtin_encoder(
+    config: &dyn zencodec::encode::DynEncoderConfig,
+    chars: &zencodec::estimate::ImageCharacteristics,
+    compute: &zencodec::estimate::ComputeEnvironment,
+    fidelity: Option<Fidelity>,
+) -> Option<zencodec::estimate::ResourceEstimate> {
+    use zencodec::encode::EncoderConfig as _;
+    let any = config.as_any();
+    let _ = (any, chars, compute, fidelity);
+    #[cfg(feature = "jpeg")]
+    if let Some(cfg) = any.downcast_ref::<zenjpeg::JpegEncoderConfig>() {
+        let resolved = match fidelity {
+            Some(f) => cfg.clone().with_fidelity(f),
+            None => cfg.clone(),
+        };
+        return Some(resolved.estimate_encode_resources(chars, compute));
+    }
+    #[cfg(feature = "png")]
+    if let Some(cfg) = any.downcast_ref::<zenpng::PngEncoderConfig>() {
+        let resolved = match fidelity {
+            Some(f) => cfg.clone().with_fidelity(f),
+            None => cfg.clone(),
+        };
+        return Some(resolved.estimate_encode_resources(chars, compute));
+    }
+    #[cfg(feature = "webp")]
+    if let Some(cfg) = any.downcast_ref::<zenwebp::zencodec::WebpEncoderConfig>() {
+        let resolved = match fidelity {
+            Some(f) => cfg.clone().with_fidelity(f),
+            None => cfg.clone(),
+        };
+        return Some(resolved.estimate_encode_resources(chars, compute));
+    }
+    #[cfg(feature = "gif")]
+    if let Some(cfg) = any.downcast_ref::<zengif::GifEncoderConfig>() {
+        let resolved = match fidelity {
+            Some(f) => cfg.clone().with_fidelity(f),
+            None => cfg.clone(),
+        };
+        return Some(resolved.estimate_encode_resources(chars, compute));
+    }
+    #[cfg(feature = "avif-encode")]
+    if let Some(cfg) = any.downcast_ref::<zenavif::AvifEncoderConfig>() {
+        let resolved = match fidelity {
+            Some(f) => cfg.clone().with_fidelity(f),
+            None => cfg.clone(),
+        };
+        return Some(resolved.estimate_encode_resources(chars, compute));
+    }
+    #[cfg(feature = "jxl-encode")]
+    if let Some(cfg) = any.downcast_ref::<zenjxl::JxlEncoderConfig>() {
+        let resolved = match fidelity {
+            Some(f) => cfg.clone().with_fidelity(f),
+            None => cfg.clone(),
+        };
+        return Some(resolved.estimate_encode_resources(chars, compute));
+    }
+    #[cfg(feature = "bitmaps-bmp")]
+    if let Some(cfg) = any.downcast_ref::<zenbitmaps::BmpEncoderConfig>() {
+        let resolved = match fidelity {
+            Some(f) => cfg.clone().with_fidelity(f),
+            None => cfg.clone(),
+        };
+        return Some(resolved.estimate_encode_resources(chars, compute));
+    }
+    None
+}
+
+fn is_qualified_builtin_still_decoder(config: &dyn DynDecoderConfig) -> bool {
+    let any = config.as_any();
+    let _ = any;
+    #[cfg(feature = "jpeg")]
+    if any.is::<zenjpeg::JpegDecoderConfig>() {
+        return true;
+    }
+    #[cfg(feature = "png")]
+    if any.is::<zenpng::PngDecoderConfig>() {
+        return true;
+    }
+    #[cfg(feature = "webp")]
+    if any.is::<zenwebp::zencodec::WebpDecoderConfig>() {
+        return true;
+    }
+    #[cfg(feature = "avif-decode")]
+    if any.is::<zenavif::AvifDecoderConfig>() {
+        return true;
+    }
+    #[cfg(feature = "jxl-decode")]
+    if any.is::<zenjxl::JxlDecoderConfig>() {
+        return true;
+    }
+    #[cfg(feature = "bitmaps-bmp")]
+    if any.is::<zenbitmaps::BmpDecoderConfig>() {
+        return true;
+    }
+    false
+}
+
+/// Classify a boxed backend codec error while preserving typed [`StopReason`] (even when
+/// backed by a consumed one-shot stop) and [`zencodec::LimitExceeded`] / `ErrorCategory::Resource`.
+fn classify_backend_error(
+    stage: Stage,
+    default_failure: Failure,
+    msg: &'static str,
+    err: Box<dyn core::error::Error + Send + Sync>,
+    eff: &EffectiveRun,
+    report: Option<&RouteReport>,
+) -> At<EngineError> {
+    use enough::Stop as _;
+    use zencodec::CodecErrorExt;
+    let failure = if let Some(zencodec::ErrorCategory::Stopped(reason)) = err.error_category() {
+        Failure::Stopped(reason)
+    } else if err.limit_exceeded().is_some()
+        || matches!(
+            err.error_category(),
+            Some(zencodec::ErrorCategory::Resource(_))
+        )
+    {
+        Failure::ResourceLimit
+    } else if let Err(reason) = eff.resources.pulse().check() {
+        Failure::Stopped(reason)
+    } else {
+        default_failure
+    };
+    let mut e = EngineError::simple(stage, failure, msg).with_boxed_cause(err);
+    if let Some(r) = report {
+        e = e.with_diagnostics(r.clone(), eff.trace.clone());
+    }
+    at!(e)
+}
+
+/// Validate that [`Metadata`] does not carry HDR mastering/CLL/DiffuseWhite/CICP or invalid/non-SDR
+/// ICC evidence before allowing `Coding::Verify`.
+fn validate_sdr_verify_metadata(meta: &Metadata, role: &str) -> EngineResult<()> {
+    if meta.content_light_level.is_some()
+        || meta.mastering_display.is_some()
+        || meta.diffuse_white.is_some()
+    {
+        return Err(at!(EngineError::simple(
+            Stage::Admit,
+            Failure::UnsupportedEffect,
+            alloc::format!(
+                "Coding::Verify refuses HDR mastering/CLL/DiffuseWhite metadata on {role}"
+            ),
+        )));
+    }
+    if let Some(cicp) = meta.cicp {
+        if cicp.transfer_characteristics == 16 || cicp.transfer_characteristics == 18 {
+            return Err(at!(EngineError::simple(
+                Stage::Admit,
+                Failure::UnsupportedEffect,
+                alloc::format!(
+                    "Coding::Verify refuses HDR CICP transfer {} on {role}",
+                    cicp.transfer_characteristics
+                ),
+            )));
+        }
+        if cicp.transfer_characteristics == 8 {
+            return Err(at!(EngineError::simple(
+                Stage::Admit,
+                Failure::UnsupportedEffect,
+                alloc::format!("Coding::Verify refuses ambiguous linear CICP transfer on {role}"),
+            )));
+        }
+        if !cicp.full_range {
+            return Err(at!(EngineError::simple(
+                Stage::Admit,
+                Failure::UnsupportedEffect,
+                alloc::format!("Coding::Verify requires full-range SDR CICP metadata on {role}"),
+            )));
+        }
+    }
+    if let Some(icc) = meta.icc_profile.as_deref()
+        && !icc.is_empty()
+    {
+        validate_sdr_icc_bytes(icc, role)?;
+    }
+    Ok(())
+}
+
+/// Validate probed [`zencodec::SourceColor`] before decoding for `Coding::Verify`.
+fn validate_sdr_verify_source_color(sc: &zencodec::SourceColor, role: &str) -> EngineResult<()> {
+    let mut meta = Metadata::none();
+    meta.cicp = sc.cicp;
+    meta.icc_profile = sc.icc_profile.clone();
+    meta.content_light_level = sc.content_light_level;
+    meta.mastering_display = sc.mastering_display;
+    meta.diffuse_white = sc.diffuse_white;
+    validate_sdr_verify_metadata(&meta, role)
+}
+
+/// Reconcile an authoritative ICC profile from [`zencodec::SourceColor`] onto a decoded
+/// [`PixelFormat`] when the decoder emitted untagged RGB/Gray pixels.
+fn effective_format_with_source_color(
+    fmt: &PixelFormat,
+    sc: &zencodec::SourceColor,
+) -> EngineResult<PixelFormat> {
+    let icc_is_authoritative = sc.color_authority.select(
+        sc.icc_profile
+            .as_deref()
+            .filter(|b| !b.is_empty())
+            .map(|_| true),
+        sc.cicp.map(|_| false),
+    ) == Some(true);
+    if icc_is_authoritative && !matches!(fmt.color, ColorSpace::Icc { .. }) {
+        let resolved = zencodec::helpers::pixel_format_for_decoded_pixels(fmt.layout, sc, None)
+            .map_err(|e| {
+                at!(EngineError::simple(
+                    Stage::Admit,
+                    Failure::InvalidData,
+                    alloc::format!("failed to reconcile authoritative ICC profile: {e:?}"),
+                ))
+            })?;
+        // Preserve the input view's exact alpha mode (e.g. Premultiplied vs Straight vs Opaque)
+        // since `pixel_format_for_decoded_pixels` derives a default Straight mode from layout alone.
+        Ok(PixelFormat::new(
+            resolved.layout,
+            resolved.color.with_alpha(fmt.color.alpha()),
+        ))
+    } else {
+        Ok(fmt.clone())
+    }
+}
+
+/// Reconcile an authoritative ICC profile from [`Metadata`] onto `fmt`.
+fn effective_format_with_metadata(fmt: &PixelFormat, meta: &Metadata) -> EngineResult<PixelFormat> {
+    if meta.icc_profile.as_deref().is_some_and(|b| !b.is_empty())
+        && !matches!(fmt.color, ColorSpace::Icc { .. })
+    {
+        let mut sc = zencodec::SourceColor::default();
+        sc.cicp = meta.cicp;
+        sc.icc_profile = meta.icc_profile.clone();
+        sc.content_light_level = meta.content_light_level;
+        sc.mastering_display = meta.mastering_display;
+        sc.diffuse_white = meta.diffuse_white;
+        effective_format_with_source_color(fmt, &sc)
+    } else {
+        Ok(fmt.clone())
+    }
+}
+
+/// Reconcile color-tagging fields on `meta` after pixels are converted to `target_fmt` so stale
+/// source ICC/CICP/HDR tags are never passed to an encoder for converted pixels.
+fn reconcile_converted_metadata(meta: &mut Metadata, target_fmt: &PixelFormat) {
+    meta.icc_profile = None;
+    meta.content_light_level = None;
+    meta.mastering_display = None;
+    meta.diffuse_white = None;
+    if *target_fmt == PixelFormat::RGB8_SRGB || *target_fmt == PixelFormat::RGBA8_SRGB {
+        meta.cicp = Some(zenpixels::Cicp::SRGB);
+    } else {
+        meta.cicp = None;
+    }
+}
+
+/// Qualify an encoder quality point and resolve its post-quantization deduplication bucket +
+/// effective encoder quality so flat calibration plateaus and integer VP8 quality rounding
+/// (e.g. WebP generic q=85.0 and q=85.5 both rounding to VP8 integer quality 86) never spend
+/// multiple Verify trials on identical encoder settings.
+///
+/// Unqualified third-party encoders without a known effective setting mapping are explicitly
+/// refused rather than guessed from raw floats.
+fn resolve_effective_verify_setting(
+    config: &dyn zencodec::encode::DynEncoderConfig,
+    q: f32,
+) -> EngineResult<(u32, f32)> {
+    config
+        .try_fidelity_job(Fidelity::codec_quality(q))
+        .map_err(|e| {
+            at!(EngineError::simple(
+                Stage::Admit,
+                Failure::UnsupportedEffect,
+                "encoder refused calibrated quality dial point required by Coding::Verify",
+            )
+            .with_cause(e))
+        })?;
+    let any = config.as_any();
+    let _ = any;
+    #[cfg(feature = "webp")]
+    if let Some(webp_cfg) = any.downcast_ref::<zenwebp::zencodec::WebpEncoderConfig>() {
+        use zencodec::encode::EncoderConfig as _;
+        let resolved = webp_cfg.clone().with_fidelity(Fidelity::codec_quality(q));
+        let native_q = match resolved.inner() {
+            zenwebp::EncoderConfig::Lossy(cfg) => cfg.quality,
+            zenwebp::EncoderConfig::Lossless(cfg) => cfg.quality,
+        };
+        // Exact match to `zenwebp::LossyConfig::to_params`: VP8 quantizes quality to rounded u8.
+        let quantized_u8 = native_q.clamp(0.0, 100.0).round() as u32;
+        return Ok((quantized_u8, quantized_u8 as f32));
+    }
+    #[cfg(feature = "jpeg")]
+    if let Some(jpeg_cfg) = any.downcast_ref::<zenjpeg::JpegEncoderConfig>() {
+        use zencodec::encode::EncoderConfig as _;
+        let resolved = jpeg_cfg.clone().with_fidelity(Fidelity::codec_quality(q));
+        if let Some(Fidelity::Lossy(zencodec::encode::LossyTarget::CodecSpecificQuality(eff_q))) =
+            resolved.resolved_target_fidelity()
+        {
+            let clamped = eff_q.clamp(0.0, 100.0);
+            let key = (clamped * 100.0).round() as u32;
+            return Ok((key, clamped));
+        }
+    }
+    Err(at!(EngineError::simple(
+        Stage::Admit,
+        Failure::UnsupportedEffect,
+        "encoder does not expose a qualified post-quantization quality setting for Coding::Verify",
+    )))
 }
 
 fn intersect_opt_u32(a: Option<u32>, b: Option<u32>) -> Option<u32> {

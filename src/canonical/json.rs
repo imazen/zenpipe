@@ -16,17 +16,17 @@ use core::num::NonZeroU32;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use whereat::at;
+use zencodec::ImageFormat;
 use zencodec::time::FrameDuration;
 #[cfg(feature = "media")]
 use zencodec::time::{TimeBase, Timestamp};
-use zencodec::ImageFormat;
 use zencodecs::engine::{
     AlphaPolicy, ChromaPolicy, ChromaSampling, CodecOptions, Coding, ColorTarget,
     DecodeOrientation, Effort, FormatPreferences, GainMapAction, GainMapEncodePolicy,
     GainMapFidelity, GainMapRendition, GamutMode, LoopCount, LoopPolicy, MetadataPolicy, Metric,
     MetricTarget, OptionMode, OptionValue, OrientationMode, OutputIntent, PublicationMode,
-    QualityLevel, RouteReport, SequencePolicy, TargetFormat, TimingPolicy, ToneMap,
-    ToneMapMethod, ToneMapPolicy, TrackPolicy,
+    QualityLevel, RouteReport, SequencePolicy, TargetFormat, TimingPolicy, ToneMap, ToneMapMethod,
+    ToneMapPolicy, TrackPolicy,
 };
 use zenlayout::{Constraint, ConstraintMode, Orientation, Rect, Size};
 use zenpixels::{ColorSpace, DiffuseWhite, Nits, PeakSource, PixelFormat, Primaries};
@@ -95,9 +95,39 @@ pub struct OutputArtifactV2 {
     /// Selected video codec token (`"av1"`, `"vp8"`, `"vp9"`) for video outputs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub video_codec: Option<String>,
+    /// Requested metric token when `Coding::Verify` executed (e.g. `"zensim_a"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verified_metric: Option<String>,
+    /// Effective scorer revision when `Coding::Verify` executed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verified_revision: Option<String>,
+    /// Requested target threshold when `Coding::Verify` executed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verified_target: Option<f32>,
     /// Measured scalar score when `Coding::Verify` executed (score-only, never diffmaps).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub verified_score: Option<f32>,
+    /// Native `f64` measured scalar score when `Coding::Verify` executed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verified_score_f64: Option<f64>,
+    /// Selected calibrated quality parameter when `Coding::Verify` converged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verified_quality: Option<f32>,
+    /// Number of verification trials executed when `Coding::Verify` ran.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verify_attempts: Option<u32>,
+    /// Requested metric token when one-shot `Coding::AimFor` executed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aim_metric: Option<String>,
+    /// Requested target threshold when one-shot `Coding::AimFor` executed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aim_target: Option<f32>,
+    /// Calibration heuristic revision when `Coding::AimFor` executed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aim_revision: Option<String>,
+    /// Heuristic estimated quality selected when `Coding::AimFor` executed (unverified).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aim_estimated_quality: Option<f32>,
     /// Components admitted with unknown native workspace bounds (empty under Strict policy).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub unknown_workspace_components: Vec<String>,
@@ -149,7 +179,17 @@ impl OutputV2 {
             height,
             frames,
             video_codec,
+            verified_metric: report.verified_metric.map(|m| m.as_token().to_string()),
+            verified_revision: report.verified_revision.clone(),
+            verified_target: report.verified_target,
             verified_score: report.verified_score,
+            verified_score_f64: report.verified_score_f64,
+            verified_quality: report.verified_quality,
+            verify_attempts: (report.verify_attempts > 0).then_some(report.verify_attempts),
+            aim_metric: report.aim_metric.map(|m| m.as_token().to_string()),
+            aim_target: report.aim_target,
+            aim_revision: report.aim_revision.clone(),
+            aim_estimated_quality: report.aim_estimated_quality,
             unknown_workspace_components: report.unknown_workspace_components.clone(),
         }
     }
@@ -232,7 +272,10 @@ fn strict_json_from_slice(bytes: &[u8]) -> PipeResult<Value> {
     struct StrictSeed;
     impl<'de> DeserializeSeed<'de> for StrictSeed {
         type Value = StrictVal;
-        fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
+        fn deserialize<D: Deserializer<'de>>(
+            self,
+            deserializer: D,
+        ) -> Result<Self::Value, D::Error> {
             deserializer.deserialize_any(StrictVisitor)
         }
     }
@@ -248,7 +291,11 @@ fn strict_json_from_slice(bytes: &[u8]) -> PipeResult<Value> {
         .map_err(|e| bad_json(alloc::format!("invalid JSON: {e}")))
 }
 
-fn check_allowed_keys(obj: &serde_json::Map<String, Value>, allowed: &[&str], ctx: &str) -> PipeResult<()> {
+fn check_allowed_keys(
+    obj: &serde_json::Map<String, Value>,
+    allowed: &[&str],
+    ctx: &str,
+) -> PipeResult<()> {
     for key in obj.keys() {
         if !allowed.contains(&key.as_str()) {
             return Err(bad_json(alloc::format!("unknown key '{key}' in {ctx}")));
@@ -275,14 +322,7 @@ pub fn parse_json_v1(bytes: &[u8], limits: WireLimitConfig) -> PipeResult<Pipeli
     check_allowed_keys(
         obj,
         &[
-            "zenpipe",
-            "inputs",
-            "outputs",
-            "pipeline",
-            "steps",
-            "graph",
-            "limits",
-            "color",
+            "zenpipe", "inputs", "outputs", "pipeline", "steps", "graph", "limits", "color",
             "metadata",
         ],
         "zenpipe v1 envelope",
@@ -291,7 +331,9 @@ pub fn parse_json_v1(bytes: &[u8], limits: WireLimitConfig) -> PipeResult<Pipeli
     if let Some(ver) = obj.get("zenpipe")
         && ver.as_u64() != Some(1)
     {
-        return Err(bad_json("unsupported zenpipe envelope version (expected 1)"));
+        return Err(bad_json(
+            "unsupported zenpipe envelope version (expected 1)",
+        ));
     }
 
     let mut inputs = Vec::new();
@@ -345,10 +387,10 @@ pub fn parse_json_v1(bytes: &[u8], limits: WireLimitConfig) -> PipeResult<Pipeli
             .ok_or_else(|| bad_json("'limits' must be an object"))?;
         check_allowed_keys(lim_obj, &["max_output_bytes", "max_dimension"], "limits")?;
         if let Some(v) = lim_obj.get("max_output_bytes") {
-            job.max_output_bytes = Some(
-                v.as_u64()
-                    .ok_or_else(|| bad_json("limits.max_output_bytes must be an unsigned integer"))?,
-            );
+            job.max_output_bytes =
+                Some(v.as_u64().ok_or_else(|| {
+                    bad_json("limits.max_output_bytes must be an unsigned integer")
+                })?);
         }
         if let Some(v) = lim_obj.get("max_dimension") {
             let d = v
@@ -478,17 +520,20 @@ fn parse_steps(steps: &[Value], limits: WireLimitConfig) -> PipeResult<Graph> {
                     .map_err(|e| bad_json(e.to_string()))?;
             }
             "composite" => {
-                let canvas = cursor.ok_or_else(|| bad_json("composite requires an active canvas"))?;
+                let canvas =
+                    cursor.ok_or_else(|| bad_json("composite requires an active canvas"))?;
                 let map = payload
                     .as_object()
                     .ok_or_else(|| bad_json("composite payload must be an object"))?;
                 let fg_ref = map
                     .get("foreground")
                     .and_then(Value::as_str)
-                    .ok_or_else(|| bad_json("composite in steps requires 'foreground' checkpoint name"))?;
-                let fg = *checkpoints
-                    .get(fg_ref)
-                    .ok_or_else(|| bad_json(alloc::format!("unknown foreground checkpoint '{fg_ref}'")))?;
+                    .ok_or_else(|| {
+                        bad_json("composite in steps requires 'foreground' checkpoint name")
+                    })?;
+                let fg = *checkpoints.get(fg_ref).ok_or_else(|| {
+                    bad_json(alloc::format!("unknown foreground checkpoint '{fg_ref}'"))
+                })?;
                 let op = parse_composite_node(canvas, fg, map)?;
                 let id = b
                     .image(ImageOp::Composite(op))
@@ -503,10 +548,12 @@ fn parse_steps(steps: &[Value], limits: WireLimitConfig) -> PipeResult<Graph> {
                 let alt_ref = map
                     .get("alternate")
                     .and_then(Value::as_str)
-                    .ok_or_else(|| bad_json("make_gain_map in steps requires 'alternate' checkpoint"))?;
-                let alt = *checkpoints
-                    .get(alt_ref)
-                    .ok_or_else(|| bad_json(alloc::format!("unknown alternate checkpoint '{alt_ref}'")))?;
+                    .ok_or_else(|| {
+                        bad_json("make_gain_map in steps requires 'alternate' checkpoint")
+                    })?;
+                let alt = *checkpoints.get(alt_ref).ok_or_else(|| {
+                    bad_json(alloc::format!("unknown alternate checkpoint '{alt_ref}'"))
+                })?;
                 let op = parse_make_gain_map_node(base, alt, map)?;
                 let id = b
                     .image(ImageOp::MakeGainMap(op))
@@ -642,13 +689,12 @@ fn parse_explicit_graph(val: &Value, limits: WireLimitConfig) -> PipeResult<Grap
             Ok(())
         };
         let get_port = |p: &str| -> PipeResult<ImageId> {
-            let from = ports
-                .and_then(|m| m.get(p))
-                .ok_or_else(|| bad_json(alloc::format!("node '{name}' missing incoming port '{p}'")))?;
-            handles
-                .get(from)
-                .copied()
-                .ok_or_else(|| bad_json(alloc::format!("upstream node '{from}' is not image-valued")))
+            let from = ports.and_then(|m| m.get(p)).ok_or_else(|| {
+                bad_json(alloc::format!("node '{name}' missing incoming port '{p}'"))
+            })?;
+            handles.get(from).copied().ok_or_else(|| {
+                bad_json(alloc::format!("upstream node '{from}' is not image-valued"))
+            })
         };
 
         match op_key.as_str() {
@@ -761,18 +807,20 @@ fn parse_unary_or_root_node(
             })
         }
         "color_ingest" => {
-            let src = upstream.ok_or_else(|| bad_json("color_ingest requires an upstream image"))?;
-            check_allowed_keys(map, &["mode", "target", "strict_invalid_icc"], "color_ingest")?;
+            let src =
+                upstream.ok_or_else(|| bad_json("color_ingest requires an upstream image"))?;
+            check_allowed_keys(
+                map,
+                &["mode", "target", "strict_invalid_icc"],
+                "color_ingest",
+            )?;
             let mode = match opt_str(map, "mode", "color_ingest")? {
                 None | Some("keep_tagged") => ColorIngestMode::KeepTagged,
                 Some("assign") => ColorIngestMode::Assign,
                 Some("convert") => ColorIngestMode::Convert,
                 Some(o) => return Err(bad_json(alloc::format!("invalid color_ingest.mode '{o}'"))),
             };
-            let target = map
-                .get("target")
-                .map(parse_color_space_name)
-                .transpose()?;
+            let target = map.get("target").map(parse_color_space_name).transpose()?;
             let strict_invalid_icc =
                 opt_bool(map, "strict_invalid_icc", "color_ingest")?.unwrap_or(true);
             Ok(ImageOp::ColorIngest(ColorIngestOp {
@@ -836,7 +884,11 @@ fn parse_decode_selection(val: &Value) -> PipeResult<DecodeSelection> {
             check_allowed_keys(m, &["track", "index"], "presentation_index")?;
             let track = m
                 .get("track")
-                .map(|t| t.as_u64().and_then(|n| u32::try_from(n).ok()).ok_or_else(|| bad_json("track must be u32")))
+                .map(|t| {
+                    t.as_u64()
+                        .and_then(|n| u32::try_from(n).ok())
+                        .ok_or_else(|| bad_json("track must be u32"))
+                })
                 .transpose()?;
             let index = m
                 .get("index")
@@ -851,7 +903,11 @@ fn parse_decode_selection(val: &Value) -> PipeResult<DecodeSelection> {
             check_allowed_keys(m, &["track", "time", "mode"], "presentation_time")?;
             let track = m
                 .get("track")
-                .map(|t| t.as_u64().and_then(|n| u32::try_from(n).ok()).ok_or_else(|| bad_json("track must be u32")))
+                .map(|t| {
+                    t.as_u64()
+                        .and_then(|n| u32::try_from(n).ok())
+                        .ok_or_else(|| bad_json("track must be u32"))
+                })
                 .transpose()?;
             let time = parse_rational_timestamp(
                 m.get("time")
@@ -872,7 +928,9 @@ fn parse_decode_selection(val: &Value) -> PipeResult<DecodeSelection> {
                 .ok_or_else(|| bad_json("page must be u32"))?;
             Ok(DecodeSelection::Page(p))
         }
-        other => Err(bad_json(alloc::format!("unknown decode.select key '{other}'"))),
+        other => Err(bad_json(alloc::format!(
+            "unknown decode.select key '{other}'"
+        ))),
     }
 }
 
@@ -912,9 +970,14 @@ fn parse_rational_duration(val: &Value) -> PipeResult<FrameDuration> {
     FrameDuration::new(num, den).map_err(|_| bad_json("invalid rational FrameDuration"))
 }
 
-fn parse_geometry_node(src: ImageId, map: &serde_json::Map<String, Value>) -> PipeResult<GeometryOp> {
+fn parse_geometry_node(
+    src: ImageId,
+    map: &serde_json::Map<String, Value>,
+) -> PipeResult<GeometryOp> {
     if map.len() != 1 {
-        return Err(bad_json("geometry payload must be a single-key tagged object"));
+        return Err(bad_json(
+            "geometry payload must be a single-key tagged object",
+        ));
     }
     let (k, v) = map.iter().next().expect("len == 1");
     match k.as_str() {
@@ -975,7 +1038,14 @@ fn parse_geometry_node(src: ImageId, map: &serde_json::Map<String, Value>) -> Pi
                 .ok_or_else(|| bad_json("geometry.constrain must be an object"))?;
             check_allowed_keys(
                 m,
-                &["mode", "width", "height", "kernel", "linear_light", "canvas_color"],
+                &[
+                    "mode",
+                    "width",
+                    "height",
+                    "kernel",
+                    "linear_light",
+                    "canvas_color",
+                ],
                 "geometry.constrain",
             )?;
             let mode = match opt_str(m, "mode", "geometry.constrain")? {
@@ -1021,7 +1091,10 @@ fn parse_geometry_node(src: ImageId, map: &serde_json::Map<String, Value>) -> Pi
                 &["width", "height", "offset_x", "offset_y", "fill"],
                 "geometry.canvas",
             )?;
-            let canvas = Size::new(req_u32(m, "width", "canvas")?, req_u32(m, "height", "canvas")?);
+            let canvas = Size::new(
+                req_u32(m, "width", "canvas")?,
+                req_u32(m, "height", "canvas")?,
+            );
             let offset_x = opt_i32(m, "offset_x", "geometry.canvas")?.unwrap_or(0);
             let offset_y = opt_i32(m, "offset_y", "geometry.canvas")?.unwrap_or(0);
             let fill_rgba = parse_rgba_opt(m.get("fill"))?.unwrap_or([0, 0, 0, 255]);
@@ -1037,14 +1110,21 @@ fn parse_geometry_node(src: ImageId, map: &serde_json::Map<String, Value>) -> Pi
     }
 }
 
-fn parse_filter_node(src: ImageId, map: &serde_json::Map<String, Value>) -> PipeResult<FilterNodeOp> {
+fn parse_filter_node(
+    src: ImageId,
+    map: &serde_json::Map<String, Value>,
+) -> PipeResult<FilterNodeOp> {
     if map.len() != 1 {
-        return Err(bad_json("filter payload must be a single-key tagged object"));
+        return Err(bad_json(
+            "filter payload must be a single-key tagged object",
+        ));
     }
     let (k, v) = map.iter().next().expect("len == 1");
     match k.as_str() {
         "exposure" => {
-            let m = v.as_object().ok_or_else(|| bad_json("filter.exposure must be an object"))?;
+            let m = v
+                .as_object()
+                .ok_or_else(|| bad_json("filter.exposure must be an object"))?;
             check_allowed_keys(m, &["stops"], "filter.exposure")?;
             Ok(FilterNodeOp::Exposure {
                 src,
@@ -1052,7 +1132,9 @@ fn parse_filter_node(src: ImageId, map: &serde_json::Map<String, Value>) -> Pipe
             })
         }
         "contrast" => {
-            let m = v.as_object().ok_or_else(|| bad_json("filter.contrast must be an object"))?;
+            let m = v
+                .as_object()
+                .ok_or_else(|| bad_json("filter.contrast must be an object"))?;
             check_allowed_keys(m, &["amount"], "filter.contrast")?;
             Ok(FilterNodeOp::Contrast {
                 src,
@@ -1060,7 +1142,9 @@ fn parse_filter_node(src: ImageId, map: &serde_json::Map<String, Value>) -> Pipe
             })
         }
         "saturation" => {
-            let m = v.as_object().ok_or_else(|| bad_json("filter.saturation must be an object"))?;
+            let m = v
+                .as_object()
+                .ok_or_else(|| bad_json("filter.saturation must be an object"))?;
             check_allowed_keys(m, &["amount"], "filter.saturation")?;
             Ok(FilterNodeOp::Saturation {
                 src,
@@ -1068,7 +1152,9 @@ fn parse_filter_node(src: ImageId, map: &serde_json::Map<String, Value>) -> Pipe
             })
         }
         "vibrance" => {
-            let m = v.as_object().ok_or_else(|| bad_json("filter.vibrance must be an object"))?;
+            let m = v
+                .as_object()
+                .ok_or_else(|| bad_json("filter.vibrance must be an object"))?;
             check_allowed_keys(m, &["amount"], "filter.vibrance")?;
             Ok(FilterNodeOp::Vibrance {
                 src,
@@ -1076,7 +1162,9 @@ fn parse_filter_node(src: ImageId, map: &serde_json::Map<String, Value>) -> Pipe
             })
         }
         "blur" => {
-            let m = v.as_object().ok_or_else(|| bad_json("filter.blur must be an object"))?;
+            let m = v
+                .as_object()
+                .ok_or_else(|| bad_json("filter.blur must be an object"))?;
             check_allowed_keys(m, &["sigma"], "filter.blur")?;
             Ok(FilterNodeOp::Blur {
                 src,
@@ -1084,7 +1172,9 @@ fn parse_filter_node(src: ImageId, map: &serde_json::Map<String, Value>) -> Pipe
             })
         }
         "sharpen" => {
-            let m = v.as_object().ok_or_else(|| bad_json("filter.sharpen must be an object"))?;
+            let m = v
+                .as_object()
+                .ok_or_else(|| bad_json("filter.sharpen must be an object"))?;
             check_allowed_keys(m, &["amount", "radius"], "filter.sharpen")?;
             Ok(FilterNodeOp::Sharpen {
                 src,
@@ -1116,7 +1206,11 @@ fn parse_composite_node(
     foreground: ImageId,
     map: &serde_json::Map<String, Value>,
 ) -> PipeResult<CompositeOp> {
-    check_allowed_keys(map, &["foreground", "x", "y", "opacity", "blend"], "composite")?;
+    check_allowed_keys(
+        map,
+        &["foreground", "x", "y", "opacity", "blend"],
+        "composite",
+    )?;
     let x = opt_i32(map, "x", "composite")?.unwrap_or(0);
     let y = opt_i32(map, "y", "composite")?.unwrap_or(0);
     let opacity = opt_f32(map, "opacity", "composite")?.unwrap_or(1.0);
@@ -1243,7 +1337,11 @@ fn parse_encode_node(src: ImageId, payload: &Value) -> PipeResult<EncodeNodeOp> 
                 "av1" => MediaCodecId::Av1,
                 "vp8" => MediaCodecId::Vp8,
                 "vp9" => MediaCodecId::Vp9,
-                other => return Err(bad_json(alloc::format!("unsupported video_codec '{other}'"))),
+                other => {
+                    return Err(bad_json(alloc::format!(
+                        "unsupported video_codec '{other}'"
+                    )));
+                }
             };
             TargetFormat::Video { container, codec }
         }
@@ -1296,9 +1394,12 @@ fn parse_encode_node(src: ImageId, payload: &Value) -> PipeResult<EncodeNodeOp> 
         } else if let Some(tm_obj) = tm_val.as_object() {
             check_allowed_keys(tm_obj, &["map_to_sdr"], "encode.tone_map")?;
             if let Some(inner) = tm_obj.get("map_to_sdr").and_then(Value::as_object) {
-                intent = intent.with_tone_map(ToneMapPolicy::MapToSdr(parse_tone_map_record(inner)?));
+                intent =
+                    intent.with_tone_map(ToneMapPolicy::MapToSdr(parse_tone_map_record(inner)?));
             } else {
-                return Err(bad_json("encode.tone_map must be 'require_compatible' or {'map_to_sdr': {...}}"));
+                return Err(bad_json(
+                    "encode.tone_map must be 'require_compatible' or {'map_to_sdr': {...}}",
+                ));
             }
         } else {
             return Err(bad_json("invalid encode.tone_map"));
@@ -1339,7 +1440,9 @@ fn parse_encode_node(src: ImageId, payload: &Value) -> PipeResult<EncodeNodeOp> 
         intent = intent.with_codec_options(parse_codec_options(opts_val)?);
     }
 
-    intent.validate().map_err(|e| bad_json(e.error().message()))?;
+    intent
+        .validate()
+        .map_err(|e| bad_json(e.error().message()))?;
     Ok(EncodeNodeOp { src, slot, intent })
 }
 
@@ -1365,7 +1468,8 @@ fn parse_coding(val: &Value) -> PipeResult<Coding> {
         "calibrated_quality" => {
             let q = v
                 .as_f64()
-                .ok_or_else(|| bad_json("calibrated_quality must be a number"))? as f32;
+                .ok_or_else(|| bad_json("calibrated_quality must be a number"))?
+                as f32;
             Ok(Coding::CalibratedQuality(q))
         }
         "quality_profile" => {
@@ -1480,9 +1584,9 @@ fn parse_track_policy(val: &Value) -> PipeResult<TrackPolicy> {
             other => Err(bad_json(alloc::format!("invalid tracks policy '{other}'"))),
         };
     }
-    let obj = val
-        .as_object()
-        .ok_or_else(|| bad_json("tracks must be 'preserve', 'drop_non_video', or {'select': {...}}"))?;
+    let obj = val.as_object().ok_or_else(|| {
+        bad_json("tracks must be 'preserve', 'drop_non_video', or {'select': {...}}")
+    })?;
     check_allowed_keys(obj, &["select"], "tracks")?;
     let sel = obj
         .get("select")
@@ -1614,7 +1718,14 @@ fn parse_alpha_policy(val: &Value) -> PipeResult<AlphaPolicy> {
 fn parse_tone_map_record(m: &serde_json::Map<String, Value>) -> PipeResult<ToneMap> {
     check_allowed_keys(
         m,
-        &["method", "target", "source_peak", "white", "target_peak", "gamut"],
+        &[
+            "method",
+            "target",
+            "source_peak",
+            "white",
+            "target_peak",
+            "gamut",
+        ],
         "tone_map",
     )?;
     let method = match opt_str(m, "method", "tone_map")? {
@@ -1681,7 +1792,9 @@ fn parse_gain_map_action(m: &serde_json::Map<String, Value>) -> PipeResult<GainM
             Ok(GainMapAction::BaseOnly)
         }
         "reconstruct" => {
-            let rm = v.as_object().ok_or_else(|| bad_json("reconstruct must be object"))?;
+            let rm = v
+                .as_object()
+                .ok_or_else(|| bad_json("reconstruct must be object"))?;
             check_allowed_keys(rm, &["rendition", "headroom_stops"], "gain_map.reconstruct")?;
             let stops_opt = opt_f32(rm, "headroom_stops", "gain_map.reconstruct")?;
             let rend_opt = opt_str(rm, "rendition", "gain_map.reconstruct")?;
@@ -1716,7 +1829,9 @@ fn parse_gain_map_action(m: &serde_json::Map<String, Value>) -> PipeResult<GainM
             };
             Ok(GainMapAction::Carry { fidelity })
         }
-        other => Err(bad_json(alloc::format!("unknown gain_map action '{other}'"))),
+        other => Err(bad_json(alloc::format!(
+            "unknown gain_map action '{other}'"
+        ))),
     }
 }
 
@@ -1806,11 +1921,7 @@ fn opt_str<'a>(
     }
 }
 
-fn opt_bool(
-    m: &serde_json::Map<String, Value>,
-    key: &str,
-    ctx: &str,
-) -> PipeResult<Option<bool>> {
+fn opt_bool(m: &serde_json::Map<String, Value>, key: &str, ctx: &str) -> PipeResult<Option<bool>> {
     match m.get(key) {
         None => Ok(None),
         Some(v) => v
@@ -1820,11 +1931,7 @@ fn opt_bool(
     }
 }
 
-fn opt_i32(
-    m: &serde_json::Map<String, Value>,
-    key: &str,
-    ctx: &str,
-) -> PipeResult<Option<i32>> {
+fn opt_i32(m: &serde_json::Map<String, Value>, key: &str, ctx: &str) -> PipeResult<Option<i32>> {
     match m.get(key) {
         None => Ok(None),
         Some(v) => v
@@ -1835,11 +1942,7 @@ fn opt_i32(
     }
 }
 
-fn opt_f32(
-    m: &serde_json::Map<String, Value>,
-    key: &str,
-    ctx: &str,
-) -> PipeResult<Option<f32>> {
+fn opt_f32(m: &serde_json::Map<String, Value>, key: &str, ctx: &str) -> PipeResult<Option<f32>> {
     match m.get(key) {
         None => Ok(None),
         Some(v) => {
@@ -1877,7 +1980,8 @@ fn req_f32(m: &serde_json::Map<String, Value>, key: &str, ctx: &str) -> PipeResu
     let f = m
         .get(key)
         .and_then(Value::as_f64)
-        .ok_or_else(|| bad_json(alloc::format!("{ctx}.{key} must be a finite number")))? as f32;
+        .ok_or_else(|| bad_json(alloc::format!("{ctx}.{key} must be a finite number")))?
+        as f32;
     if !f.is_finite() {
         return Err(bad_json(alloc::format!("{ctx}.{key} must be finite")));
     }

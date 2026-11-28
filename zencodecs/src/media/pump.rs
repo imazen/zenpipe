@@ -117,10 +117,22 @@ pub enum PumpEvent<'a> {
 enum PendingTicket {
     None,
     Input(IoTicket),
-    WriteMuxAppend { ticket: IoTicket, offered_len: usize },
-    WriteTailAppend { ticket: IoTicket, offered_len: usize },
-    WriteVerifiedAppend { ticket: IoTicket, offered_len: usize },
-    WritePatch { ticket: IoTicket, offered_len: usize },
+    WriteMuxAppend {
+        ticket: IoTicket,
+        offered_len: usize,
+    },
+    WriteTailAppend {
+        ticket: IoTicket,
+        offered_len: usize,
+    },
+    WriteVerifiedAppend {
+        ticket: IoTicket,
+        offered_len: usize,
+    },
+    WritePatch {
+        ticket: IoTicket,
+        offered_len: usize,
+    },
 }
 
 /// Type alias matching the canonical architecture name.
@@ -256,14 +268,16 @@ impl MediaPump {
                 .with_cause(e))
             })?;
         eff.admit_workspace(demux_id.as_str(), demux_offer.workspace, &mut report)?;
-        let demuxer = demux_factory.open(&demux_offer, &eff.resources).map_err(|e| {
-            at!(EngineError::simple(
-                Stage::Prepare,
-                Failure::BackendFailure,
-                "demuxer open failed",
-            )
-            .with_cause(e))
-        })?;
+        let demuxer = demux_factory
+            .open(&demux_offer, &eff.resources)
+            .map_err(|e| {
+                at!(EngineError::simple(
+                    Stage::Prepare,
+                    Failure::BackendFailure,
+                    "demuxer open failed",
+                )
+                .with_cause(e))
+            })?;
 
         let max_out_cap = {
             let out_lim = eff
@@ -525,11 +539,15 @@ impl MediaPump {
         }
 
         // 2. Validate that input.offset matches one of the outstanding ticketed requests.
-        let matching_req = self.pending_requests.iter().copied().find(|req| match *req {
-            InputRequest::AtLeast { offset, .. } => input.offset == offset,
-            InputRequest::Range(r) => input.offset == r.offset,
-            _ => false,
-        });
+        let matching_req = self
+            .pending_requests
+            .iter()
+            .copied()
+            .find(|req| match *req {
+                InputRequest::AtLeast { offset, .. } => input.offset == offset,
+                InputRequest::Range(r) => input.offset == r.offset,
+                _ => false,
+            });
         let Some(matched) = matching_req else {
             return Err(self.fail(at!(EngineError::simple(
                 Stage::Execute,
@@ -559,7 +577,9 @@ impl MediaPump {
             .and_then(|v| usize::try_from(v).ok())
             .unwrap_or(32 * 1024 * 1024);
 
-        let current_end = self.input_offset.saturating_add(self.input_buf.len() as u64);
+        let current_end = self
+            .input_offset
+            .saturating_add(self.input_buf.len() as u64);
         let prev_len = self.input_buf.len();
         let prev_off = self.input_offset;
 
@@ -591,19 +611,25 @@ impl MediaPump {
                 self.input_buf.clear();
             }
             if self.input_total_len.is_none() {
-                self.input_total_len =
-                    Some(self.input_offset.saturating_add(self.input_buf.len() as u64));
+                self.input_total_len = Some(
+                    self.input_offset
+                        .saturating_add(self.input_buf.len() as u64),
+                );
             }
             self.stalled_at_eof = true;
         } else if !self.input_buf.is_empty() && input.offset == current_end {
             // Forward-only streaming append without re-reading earlier bytes.
-            let next_len = self.input_buf.len().checked_add(bytes.len()).ok_or_else(|| {
-                self.fail(at!(EngineError::simple(
-                    Stage::Execute,
-                    Failure::ResourceLimit,
-                    "MediaPump input staging buffer overflow",
-                )))
-            })?;
+            let next_len = self
+                .input_buf
+                .len()
+                .checked_add(bytes.len())
+                .ok_or_else(|| {
+                    self.fail(at!(EngineError::simple(
+                        Stage::Execute,
+                        Failure::ResourceLimit,
+                        "MediaPump input staging buffer overflow",
+                    )))
+                })?;
             if next_len > max_buf {
                 return Err(self.fail(at!(EngineError::simple(
                     Stage::Execute,
@@ -636,13 +662,17 @@ impl MediaPump {
                 ))));
             }
             let extra = &bytes[overlap..];
-            let next_len = self.input_buf.len().checked_add(extra.len()).ok_or_else(|| {
-                self.fail(at!(EngineError::simple(
-                    Stage::Execute,
-                    Failure::ResourceLimit,
-                    "MediaPump input staging buffer overflow",
-                )))
-            })?;
+            let next_len = self
+                .input_buf
+                .len()
+                .checked_add(extra.len())
+                .ok_or_else(|| {
+                    self.fail(at!(EngineError::simple(
+                        Stage::Execute,
+                        Failure::ResourceLimit,
+                        "MediaPump input staging buffer overflow",
+                    )))
+                })?;
             if next_len > max_buf {
                 return Err(self.fail(at!(EngineError::simple(
                     Stage::Execute,
@@ -1073,7 +1103,8 @@ impl MediaPump {
         if self.dec_done && self.pending_frames_for_enc.is_empty() {
             if let Some(enc) = self.encoder.as_mut() {
                 if !self.enc_ended {
-                    let pulse: Option<&dyn zencodec::Pulse> = Some(self.effective.resources.pulse());
+                    let pulse: Option<&dyn zencodec::Pulse> =
+                        Some(self.effective.resources.pulse());
                     if let Err(e) = enc.end_input(pulse) {
                         return Err(self.fail(at!(EngineError::simple(
                             Stage::Execute,
@@ -1091,7 +1122,8 @@ impl MediaPump {
 
             if self.enc_done && !self.mux_finished {
                 if let Some(mut mux) = self.muxer.take() {
-                    let pulse: Option<&dyn zencodec::Pulse> = Some(self.effective.resources.pulse());
+                    let pulse: Option<&dyn zencodec::Pulse> =
+                        Some(self.effective.resources.pulse());
                     let mut pre_finish = Vec::new();
                     if !mux.pending_output().is_empty() {
                         mux.take_output(&mut pre_finish);
@@ -1310,7 +1342,8 @@ impl MediaPump {
                 && let Some(dec) = self.decoder.as_mut()
             {
                 if !self.dec_ended {
-                    let pulse: Option<&dyn zencodec::Pulse> = Some(self.effective.resources.pulse());
+                    let pulse: Option<&dyn zencodec::Pulse> =
+                        Some(self.effective.resources.pulse());
                     if let Err(e) = dec.end_input(pulse) {
                         return Err(self.fail(at!(EngineError::simple(
                             Stage::Execute,
@@ -1359,7 +1392,9 @@ impl MediaPump {
         match prog.event {
             DemuxEvent::Need => {
                 let mut buf_start = self.input_offset;
-                let buf_end = self.input_offset.saturating_add(self.input_buf.len() as u64);
+                let buf_end = self
+                    .input_offset
+                    .saturating_add(self.input_buf.len() as u64);
                 let at_known_eof = self.input_total_len.is_some_and(|t| buf_end >= t);
 
                 // Validate exact Range requests against known EOF upfront: a truncated Range
@@ -1367,10 +1402,9 @@ impl MediaPump {
                 if let Some(total) = self.input_total_len {
                     let all_ranges_past_eof = !self.demuxer.requested().is_empty()
                         && self.demuxer.requested().iter().all(|req| match *req {
-                            InputRequest::Range(r) => r
-                                .offset
-                                .checked_add(r.length)
-                                .is_none_or(|end| end > total),
+                            InputRequest::Range(r) => {
+                                r.offset.checked_add(r.length).is_none_or(|end| end > total)
+                            }
                             _ => false,
                         });
                     if all_ranges_past_eof {
@@ -1387,8 +1421,7 @@ impl MediaPump {
                 if prog.consumed > 0
                     && self.demuxer.requested().iter().any(|req| match *req {
                         InputRequest::AtLeast { offset, min_len } => {
-                            offset == buf_start
-                                && (self.input_buf.len() >= min_len || at_known_eof)
+                            offset == buf_start && (self.input_buf.len() >= min_len || at_known_eof)
                         }
                         InputRequest::Range(r) => {
                             r.offset == buf_start && (self.input_buf.len() as u64) >= r.length
@@ -1401,7 +1434,8 @@ impl MediaPump {
 
                 // Case B: Demuxer requested a forward offset strictly inside our buffered window
                 // already satisfied in-memory (exact Range NEVER satisfied by EOF alone).
-                if let Some(advance_to) = self.demuxer.requested().iter().find_map(|req| match *req {
+                if let Some(advance_to) = self.demuxer.requested().iter().find_map(|req| match *req
+                {
                     InputRequest::AtLeast { offset, min_len }
                         if offset > buf_start && offset <= buf_end =>
                     {
@@ -1490,7 +1524,8 @@ impl MediaPump {
                     self.pending_requests.push(normalized);
                 }
                 if self.pending_requests.is_empty() {
-                    self.pending_requests.push(InputRequest::at_least(buf_end, 1));
+                    self.pending_requests
+                        .push(InputRequest::at_least(buf_end, 1));
                 }
                 Ok(PumpEvent::NeedInput {
                     ticket,
@@ -1515,7 +1550,8 @@ impl MediaPump {
                     && let Some(dec) = self.decoder.as_mut()
                 {
                     let cfg = CodecConfig::from(t);
-                    let pulse: Option<&dyn zencodec::Pulse> = Some(self.effective.resources.pulse());
+                    let pulse: Option<&dyn zencodec::Pulse> =
+                        Some(self.effective.resources.pulse());
                     if let Err(e) = dec.configure(&cfg, pulse) {
                         return Err(self.fail(at!(EngineError::simple(
                             Stage::Execute,
@@ -1643,7 +1679,12 @@ impl MediaPump {
         let track = &tracks[v_idx];
         let cfg = CodecConfig::from(track);
         let max_w = self.effective.resources.limits().max_width.unwrap_or(4_096);
-        let max_h = self.effective.resources.limits().max_height.unwrap_or(4_096);
+        let max_h = self
+            .effective
+            .resources
+            .limits()
+            .max_height
+            .unwrap_or(4_096);
         let extent = track
             .video_info()
             .filter(|v| v.coded_width > 0 && v.coded_height > 0)
@@ -1658,14 +1699,16 @@ impl MediaPump {
             &mut self.effective,
             &mut self.report,
         )?;
-        let mut dec = factory.open(&plan, &self.effective.resources).map_err(|e| {
-            at!(EngineError::simple(
-                Stage::Prepare,
-                Failure::BackendFailure,
-                "video decoder open failed",
-            )
-            .with_cause(e))
-        })?;
+        let mut dec = factory
+            .open(&plan, &self.effective.resources)
+            .map_err(|e| {
+                at!(EngineError::simple(
+                    Stage::Prepare,
+                    Failure::BackendFailure,
+                    "video decoder open failed",
+                )
+                .with_cause(e))
+            })?;
         let pulse: Option<&dyn zencodec::Pulse> = Some(self.effective.resources.pulse());
         dec.configure(&cfg, pulse).map_err(|e| {
             at!(EngineError::simple(
@@ -1700,19 +1743,21 @@ impl MediaPump {
             .map(Timestamp::base)
             .unwrap_or_else(|| TimeBase::new(1, 1000).expect("valid 1/1000 clock"));
         let mut need = VideoEncodeNeeds::new(self.target_codec.clone(), interp, clock, 16);
-        if let Some(fid) = video_fidelity_from_coding(&self.intent.coding)? {
+        if let Some(fid) = video_fidelity_from_coding(&self.intent.coding, &mut self.report)? {
             need = need.with_fidelity(fid);
         }
         let (_id, factory, plan) =
             select_video_encoder(&self.engine, &need, &mut self.effective, &mut self.report)?;
-        let enc = factory.open(&plan, &self.effective.resources).map_err(|e| {
-            at!(EngineError::simple(
-                Stage::Prepare,
-                Failure::BackendFailure,
-                "video encoder open failed",
-            )
-            .with_cause(e))
-        })?;
+        let enc = factory
+            .open(&plan, &self.effective.resources)
+            .map_err(|e| {
+                at!(EngineError::simple(
+                    Stage::Prepare,
+                    Failure::BackendFailure,
+                    "video encoder open failed",
+                )
+                .with_cause(e))
+            })?;
         self.encoder = Some(enc);
         Ok(())
     }
@@ -1740,9 +1785,7 @@ impl MediaPump {
             0,
             out_cfg.codec.clone(),
             out_cfg.time_base,
-            out_cfg
-                .video
-                .unwrap_or_else(|| VideoTrackInfo::new(64, 64)),
+            out_cfg.video.unwrap_or_else(|| VideoTrackInfo::new(64, 64)),
         );
         if let Some(priv_bytes) = &out_cfg.private {
             tb = tb.with_codec_private(Arc::clone(priv_bytes));
@@ -1897,7 +1940,10 @@ fn webm_effective_clock(track_clock: TimeBase) -> TimeBase {
     let ns = u64::from(track_clock.numerator()).saturating_mul(NS_PER_SECOND);
     let den = u64::from(track_clock.denominator());
     let scale_ns = if den > 0 && ns.is_multiple_of(den) {
-        u32::try_from(ns / den).ok().filter(|&s| s > 0).unwrap_or(DEFAULT_SCALE_NS)
+        u32::try_from(ns / den)
+            .ok()
+            .filter(|&s| s > 0)
+            .unwrap_or(DEFAULT_SCALE_NS)
     } else {
         DEFAULT_SCALE_NS
     };
@@ -1922,16 +1968,13 @@ fn check_endpoint_quantization(
     let s_den = u128::from(src_base.denominator());
     let out_num = u128::from(out_clock.numerator());
     let out_den = u128::from(out_clock.denominator());
-    let mag_num = s_num
-        .unsigned_abs()
-        .checked_mul(out_den)
-        .ok_or_else(|| {
-            at!(EngineError::simple(
-                Stage::Verify,
-                Failure::ResourceLimit,
-                "quantized endpoint numerator overflow",
-            ))
-        })?;
+    let mag_num = s_num.unsigned_abs().checked_mul(out_den).ok_or_else(|| {
+        at!(EngineError::simple(
+            Stage::Verify,
+            Failure::ResourceLimit,
+            "quantized endpoint numerator overflow",
+        ))
+    })?;
     let den_ticks = s_den.checked_mul(out_num).ok_or_else(|| {
         at!(EngineError::simple(
             Stage::Verify,
@@ -1963,7 +2006,10 @@ fn check_endpoint_quantization(
     Ok(())
 }
 
-fn video_fidelity_from_coding(coding: &Coding) -> EngineResult<Option<Fidelity>> {
+fn video_fidelity_from_coding(
+    coding: &Coding,
+    report: &mut RouteReport,
+) -> EngineResult<Option<Fidelity>> {
     validate_video_coding(coding)?;
     Ok(match coding {
         Coding::Auto => None,
@@ -1972,7 +2018,24 @@ fn video_fidelity_from_coding(coding: &Coding) -> EngineResult<Option<Fidelity>>
         Coding::QualityProfile { level, dpr } => {
             Some(Fidelity::codec_quality(level.calibrated_quality(*dpr)))
         }
-        Coding::AimFor(t) => Some(Fidelity::codec_quality(video_aim_seed(t))),
+        Coding::AimFor(t) => {
+            t.validate()?;
+            if let Some(ref rev) = t.revision
+                && rev != crate::engine::AIM_SEED_REVISION
+            {
+                return Err(at!(EngineError::simple(
+                    Stage::Admit,
+                    Failure::UnsupportedEffect,
+                    "Coding::AimFor calibration revision does not match pinned target revision",
+                )));
+            }
+            let est_q = video_aim_seed(t);
+            report.aim_metric = Some(t.metric);
+            report.aim_target = Some(t.value);
+            report.aim_revision = Some(crate::engine::AIM_SEED_REVISION.to_string());
+            report.aim_estimated_quality = Some(est_q);
+            Some(Fidelity::codec_quality(est_q))
+        }
         Coding::LosslessOrKeep => Some(Fidelity::codec_quality(
             QualityLevel::Good.calibrated_quality(1.0),
         )),
@@ -1990,7 +2053,10 @@ fn video_aim_seed(target: &MetricTarget) -> f32 {
 /// Compact a decoded planar [`Frame`] into tightly packed, `StorageBudget`-accounted
 /// planes so downstream encoders never see trailing-stride discrepancies and decoder DPB
 /// slots are released immediately.
-fn repack_frame_tight(frame: Frame, storage: &zencodec::storage::StorageBudget) -> EngineResult<Frame> {
+fn repack_frame_tight(
+    frame: Frame,
+    storage: &zencodec::storage::StorageBudget,
+) -> EngineResult<Frame> {
     let interp = Arc::clone(frame.interpretation());
     let timing = frame.timing();
     let pres = frame.presentation();
@@ -2208,9 +2274,7 @@ pub fn drive_pump_in_memory(
                     .copied()
                     .unwrap_or(InputRequest::at_least(0, 1));
                 let (offset, max_take) = match req {
-                    InputRequest::AtLeast { offset, min_len } => {
-                        (offset, chunk_cap.max(min_len))
-                    }
+                    InputRequest::AtLeast { offset, min_len } => (offset, chunk_cap.max(min_len)),
                     InputRequest::Range(r) => {
                         let len = usize::try_from(r.length).unwrap_or(usize::MAX);
                         (r.offset, len)
@@ -2219,10 +2283,8 @@ pub fn drive_pump_in_memory(
                 };
                 let start = usize::try_from(offset).unwrap_or(source_bytes.len());
                 if start >= source_bytes.len() {
-                    let _ = pump.supply_input(
-                        ticket,
-                        Input::new(offset, &[]).with_total_len(total_len),
-                    )?;
+                    let _ = pump
+                        .supply_input(ticket, Input::new(offset, &[]).with_total_len(total_len))?;
                 } else {
                     let avail = source_bytes.len() - start;
                     let take = avail.min(max_take);
@@ -2364,14 +2426,14 @@ pub fn extract_poster_from_bytes(
             .with_cause(e))
         })?;
     eff.admit_workspace(demux_id.as_str(), demux_offer.workspace, &mut report)?;
-    let mut demux = demux_factory.open(&demux_offer, &eff.resources).map_err(|e| {
-        at!(EngineError::simple(
-            Stage::Prepare,
-            Failure::BackendFailure,
-            "demux open failed"
-        )
-        .with_cause(e))
-    })?;
+    let mut demux = demux_factory
+        .open(&demux_offer, &eff.resources)
+        .map_err(|e| {
+            at!(
+                EngineError::simple(Stage::Prepare, Failure::BackendFailure, "demux open failed")
+                    .with_cause(e)
+            )
+        })?;
 
     // Stream demux -> decode directly with O(1) frame memory and O(1) online selection
     // (zero growing PresentationEntry Vec and zero quadratic prefix cloning)!
@@ -2409,7 +2471,9 @@ pub fn extract_poster_from_bytes(
                     .unwrap_or_else(|| Timestamp::new(ord as i64, tb));
 
                 match selection {
-                    DecodeSelection::PresentationIndex { index: target_idx, .. } => {
+                    DecodeSelection::PresentationIndex {
+                        index: target_idx, ..
+                    } => {
                         if ord == target_idx {
                             *best_frame = Some((ord, pts, mf));
                             *early_found = true;
@@ -2457,14 +2521,15 @@ pub fn extract_poster_from_bytes(
             &[]
         };
         let prog = demux
-            .step(Input::new(offset as u64, slice).with_total_len(total_len), pulse)
+            .step(
+                Input::new(offset as u64, slice).with_total_len(total_len),
+                pulse,
+            )
             .map_err(|e| {
-                at!(EngineError::simple(
-                    Stage::Execute,
-                    Failure::InvalidData,
-                    "demux step failed"
+                at!(
+                    EngineError::simple(Stage::Execute, Failure::InvalidData, "demux step failed")
+                        .with_cause(e)
                 )
-                .with_cause(e))
             })?;
         offset = offset.saturating_add(prog.consumed);
         match prog.event {
@@ -2560,7 +2625,9 @@ pub fn extract_poster_from_bytes(
                     )));
                 }
                 let Some(d) = dec.as_mut() else { continue };
-                let Some(tl) = timeline.as_mut() else { continue };
+                let Some(tl) = timeline.as_mut() else {
+                    continue;
+                };
                 let pkt_pts = pkt.pts();
                 let pkt_discard = pkt.discard();
                 let pulse: Option<&dyn zencodec::Pulse> = Some(eff.resources.pulse());
@@ -2616,9 +2683,7 @@ pub fn extract_poster_from_bytes(
         }
     }
 
-    if !early_found
-        && let (Some(d), Some(tl)) = (dec.as_mut(), timeline.as_mut())
-    {
+    if !early_found && let (Some(d), Some(tl)) = (dec.as_mut(), timeline.as_mut()) {
         let pulse: Option<&dyn zencodec::Pulse> = Some(eff.resources.pulse());
         d.end_input(pulse).map_err(|e| {
             at!(EngineError::simple(
@@ -2867,7 +2932,8 @@ pub fn encode_frames_to_video(
         )));
     };
     validate_container_codec_tuple(target_container, target_codec)?;
-    let requested_fidelity = video_fidelity_from_coding(&intent.coding)?;
+    let mut aim_report = RouteReport::default();
+    let requested_fidelity = video_fidelity_from_coding(&intent.coding, &mut aim_report)?;
     if frames.is_empty() {
         return Err(at!(EngineError::simple(
             Stage::Admit,
@@ -2877,7 +2943,9 @@ pub fn encode_frames_to_video(
     }
     let (timing_policy, loop_policy) = match intent.sequence {
         SequencePolicy::Preserve { timing, loops } => (timing, loops),
-        SequencePolicy::FirstPresentation => (TimingPolicy::Exact, LoopPolicy::Set(LoopCount::once())),
+        SequencePolicy::FirstPresentation => {
+            (TimingPolicy::Exact, LoopPolicy::Set(LoopCount::once()))
+        }
     };
     let _ = normalize_loop_for_target(source_loops, loop_policy, target_container)?;
 
@@ -2887,6 +2955,10 @@ pub fn encode_frames_to_video(
         route: Some(RouteKind::Media),
         output_container: Some(target_container.clone()),
         output_video_codec: Some(target_codec.clone()),
+        aim_metric: aim_report.aim_metric,
+        aim_target: aim_report.aim_target,
+        aim_revision: aim_report.aim_revision,
+        aim_estimated_quality: aim_report.aim_estimated_quality,
         ..Default::default()
     };
 
@@ -2908,7 +2980,9 @@ pub fn encode_frames_to_video(
     let durs: Vec<FrameDuration> = frame_slice.iter().map(|(_, d)| *d).collect();
     let clock = match timing_policy {
         TimingPolicy::Exact => exact_common_time_base(&durs)?,
-        TimingPolicy::QuantizeEndpoints { .. } => TimeBase::new(1, 1000).expect("valid 1/1000 clock"),
+        TimingPolicy::QuantizeEndpoints { .. } => {
+            TimeBase::new(1, 1000).expect("valid 1/1000 clock")
+        }
     };
     let quantized = quantize_endpoints(&durs, clock, timing_policy)?;
 
@@ -2983,7 +3057,8 @@ pub fn encode_frames_to_video(
                 "all video frames must share identical canvas dimensions",
             )));
         }
-        let timing = FrameTiming::at(Timestamp::new(pts_ticks, clock)).with_duration_ticks(dur_ticks);
+        let timing =
+            FrameTiming::at(Timestamp::new(pts_ticks, clock)).with_duration_ticks(dur_ticks);
         let dur_i64 = i64::try_from(dur_ticks).map_err(|_| {
             at!(EngineError::simple(
                 Stage::Execute,
@@ -3088,12 +3163,10 @@ pub fn encode_frames_to_video(
     )?;
     let pulse: Option<&dyn zencodec::Pulse> = Some(eff.resources.pulse());
     let mut mux = mux_factory.open(&mux_plan, &eff.resources).map_err(|e| {
-        at!(EngineError::simple(
-            Stage::Prepare,
-            Failure::BackendFailure,
-            "muxer open failed"
+        at!(
+            EngineError::simple(Stage::Prepare, Failure::BackendFailure, "muxer open failed")
+                .with_cause(e)
         )
-        .with_cause(e))
     })?;
     let hint = match intent.publication {
         PublicationMode::Incremental => MuxHint::forward_only(),
@@ -3129,11 +3202,8 @@ pub fn encode_frames_to_video(
             (None, None) => 64 * 1024 * 1024,
         }
     };
-    let mut pub_buf = PublicationBuffer::new(
-        intent.publication,
-        max_out,
-        eff.resources.storage().clone(),
-    )?;
+    let mut pub_buf =
+        PublicationBuffer::new(intent.publication, max_out, eff.resources.storage().clone())?;
 
     let drain_pending = |m: &mut dyn DynMuxer, pb: &mut PublicationBuffer| -> EngineResult<()> {
         if !m.pending_output().is_empty() {
@@ -3182,12 +3252,10 @@ pub fn encode_frames_to_video(
     }
 
     let finished = mux.finish(pulse).map_err(|e| {
-        at!(EngineError::simple(
-            Stage::Publish,
-            Failure::BackendFailure,
-            "mux finish failed"
+        at!(
+            EngineError::simple(Stage::Publish, Failure::BackendFailure, "mux finish failed")
+                .with_cause(e)
         )
-        .with_cause(e))
     })?;
     if !finished.tail.is_empty() {
         pub_buf.append(&finished.tail)?;

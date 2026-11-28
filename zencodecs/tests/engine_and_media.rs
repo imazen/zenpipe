@@ -27,8 +27,8 @@ use zencodecs::engine::{
     WorkspacePolicy,
 };
 use zencodecs::media::pump::{
-    drive_pump_in_memory, encode_frames_to_video, extract_poster_from_bytes,
-    transcode_media_bytes, MediaPump,
+    MediaPump, drive_pump_in_memory, encode_frames_to_video, extract_poster_from_bytes,
+    transcode_media_bytes,
 };
 use zencodecs::media::select::{DecodeSelection, SeekMode};
 use zencodecs::routing::{Routing, RuleKey};
@@ -118,36 +118,35 @@ fn engine_rejects_prestamped_defaults_enforces_strict_bounds_preserve_bytes_and_
 
     let img = make_gradient_rgb8(64, 64, 17);
 
-    // 3. Decision 4: WorkspacePolicy::Strict refuses unknown native workspace by default.
-    let strict_err = engine
-        .encode_pixels(
-            &OutputIntent::format(ImageFormat::Jpeg),
-            img.as_view(),
-            &Metadata::none(),
-            None,
-            &Run::new(),
-        )
-        .unwrap_err();
-    assert_eq!(strict_err.error().failure(), &Failure::PolicyRefusal);
-
-    // Explicit BestEffort admits and records the unknown workspace component.
-    let best_effort_run = Run::new()
-        .with_workspace_policy(WorkspacePolicy::BestEffort)
-        .with_trace(NonZeroU32::new(64).unwrap());
+    // 3. Decision 4: qualified pure-Rust zen codecs report real bounds and succeed under
+    //    default `WorkspacePolicy::Strict`, while any third-party/unknown-bound codec is
+    //    refused under `Strict` and admitted+recorded only under explicit `BestEffort`.
+    let strict_run = Run::new().with_trace(NonZeroU32::new(64).unwrap());
     let encoded_default = engine
         .encode_pixels(
             &OutputIntent::format(ImageFormat::Jpeg).with_coding(Coding::CalibratedQuality(85.0)),
             img.as_view(),
             &Metadata::none(),
             None,
-            &best_effort_run,
+            &strict_run,
         )
         .unwrap();
     assert_eq!(
         encoded_default.report.encoder.as_ref().map(|r| r.as_str()),
         Some(ids::ZENJPEG)
     );
-    assert!(!encoded_default.report.unknown_workspace_components.is_empty());
+    assert!(
+        encoded_default
+            .report
+            .unknown_workspace_components
+            .is_empty(),
+        "qualified zenjpeg must have zero unknown workspace components under Strict"
+    );
+
+    // Explicit BestEffort run remains supported for hosts opting into unknown-bound codecs.
+    let best_effort_run = Run::new()
+        .with_workspace_policy(WorkspacePolicy::BestEffort)
+        .with_trace(NonZeroU32::new(64).unwrap());
 
     // 4. Routing swap to alt_jpeg_id using the EXACT SAME OutputIntent (zero node/request change).
     let swap_routing = Routing::unrestricted()
@@ -245,17 +244,79 @@ fn engine_rejects_prestamped_defaults_enforces_strict_bounds_preserve_bytes_and_
         )
         .err()
         .expect("offer from another Engine must be refused");
-    assert_eq!(cross_err.into_error().error().failure(), &Failure::InvalidRequest);
+    assert_eq!(
+        cross_err.into_error().error().failure(),
+        &Failure::InvalidRequest
+    );
 
-    // Still decode under Strict workspace policy must refuse unknown native decoder workspace.
-    let strict_decode_err = engine
+    // Qualified pure-Rust still decode succeeds under default Strict workspace policy with
+    // zero unknown workspace components.
+    let strict_decode_ok = engine
+        .decode(
+            &zencodecs::DecodeNeeds::still(),
+            ok_preserve.output.as_bytes(),
+            &Run::new(),
+        )
+        .unwrap();
+    assert!(
+        strict_decode_ok
+            .report
+            .unknown_workspace_components
+            .is_empty()
+    );
+
+    // An unknown-workspace third-party/unqualified decoder MUST still be refused under
+    // Strict policy and admitted+recorded only under explicit BestEffort.
+    #[derive(Clone, Debug)]
+    struct UnknownBoundJpegDecoder(zenjpeg::JpegDecoderConfig);
+    impl zencodec::decode::DecoderConfig for UnknownBoundJpegDecoder {
+        type Error = <zenjpeg::JpegDecoderConfig as zencodec::decode::DecoderConfig>::Error;
+        type Job<'a> = <zenjpeg::JpegDecoderConfig as zencodec::decode::DecoderConfig>::Job<'a>;
+        fn formats() -> &'static [ImageFormat] {
+            <zenjpeg::JpegDecoderConfig as zencodec::decode::DecoderConfig>::formats()
+        }
+        fn supported_pixel_formats() -> &'static [zenpixels::PixelFormat] {
+            <zenjpeg::JpegDecoderConfig as zencodec::decode::DecoderConfig>::supported_pixel_formats(
+            )
+        }
+        fn capabilities() -> &'static zencodec::decode::DecodeCapabilities {
+            <zenjpeg::JpegDecoderConfig as zencodec::decode::DecoderConfig>::capabilities()
+        }
+        fn job<'a>(self) -> Self::Job<'a> {
+            self.0.job()
+        }
+    }
+    let unknown_id = RegistrationId::new("org.example.jpeg.unknown-bound").unwrap();
+    let unknown_set = CodecSet::new()
+        .with_named_decoder(
+            unknown_id.clone(),
+            "unknown-1",
+            UnknownBoundJpegDecoder(zenjpeg::JpegDecoderConfig::new()),
+        )
+        .unwrap();
+    let unknown_engine = Engine::new(unknown_set).unwrap();
+    let strict_unknown_err = unknown_engine
         .decode(
             &zencodecs::DecodeNeeds::still(),
             ok_preserve.output.as_bytes(),
             &Run::new(),
         )
         .unwrap_err();
-    assert_eq!(strict_decode_err.error().failure(), &Failure::PolicyRefusal);
+    assert_eq!(
+        strict_unknown_err.error().failure(),
+        &Failure::PolicyRefusal
+    );
+    let best_effort_unknown = unknown_engine
+        .decode(
+            &zencodecs::DecodeNeeds::still(),
+            ok_preserve.output.as_bytes(),
+            &best_effort_run,
+        )
+        .unwrap();
+    assert_eq!(
+        best_effort_unknown.report.unknown_workspace_components,
+        vec![unknown_id.as_str().to_string()]
+    );
 
     // 6. Decision 5: Coding::Verify(MetricTarget) score-only closed-loop still SDR convergence.
     let target = MetricTarget::new(Metric::Ssimulacra2, 75.0)
@@ -341,7 +402,11 @@ fn first_class_av1_vp8_vp9_mp4_webm_ivf_streaming_poster_and_ffprobe_oracle() {
     let f1 = make_gradient_rgb8(64, 64, 64);
     let f2 = make_gradient_rgb8(64, 64, 128);
     let dur = FrameDuration::from_millis(40);
-    let frames = vec![(f0.as_view(), dur), (f1.as_view(), dur), (f2.as_view(), dur)];
+    let frames = vec![
+        (f0.as_view(), dur),
+        (f1.as_view(), dur),
+        (f2.as_view(), dur),
+    ];
 
     let run = Run::new()
         .with_workspace_policy(WorkspacePolicy::BestEffort)
@@ -349,9 +414,14 @@ fn first_class_av1_vp8_vp9_mp4_webm_ivf_streaming_poster_and_ffprobe_oracle() {
 
     // 1. Repeating animation -> MP4 must REFUSE under LoopPolicy::Preserve!
     let loop_refuse_intent = OutputIntent::video(ContainerId::Mp4, MediaCodecId::Av1);
-    let loop_err =
-        encode_frames_to_video(&engine, &frames, LoopCount::Infinite, &loop_refuse_intent, &run)
-            .unwrap_err();
+    let loop_err = encode_frames_to_video(
+        &engine,
+        &frames,
+        LoopCount::Infinite,
+        &loop_refuse_intent,
+        &run,
+    )
+    .unwrap_err();
     assert_eq!(loop_err.error().failure(), &Failure::UnsupportedEffect);
 
     let exact_one_pass = SequencePolicy::Preserve {
@@ -394,7 +464,10 @@ fn first_class_av1_vp8_vp9_mp4_webm_ivf_streaming_poster_and_ffprobe_oracle() {
         &run,
     )
     .unwrap_err();
-    assert_eq!(webm_exact_err.error().failure(), &Failure::UnsupportedEffect);
+    assert_eq!(
+        webm_exact_err.error().failure(),
+        &Failure::UnsupportedEffect
+    );
 
     let vp8_webm = encode_frames_to_video(
         &engine,
@@ -493,7 +566,11 @@ fn first_class_av1_vp8_vp9_mp4_webm_ivf_streaming_poster_and_ffprobe_oracle() {
 
     // 4b. Exact fractional 1/30 s frames encode cleanly to MP4 under TimingPolicy::Exact!
     let dur30 = FrameDuration::new(1, 30).unwrap();
-    let frames_30fps = vec![(f0.as_view(), dur30), (f1.as_view(), dur30), (f2.as_view(), dur30)];
+    let frames_30fps = vec![
+        (f0.as_view(), dur30),
+        (f1.as_view(), dur30),
+        (f2.as_view(), dur30),
+    ];
     let exact_30fps_mp4 = encode_frames_to_video(
         &engine,
         &frames_30fps,
@@ -611,7 +688,9 @@ fn media_pump_rejects_stale_wrong_direction_tickets_and_fuses_on_fault() {
         other => panic!("expected NeedInput, got {other:?}"),
     };
     let wrong_ticket = IoTicket::from_raw(ticket.raw() + 99);
-    let err = pump.supply_input(wrong_ticket, Input::new(0, b"bad")).unwrap_err();
+    let err = pump
+        .supply_input(wrong_ticket, Input::new(0, b"bad"))
+        .unwrap_err();
     assert_eq!(err.error().failure(), &Failure::InvalidRequest);
     // Pump is now fused; even the original ticket or advance must refuse immediately.
     assert!(pump.supply_input(ticket, Input::new(0, b"bad")).is_err());
@@ -643,7 +722,10 @@ fn media_pump_rejects_stale_wrong_direction_tickets_and_fuses_on_fault() {
         &run,
     )
     .unwrap();
-    assert!(matches!(pump3.advance().unwrap(), PumpEvent::NeedInput { .. }));
+    assert!(matches!(
+        pump3.advance().unwrap(),
+        PumpEvent::NeedInput { .. }
+    ));
     let err3 = pump3.advance().unwrap_err();
     assert_eq!(err3.error().failure(), &Failure::InvalidRequest);
     assert!(pump3.advance().is_err());
@@ -889,7 +971,8 @@ fn media_pump_rejects_stale_wrong_direction_tickets_and_fuses_on_fault() {
     let ts_us = Timestamp::new(40_000, TimeBase::new(1, 1_000_000).unwrap());
     let disc = Discard::start(FrameDuration::from_millis(5));
     // Order A: hidden packet with discard, then visible packet at same instant (different base!).
-    tl_a.record_accepted_packet(Some(ts_ms), Some(disc)).unwrap();
+    tl_a.record_accepted_packet(Some(ts_ms), Some(disc))
+        .unwrap();
     assert_eq!(
         tl_a.record_accepted_packet(Some(ts_us), None)
             .unwrap_err()
@@ -927,7 +1010,8 @@ fn media_pump_rejects_stale_wrong_direction_tickets_and_fuses_on_fault() {
     // 9. PublicationBuffer honors peak simultaneous memory cap (60 + 30 <= 100 B without 160 B spike)!
     use zencodecs::media::publication::PublicationBuffer;
     let tight_storage = zencodec::storage::StorageBudget::new(100, 16);
-    let mut pb = PublicationBuffer::new(PublicationMode::Incremental, 100, tight_storage.clone()).unwrap();
+    let mut pb =
+        PublicationBuffer::new(PublicationMode::Incremental, 100, tight_storage.clone()).unwrap();
     pb.append(&[1u8; 60]).unwrap();
     pb.append(&[2u8; 30]).unwrap();
     assert!(tight_storage.reserved_bytes() <= 100);

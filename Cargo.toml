@@ -54,6 +54,11 @@ vp8-encode = ["vp8", "zencodecs/vp8-encode"]
 vp9 = ["media", "zencodecs/vp9"]
 vp9-encode = ["vp9", "zencodecs/vp9-encode"]
 all-media = ["mp4", "webm", "ivf", "av1-encode", "vp8-encode", "vp9-encode"]
+# Opt-in score-only perceptual IQA metric scorers (zenpsy-api).
+iqa-zensim = ["zennode", "zencodecs/iqa-zensim"]
+iqa-ssimulacra2 = ["zennode", "zencodecs/iqa-ssimulacra2"]
+iqa-butteraugli = ["zennode", "zencodecs/iqa-butteraugli"]
+iqa = ["iqa-zensim", "iqa-ssimulacra2", "iqa-butteraugli"]
 # Pipelines over zencodec-io drivers (`zenpipe::io`): controlled decode from
 # slices, files and range sources; planned, policy-admitted row encoding to
 # forward or seek-back destinations.
@@ -326,7 +331,8 @@ heic = { git = "https://github.com/imazen/heic", rev = "028c0329a87c22eac3ab9c84
 zentiff = { git = "https://github.com/imazen/zenextras", rev = "3dcbb65672079c5c423b6b55ede127e0b090f4aa" }
 zenpdf = { git = "https://github.com/imazen/zenextras", rev = "3dcbb65672079c5c423b6b55ede127e0b090f4aa" }
 ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "76e9aad431e1faf7782b0654857325246b15c28b" }
-fast-ssim2 = { git = "https://github.com/imazen/fast-ssim2", rev = "f6557a5bc51d3161d442c269acd33afabfc4794b" }
+fast-ssim2 = { git = "https://github.com/imazen/fast-ssim2", rev = "1e9fa174ee6a1a417057892922b5720e2c5978a0" }
+butteraugli = { git = "https://github.com/imazen/butteraugli", rev = "3e2ebb830b9dd28a985f962e5065ad268592c2df" }
 zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "27a69d531938d1781777fd99ec7d7f74b805abdf" }
 jxl-encoder = { git = "https://github.com/imazen/jxl-encoder", rev = "7fdd3ea2839b5a0ccd73dd61c9a99b8fe95857fe" }
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "e1c366b089b29511ef66f1b5af5d9e208dbff5d1" }
@@ -337,8 +343,8 @@ zengif = { git = "https://github.com/imazen/zengif", rev = "edbbd1a1a30f15018a41
 zenavif = { git = "https://github.com/imazen/zenavif", rev = "bc93c79121c81c0ba7f0f65e1ce6f07d07d5942d" }
 zenavif-serialize = { git = "https://github.com/imazen/zenavif", rev = "bc93c79121c81c0ba7f0f65e1ce6f07d07d5942d" }
 zenraw = { git = "https://github.com/imazen/zenraw", rev = "2635c03801e2fd5b54f10e7e7b888cbec45f000a" }
-zensim = { git = "https://github.com/imazen/zensimx", rev = "6da0e710bafafa474b6b63f3cf6a476e43bbe799" }
-zensim-regress = { git = "https://github.com/imazen/zensimx", rev = "6da0e710bafafa474b6b63f3cf6a476e43bbe799" }
+zensim = { git = "https://github.com/imazen/zensim", rev = "7ee1a56495cf93b12f38e8673023fb0643e9f72d" }
+zensim-regress = { git = "https://github.com/imazen/zensim", rev = "7ee1a56495cf93b12f38e8673023fb0643e9f72d" }
 zennode = { git = "https://github.com/imazen/zennode" }
 zennode-derive = { git = "https://github.com/imazen/zennode" }
 zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }

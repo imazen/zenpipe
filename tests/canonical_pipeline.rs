@@ -18,8 +18,8 @@ use std::num::NonZeroU32;
 use std::process::Command;
 use std::sync::Arc;
 
-use zencodec::time::FrameDuration;
 use zencodec::CodecSet;
+use zencodec::time::FrameDuration;
 use zencodecs::bundles;
 use zencodecs::engine::{Engine, LoopCount, WorkspacePolicy};
 use zenpipe::canonical::{
@@ -210,7 +210,11 @@ fn canonical_pipeline_av1_vp8_vp9_mp4_webm_poster_animation_and_transcode_with_f
             Bindings::new()
                 .with_frames(
                     "anim",
-                    vec![(f0.as_view(), dur), (f1.as_view(), dur), (f2.as_view(), dur)],
+                    vec![
+                        (f0.as_view(), dur),
+                        (f1.as_view(), dur),
+                        (f2.as_view(), dur),
+                    ],
                     LoopCount::Infinite,
                 )
                 .unwrap(),
@@ -357,7 +361,9 @@ fn canonical_pipeline_av1_vp8_vp9_mp4_webm_poster_animation_and_transcode_with_f
     let res6 = rt
         .prepare(
             &job6,
-            Bindings::new().with_bytes("anim_webp", &webp_art.bytes).unwrap(),
+            Bindings::new()
+                .with_bytes("anim_webp", &webp_art.bytes)
+                .unwrap(),
         )
         .unwrap()
         .run()
@@ -413,12 +419,22 @@ fn canonical_pr5_regressions_strict_json_limits_fit_pad_multiply_and_selection()
     .unwrap();
     let mut job_dim = zenpipe::canonical::CanonicalJob::from_graph(b.finish().unwrap());
     job_dim.max_dimension = Some(1);
-    assert!(rt.prepare(&job_dim, Bindings::new()).unwrap().run().is_err());
+    assert!(
+        rt.prepare(&job_dim, Bindings::new())
+            .unwrap()
+            .run()
+            .is_err()
+    );
 
     let mut job_out = job_dim.clone();
     job_out.max_dimension = None;
     job_out.max_output_bytes = Some(1);
-    assert!(rt.prepare(&job_out, Bindings::new()).unwrap().run().is_err());
+    assert!(
+        rt.prepare(&job_out, Bindings::new())
+            .unwrap()
+            .run()
+            .is_err()
+    );
 
     // 3. Constrain FitPad executes complete layout (200x100 -> FitPad 100x100 => 100x100 canvas)!
     let fit_pad_json = br#"{
@@ -466,7 +482,11 @@ fn canonical_pr5_regressions_strict_json_limits_fit_pad_multiply_and_selection()
     })
     .unwrap();
     let mult_job = zenpipe::canonical::CanonicalJob::from_graph(b2.finish().unwrap());
-    let mult_res = rt.prepare(&mult_job, Bindings::new()).unwrap().run().unwrap();
+    let mult_res = rt
+        .prepare(&mult_job, Bindings::new())
+        .unwrap()
+        .run()
+        .unwrap();
     let mult_px = mult_res.artifact("out").unwrap().pixels.as_ref().unwrap();
     let first_pixel = &mult_px.as_view().row(0)[..4];
     assert_eq!(
@@ -488,7 +508,11 @@ fn canonical_pr5_regressions_strict_json_limits_fit_pad_multiply_and_selection()
         .prepare(
             &bad_sel_job,
             Bindings::new()
-                .with_frames("seq", vec![(f0.as_view(), FrameDuration::from_millis(40))], LoopCount::once())
+                .with_frames(
+                    "seq",
+                    vec![(f0.as_view(), FrameDuration::from_millis(40))],
+                    LoopCount::once(),
+                )
                 .unwrap(),
         )
         .unwrap()
@@ -571,7 +595,11 @@ fn canonical_pr5_regressions_strict_json_limits_fit_pad_multiply_and_selection()
             .with_limits(tight_limits),
     );
     assert!(
-        rt_mem.prepare(&job_mem, Bindings::new()).unwrap().run().is_err(),
+        rt_mem
+            .prepare(&job_mem, Bindings::new())
+            .unwrap()
+            .run()
+            .is_err(),
         "two simultaneously live 16-byte canvases must exceed 16-byte max_memory_bytes"
     );
 
@@ -596,7 +624,11 @@ fn canonical_pr5_regressions_strict_json_limits_fit_pad_multiply_and_selection()
             .with_limits(zencodec::ResourceLimits::default().with_max_memory(208)),
     );
     assert!(
-        rt_blur.prepare(&blur_job, Bindings::new()).unwrap().run().is_err(),
+        rt_blur
+            .prepare(&blur_job, Bindings::new())
+            .unwrap()
+            .run()
+            .is_err(),
         "2x2 RGBA8 neighborhood blur (including Blur::apply scratch > 208 B) must exceed 208 B max_memory_bytes"
     );
 
@@ -620,7 +652,11 @@ fn canonical_pr5_regressions_strict_json_limits_fit_pad_multiply_and_selection()
             .with_limits(zencodec::ResourceLimits::default().with_max_memory(15_664)),
     );
     assert!(
-        rt_sb.prepare(&sb_job, Bindings::new()).unwrap().run().is_err(),
+        rt_sb
+            .prepare(&sb_job, Bindings::new())
+            .unwrap()
+            .run()
+            .is_err(),
         "16x16 RGBA8 sigma-10 stackblur must exceed 15,664 B max_memory_bytes"
     );
 
@@ -645,7 +681,11 @@ fn canonical_pr5_regressions_strict_json_limits_fit_pad_multiply_and_selection()
             .with_limits(zencodec::ResourceLimits::default().with_max_memory(56_312)),
     );
     assert!(
-        rt_tb.prepare(&tb_job, Bindings::new()).unwrap().run().is_err(),
+        rt_tb
+            .prepare(&tb_job, Bindings::new())
+            .unwrap()
+            .run()
+            .is_err(),
         "9x90 RGBA8 sigma-40 stackblur (including SIMD scalar tail buffers) must exceed 56,312 B max_memory_bytes"
     );
 
@@ -663,7 +703,9 @@ fn canonical_pr5_regressions_strict_json_limits_fit_pad_multiply_and_selection()
         ColorSpace::DISPLAY_P3.with_alpha(zenpixels::AlphaMode::Straight),
     );
     let src_p3_rgba = PixelBuf::from_bytes(
-        vec![250, 12, 77, 255, 11, 240, 33, 200, 99, 88, 77, 150, 5, 6, 7, 255],
+        vec![
+            250, 12, 77, 255, 11, 240, 33, 200, 99, 88, 77, 150, 5, 6, 7, 255,
+        ],
         2,
         2,
         p3_rgba_fmt.clone(),
@@ -701,7 +743,9 @@ fn canonical_pr5_regressions_strict_json_limits_fit_pad_multiply_and_selection()
     let ext_res = rt
         .prepare(
             &ext_job,
-            Bindings::new().with_pixels("p3", src_p3_rgba.as_view()).unwrap(),
+            Bindings::new()
+                .with_pixels("p3", src_p3_rgba.as_view())
+                .unwrap(),
         )
         .unwrap()
         .run()
@@ -729,7 +773,9 @@ fn canonical_pr5_regressions_strict_json_limits_fit_pad_multiply_and_selection()
     let u10_err = rt
         .prepare(
             &ext_job,
-            Bindings::new().with_pixels("p3", src_u10.as_view()).unwrap(),
+            Bindings::new()
+                .with_pixels("p3", src_u10.as_view())
+                .unwrap(),
         )
         .unwrap()
         .run();
@@ -740,13 +786,8 @@ fn canonical_pr5_regressions_strict_json_limits_fit_pad_multiply_and_selection()
 
     // 10. Composite Multiply preserves positive float alpha down to 2^-24 on RGBAF32_LINEAR backdrop!
     let tiny_alpha = 2.0f32.powi(-24);
-    let bg_f32 = PixelBuf::from_bytes(
-        vec![0u8; 2 * 2 * 16],
-        2,
-        2,
-        PixelFormat::RGBAF32_LINEAR,
-    )
-    .unwrap();
+    let bg_f32 =
+        PixelBuf::from_bytes(vec![0u8; 2 * 2 * 16], 2, 2, PixelFormat::RGBAF32_LINEAR).unwrap();
     let fg_f32_px: Vec<u8> = bytemuck::cast_slice(&[1.0f32, 0.0, 0.0, 1.0].repeat(4)).to_vec();
     let fg_f32 = PixelBuf::from_bytes(fg_f32_px, 2, 2, PixelFormat::RGBAF32_LINEAR).unwrap();
     let mut b_tiny = zenpipe::canonical::GraphBuilder::new();
@@ -802,8 +843,14 @@ fn canonical_pr5_regressions_strict_json_limits_fit_pad_multiply_and_selection()
         .unwrap();
     let tiny_px = tiny_res.artifact("out").unwrap().pixels.as_ref().unwrap();
     let px0: &[f32] = bytemuck::cast_slice(&tiny_px.as_view().row(0)[..16]);
-    assert_eq!(px0[0], 1.0, "tiny-alpha Multiply must keep unpremultiplied red = 1.0");
-    assert_eq!(px0[3], tiny_alpha, "tiny-alpha Multiply must preserve float alpha 2^-24");
+    assert_eq!(
+        px0[0], 1.0,
+        "tiny-alpha Multiply must keep unpremultiplied red = 1.0"
+    );
+    assert_eq!(
+        px0[3], tiny_alpha,
+        "tiny-alpha Multiply must preserve float alpha 2^-24"
+    );
 
     // 10b. Subnormal positive opacity 2^-129 MUST produce finite [1.0, 0.0, 0.0, 2^-129] (no inf/NaN)!
     let subnormal_alpha = f32::from_bits(0x0010_0000); // exact IEEE-754 subnormal 2^-129
@@ -861,7 +908,10 @@ fn canonical_pr5_regressions_strict_json_limits_fit_pad_multiply_and_selection()
         .unwrap();
     let sub_px = sub_res.artifact("out").unwrap().pixels.as_ref().unwrap();
     let spx0: &[f32] = bytemuck::cast_slice(&sub_px.as_view().row(0)[..16]);
-    assert!(spx0.iter().all(|v| v.is_finite()), "subnormal alpha composite must stay finite: {spx0:?}");
+    assert!(
+        spx0.iter().all(|v| v.is_finite()),
+        "subnormal alpha composite must stay finite: {spx0:?}"
+    );
     assert_eq!(spx0[0], 1.0);
     assert_eq!(spx0[1], 0.0);
     assert_eq!(spx0[2], 0.0);
@@ -1007,4 +1057,584 @@ fn build_two_frame_8x8_restore_prev_gif() -> Vec<u8> {
     // Trailer
     g.push(0x3B);
     g
+}
+
+#[test]
+fn prepared_job_run_with_pulse_cancels_and_preserves_typed_target_unmet() {
+    use enough::{Stop, StopReason};
+    use std::num::NonZeroU32;
+    use std::sync::Arc;
+    use zencodec::{CodecSet, JobResources, SharedPulse};
+    use zencodecs::bundles;
+    use zencodecs::engine::{EngineError, EngineResult, Failure, Metric, MetricScorer};
+    use zenpixels::{PixelFormat, PixelView};
+
+    struct ConstantLowScorer;
+    impl MetricScorer for ConstantLowScorer {
+        fn metric(&self) -> Metric {
+            Metric::ZensimA
+        }
+        fn revision(&self) -> &'static str {
+            "const-low.r1"
+        }
+        fn comparison_format(&self) -> PixelFormat {
+            PixelFormat::RGBA8_SRGB
+        }
+        fn score(
+            &self,
+            _reference: PixelView<'_>,
+            _candidate: PixelView<'_>,
+            _resources: &JobResources,
+        ) -> EngineResult<f32> {
+            Ok(42.0)
+        }
+    }
+
+    let set = bundles::register_all_enabled(CodecSet::new()).unwrap();
+    let engine = Arc::new(
+        Engine::new(set)
+            .unwrap()
+            .with_color_services(bundles::moxcms_color_services())
+            .with_metric_scorer(Arc::new(ConstantLowScorer), NonZeroU32::new(4).unwrap())
+            .unwrap(),
+    );
+
+    // 1. Typed Failure::TargetUnmet is preserved inside PipeError::Codec (not stringified into Op)
+    //    and runs under default WorkspacePolicy::Strict!
+    let job = parse_pipeline_json(
+        br#"{
+            "steps": [
+                {"canvas": {"width": 32, "height": 32, "fill": [120, 160, 200, 255]}},
+                {"encode": {"output": "out", "format": "jpeg", "coding": {"verify": {"metric": "zensim_a", "value": 90.0}}}}
+            ]
+        }"#,
+        WireLimitConfig::default(),
+    )
+    .unwrap();
+
+    let rt = PipelineRuntime::new(engine.clone(), HostServices::new());
+    let err = rt
+        .prepare(&job, Bindings::new())
+        .unwrap()
+        .run_with_pulse(SharedPulse::default())
+        .unwrap_err();
+    match err.error() {
+        zenpipe::PipeError::Codec(boxed) => {
+            let eng = boxed
+                .downcast_ref::<EngineError>()
+                .expect("PipeError::Codec must preserve typed EngineError");
+            assert_eq!(eng.failure(), &Failure::TargetUnmet);
+        }
+        other => panic!("expected PipeError::Codec(EngineError(TargetUnmet)), got: {other:?}"),
+    }
+
+    // 2. Converging Coding::Verify emits rich IQA provenance fields in OutputV2 JSON!
+    let ok_job = parse_pipeline_json(
+        br#"{
+            "steps": [
+                {"canvas": {"width": 32, "height": 32, "fill": [120, 160, 200, 255]}},
+                {"encode": {"output": "out", "format": "jpeg", "coding": {"verify": {"metric": "zensim_a", "value": 40.0}}}}
+            ]
+        }"#,
+        WireLimitConfig::default(),
+    )
+    .unwrap();
+    let ok_res = rt
+        .prepare(&ok_job, Bindings::new())
+        .unwrap()
+        .run_with_pulse(SharedPulse::default())
+        .unwrap();
+    let out_v2 = ok_res.output_v2();
+    assert_eq!(
+        out_v2.outputs[0].verified_metric.as_deref(),
+        Some("zensim_a")
+    );
+    assert_eq!(
+        out_v2.outputs[0].verified_revision.as_deref(),
+        Some("const-low.r1")
+    );
+    assert_eq!(out_v2.outputs[0].verified_target, Some(40.0));
+    assert_eq!(out_v2.outputs[0].verified_score_f64, Some(42.0));
+    assert!(out_v2.outputs[0].verified_quality.is_some());
+    assert!(out_v2.outputs[0].verify_attempts.unwrap_or(0) >= 1);
+
+    // 3. PreparedJob::run_with_pulse stops immediately with typed PipeError::Stopped(TimedOut).
+    struct TimedOutStop;
+    impl Stop for TimedOutStop {
+        fn check(&self) -> Result<(), StopReason> {
+            Err(StopReason::TimedOut)
+        }
+    }
+    let pulse = SharedPulse::new(zencodec::how_far::StopOnly::new(TimedOutStop));
+    let cancelled = rt
+        .prepare(&job, Bindings::new())
+        .unwrap()
+        .run_with_pulse(pulse)
+        .unwrap_err();
+    assert!(
+        matches!(
+            cancelled.error(),
+            zenpipe::PipeError::Stopped(StopReason::TimedOut)
+        ),
+        "expected PipeError::Stopped(TimedOut), got: {cancelled:?}"
+    );
+
+    // 4. Mid-Verify cancellation witness: stop flag trips DURING trial 1's scoring so trial 1
+    //    executes and trial 2 aborts cooperatively with typed PipeError::Stopped(TimedOut).
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    struct TripAfterFirstScore {
+        calls: Arc<AtomicUsize>,
+        tripped: Arc<AtomicBool>,
+    }
+    impl MetricScorer for TripAfterFirstScore {
+        fn metric(&self) -> Metric {
+            Metric::ZensimA
+        }
+        fn revision(&self) -> &'static str {
+            "trip-after-one.r1"
+        }
+        fn comparison_format(&self) -> PixelFormat {
+            PixelFormat::RGBA8_SRGB
+        }
+        fn score(
+            &self,
+            _reference: PixelView<'_>,
+            _candidate: PixelView<'_>,
+            _resources: &JobResources,
+        ) -> EngineResult<f32> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            self.tripped.store(true, Ordering::SeqCst);
+            Ok(10.0)
+        }
+    }
+    struct FlagStop(Arc<AtomicBool>);
+    impl Stop for FlagStop {
+        fn check(&self) -> Result<(), StopReason> {
+            if self.0.load(Ordering::SeqCst) {
+                Err(StopReason::TimedOut)
+            } else {
+                Ok(())
+            }
+        }
+    }
+    let trip_calls = Arc::new(AtomicUsize::new(0));
+    let trip_flag = Arc::new(AtomicBool::new(false));
+    let trip_engine = Arc::new(
+        Engine::new(bundles::register_all_enabled(CodecSet::new()).unwrap())
+            .unwrap()
+            .with_color_services(bundles::moxcms_color_services())
+            .with_metric_scorer(
+                Arc::new(TripAfterFirstScore {
+                    calls: Arc::clone(&trip_calls),
+                    tripped: Arc::clone(&trip_flag),
+                }),
+                NonZeroU32::new(4).unwrap(),
+            )
+            .unwrap(),
+    );
+    let trip_rt = PipelineRuntime::new(trip_engine, HostServices::new());
+    let trip_pulse = SharedPulse::new(zencodec::how_far::StopOnly::new(FlagStop(Arc::clone(
+        &trip_flag,
+    ))));
+    let mid_verify_err = trip_rt
+        .prepare(&job, Bindings::new())
+        .unwrap()
+        .run_with_pulse(trip_pulse)
+        .unwrap_err();
+    assert_eq!(
+        trip_calls.load(Ordering::SeqCst),
+        1,
+        "trial 1 must have executed before mid-Verify cancellation tripped"
+    );
+    assert!(
+        matches!(
+            mid_verify_err.error(),
+            zenpipe::PipeError::Stopped(StopReason::TimedOut)
+        ),
+        "expected PipeError::Stopped(TimedOut) mid-Verify, got: {mid_verify_err:?}"
+    );
+
+    // 5a. Phase-isolated mid-decode cancellation witness: wrap real `zenjpeg::JpegDecoderConfig`
+    //     so all `probe()` calls pass untouched, then `DynDecoder::decode()` records
+    //     `entered_decode = true` and flips the stop flag so cancellation fires strictly INSIDE
+    //     real `zenjpeg::decode()` via the pulse forwarded by `PipelineRuntime`!
+    let seed_job = parse_pipeline_json(
+        br#"{
+            "steps": [
+                {"canvas": {"width": 256, "height": 256, "fill": [80, 140, 210, 255]}},
+                {"encode": {"output": "src", "format": "jpeg", "coding": {"calibrated_quality": 85.0}}}
+            ]
+        }"#,
+        WireLimitConfig::default(),
+    )
+    .unwrap();
+    let jpeg_bytes = rt
+        .prepare(&seed_job, Bindings::new())
+        .unwrap()
+        .run()
+        .unwrap()
+        .outputs
+        .remove(0)
+        .bytes;
+
+    struct CountdownStop {
+        allow_checks: usize,
+        checks: Arc<AtomicUsize>,
+    }
+    impl Stop for CountdownStop {
+        fn check(&self) -> Result<(), StopReason> {
+            let n = self.checks.fetch_add(1, Ordering::SeqCst);
+            if n >= self.allow_checks {
+                Err(StopReason::Cancelled)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    struct DecodeCancelFlagStop(Arc<AtomicBool>);
+    impl Stop for DecodeCancelFlagStop {
+        fn check(&self) -> Result<(), StopReason> {
+            if self.0.load(Ordering::SeqCst) {
+                Err(StopReason::Cancelled)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    struct TripOnDecodeConfig {
+        inner: Arc<dyn zencodec::decode::DynDecoderConfig>,
+        probes: Arc<AtomicUsize>,
+        entered_decode: Arc<AtomicBool>,
+        backend_stopped: Arc<AtomicBool>,
+        trip_flag: Arc<AtomicBool>,
+    }
+    struct TripOnDecodeJob<'a> {
+        inner: Box<dyn zencodec::decode::DynDecodeJob<'a> + 'a>,
+        probes: Arc<AtomicUsize>,
+        entered_decode: Arc<AtomicBool>,
+        backend_stopped: Arc<AtomicBool>,
+        trip_flag: Arc<AtomicBool>,
+    }
+    struct TripOnDecodeExec<'a> {
+        inner: Box<dyn zencodec::decode::DynDecoder + 'a>,
+        entered_decode: Arc<AtomicBool>,
+        backend_stopped: Arc<AtomicBool>,
+        trip_flag: Arc<AtomicBool>,
+    }
+    impl<'a> zencodec::decode::DynDecoder for TripOnDecodeExec<'a> {
+        fn decode(
+            self: Box<Self>,
+        ) -> Result<zencodec::decode::DecodeOutput, Box<dyn std::error::Error + Send + Sync>>
+        {
+            use zencodec::CodecErrorExt as _;
+            self.entered_decode.store(true, Ordering::SeqCst);
+            self.trip_flag.store(true, Ordering::SeqCst);
+            let res = self.inner.decode();
+            if let Err(ref err) = res
+                && matches!(
+                    err.error_category(),
+                    Some(zencodec::ErrorCategory::Stopped(StopReason::Cancelled))
+                )
+            {
+                self.backend_stopped.store(true, Ordering::SeqCst);
+            }
+            res
+        }
+    }
+    impl<'a> zencodec::decode::DynDecodeJob<'a> for TripOnDecodeJob<'a> {
+        fn set_pulse(&mut self, pulse: SharedPulse) {
+            self.inner.set_pulse(pulse);
+        }
+        fn set_limits(&mut self, limits: zencodec::ResourceLimits) {
+            self.inner.set_limits(limits);
+        }
+        fn probe(
+            &self,
+            data: &[u8],
+        ) -> Result<zencodec::ImageInfo, Box<dyn std::error::Error + Send + Sync>> {
+            self.probes.fetch_add(1, Ordering::SeqCst);
+            self.inner.probe(data)
+        }
+        fn probe_full(
+            &self,
+            data: &[u8],
+        ) -> Result<zencodec::ImageInfo, Box<dyn std::error::Error + Send + Sync>> {
+            self.probes.fetch_add(1, Ordering::SeqCst);
+            self.inner.probe_full(data)
+        }
+        fn set_crop_hint(&mut self, crop: zencodec::Rect) {
+            self.inner.set_crop_hint(crop);
+        }
+        fn set_orientation(&mut self, hint: zencodec::OrientationHint) {
+            self.inner.set_orientation(hint);
+        }
+        fn set_start_frame_index(&mut self, index: u32) {
+            self.inner.set_start_frame_index(index);
+        }
+        fn extensions(&self) -> Option<&dyn std::any::Any> {
+            self.inner.extensions()
+        }
+        fn extensions_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+            self.inner.extensions_mut()
+        }
+        fn output_info(
+            &self,
+            data: &[u8],
+        ) -> Result<zencodec::decode::OutputInfo, Box<dyn std::error::Error + Send + Sync>>
+        {
+            self.inner.output_info(data)
+        }
+        fn into_decoder(
+            self: Box<Self>,
+            data: std::borrow::Cow<'a, [u8]>,
+            preferred: &[PixelFormat],
+        ) -> Result<
+            Box<dyn zencodec::decode::DynDecoder + 'a>,
+            Box<dyn std::error::Error + Send + Sync>,
+        > {
+            let dec = self.inner.into_decoder(data, preferred)?;
+            Ok(Box::new(TripOnDecodeExec {
+                inner: dec,
+                entered_decode: self.entered_decode,
+                backend_stopped: self.backend_stopped,
+                trip_flag: self.trip_flag,
+            }))
+        }
+        fn push_decode(
+            self: Box<Self>,
+            data: std::borrow::Cow<'a, [u8]>,
+            sink: &mut dyn zencodec::decode::DecodeRowSink,
+            preferred: &[PixelFormat],
+        ) -> Result<zencodec::decode::OutputInfo, Box<dyn std::error::Error + Send + Sync>>
+        {
+            self.inner.push_decode(data, sink, preferred)
+        }
+        fn into_streaming_decoder(
+            self: Box<Self>,
+            data: std::borrow::Cow<'a, [u8]>,
+            preferred: &[PixelFormat],
+        ) -> Result<
+            Box<dyn zencodec::decode::DynStreamingDecoder + 'a>,
+            Box<dyn std::error::Error + Send + Sync>,
+        > {
+            self.inner.into_streaming_decoder(data, preferred)
+        }
+        fn into_animation_frame_decoder(
+            self: Box<Self>,
+            data: std::borrow::Cow<'a, [u8]>,
+            preferred: &[PixelFormat],
+        ) -> Result<
+            Box<dyn zencodec::decode::DynAnimationFrameDecoder>,
+            Box<dyn std::error::Error + Send + Sync>,
+        > {
+            self.inner.into_animation_frame_decoder(data, preferred)
+        }
+    }
+    impl zencodec::decode::DynDecoderConfig for TripOnDecodeConfig {
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+        fn formats(&self) -> &'static [zencodec::ImageFormat] {
+            self.inner.formats()
+        }
+        fn supported_pixel_formats(&self) -> &'static [PixelFormat] {
+            self.inner.supported_pixel_formats()
+        }
+        fn capabilities(&self) -> &'static zencodec::decode::DecodeCapabilities {
+            self.inner.capabilities()
+        }
+        fn dyn_job(&self) -> Box<dyn zencodec::decode::DynDecodeJob<'_> + '_> {
+            Box::new(TripOnDecodeJob {
+                inner: self.inner.dyn_job(),
+                probes: Arc::clone(&self.probes),
+                entered_decode: Arc::clone(&self.entered_decode),
+                backend_stopped: Arc::clone(&self.backend_stopped),
+                trip_flag: Arc::clone(&self.trip_flag),
+            })
+        }
+    }
+
+    let probes = Arc::new(AtomicUsize::new(0));
+    let entered_decode = Arc::new(AtomicBool::new(false));
+    let backend_stopped = Arc::new(AtomicBool::new(false));
+    let dec_trip_flag = Arc::new(AtomicBool::new(false));
+    let real_jpeg_dec = engine
+        .codecs()
+        .factories::<zencodec::ImageDecodeRole>(&zencodec::ImageFormat::Jpeg)
+        .next()
+        .expect("zenjpeg registered")
+        .factory
+        .clone();
+    let trip_dec_id = zencodec::RegistrationId::new("org.test.jpeg.trip_decode").unwrap();
+    let dec_set = bundles::register_all_enabled(CodecSet::new())
+        .unwrap()
+        .with_role::<zencodec::ImageDecodeRole>(
+            vec![zencodec::ImageFormat::Jpeg],
+            zencodec::NamedFactory::<zencodec::ImageDecodeRole>::new(
+                trip_dec_id.clone(),
+                "test-1",
+                Arc::new(TripOnDecodeConfig {
+                    inner: real_jpeg_dec,
+                    probes: Arc::clone(&probes),
+                    entered_decode: Arc::clone(&entered_decode),
+                    backend_stopped: Arc::clone(&backend_stopped),
+                    trip_flag: Arc::clone(&dec_trip_flag),
+                }),
+            ),
+        )
+        .unwrap();
+    let dec_engine = Arc::new(
+        Engine::new(dec_set)
+            .unwrap()
+            .with_color_services(bundles::moxcms_color_services())
+            .with_routing(
+                zencodecs::routing::Routing::unrestricted()
+                    .requiring(
+                        zencodecs::routing::RuleKey::ImageDecode(zencodec::ImageFormat::Jpeg),
+                        trip_dec_id,
+                    )
+                    .unwrap(),
+            ),
+    );
+    let dec_rt = PipelineRuntime::new(
+        dec_engine,
+        HostServices::new().with_workspace_policy(zencodecs::engine::WorkspacePolicy::BestEffort),
+    );
+    let dec_only_job = parse_pipeline_json(
+        br#"{
+            "steps": [
+                {"decode": {"input": "in", "orientation": "apply"}},
+                {"encode": {"output": "out", "format": "png"}}
+            ]
+        }"#,
+        WireLimitConfig::default(),
+    )
+    .unwrap();
+    let dec_pulse = SharedPulse::new(zencodec::how_far::StopOnly::new(DecodeCancelFlagStop(
+        Arc::clone(&dec_trip_flag),
+    )));
+    let mid_dec_err = dec_rt
+        .prepare(
+            &dec_only_job,
+            Bindings::new().with_bytes("in", &jpeg_bytes).unwrap(),
+        )
+        .unwrap()
+        .run_with_pulse(dec_pulse)
+        .unwrap_err();
+    assert!(
+        probes.load(Ordering::SeqCst) >= 1,
+        "probe phase must complete cleanly before decode"
+    );
+    assert!(
+        entered_decode.load(Ordering::SeqCst),
+        "execution must enter DynDecoder::decode() before cancellation trips"
+    );
+    assert!(
+        backend_stopped.load(Ordering::SeqCst),
+        "real zenjpeg::decode() itself must observe the forwarded pulse and return Stopped(Cancelled)"
+    );
+    assert!(
+        matches!(
+            mid_dec_err.error(),
+            zenpipe::PipeError::Stopped(StopReason::Cancelled)
+        ),
+        "expected PipeError::Stopped(Cancelled) from real zenjpeg::decode() via forwarded pulse, got: {mid_dec_err:?}"
+    );
+
+    // 5b. Phase-isolated mid-conversion cancellation witness: ZERO decode/probe — canvas ->
+    //     color_space (256x256) -> encode cancels strictly inside `convert_pixel_buf` row loop!
+    let conv_job = parse_pipeline_json(
+        br#"{
+            "steps": [
+                {"canvas": {"width": 256, "height": 256, "fill": [80, 140, 210, 255]}},
+                {"color_space": {"to": "rgb8_srgb"}},
+                {"encode": {"output": "out", "format": "png"}}
+            ]
+        }"#,
+        WireLimitConfig::default(),
+    )
+    .unwrap();
+    let conv_checks = Arc::new(AtomicUsize::new(0));
+    let conv_pulse = SharedPulse::new(zencodec::how_far::StopOnly::new(CountdownStop {
+        // Canvas step passes, convert_pixel_buf entry + row 0 + row 64 pass, row 128 cancels!
+        allow_checks: 5,
+        checks: Arc::clone(&conv_checks),
+    }));
+    let mid_conv_err = rt
+        .prepare(&conv_job, Bindings::new())
+        .unwrap()
+        .run_with_pulse(conv_pulse)
+        .unwrap_err();
+    assert!(
+        conv_checks.load(Ordering::SeqCst) >= 6,
+        "conversion stop must trip inside convert_pixel_buf row loop"
+    );
+    assert!(
+        matches!(
+            mid_conv_err.error(),
+            zenpipe::PipeError::Stopped(StopReason::Cancelled)
+        ),
+        "expected PipeError::Stopped(Cancelled) mid-conversion, got: {mid_conv_err:?}"
+    );
+
+    // 5c. Phase-isolated mid-orientation cancellation witness in canonical runtime:
+    let orient_job = parse_pipeline_json(
+        br#"{
+            "steps": [
+                {"canvas": {"width": 256, "height": 256, "fill": [80, 140, 210, 255]}},
+                {"geometry": {"orient": "rotate90"}},
+                {"encode": {"output": "out", "format": "png"}}
+            ]
+        }"#,
+        WireLimitConfig::default(),
+    )
+    .unwrap();
+    let orient_checks = Arc::new(AtomicUsize::new(0));
+    let orient_pulse = SharedPulse::new(zencodec::how_far::StopOnly::new(CountdownStop {
+        allow_checks: 5,
+        checks: Arc::clone(&orient_checks),
+    }));
+    let mid_orient_err = rt
+        .prepare(&orient_job, Bindings::new())
+        .unwrap()
+        .run_with_pulse(orient_pulse)
+        .unwrap_err();
+    assert!(
+        orient_checks.load(Ordering::SeqCst) >= 6,
+        "orient stop must trip inside apply_orient row loop"
+    );
+    assert!(
+        matches!(
+            mid_orient_err.error(),
+            zenpipe::PipeError::Stopped(StopReason::Cancelled)
+        ),
+        "expected PipeError::Stopped(Cancelled) mid-orientation, got: {mid_orient_err:?}"
+    );
+
+    // 6. Coding::AimFor exposes aim_metric, aim_target, aim_revision, aim_estimated_quality
+    //    and leaves verified_score absent in OutputV2 JSON.
+    let aim_job = parse_pipeline_json(
+        br#"{
+            "steps": [
+                {"canvas": {"width": 32, "height": 32, "fill": [100, 120, 140, 255]}},
+                {"encode": {"output": "out", "format": "jpeg", "coding": {"aim_for": {"metric": "zensim_a", "value": 85.0}}}}
+            ]
+        }"#,
+        WireLimitConfig::default(),
+    )
+    .unwrap();
+    let aim_res = rt
+        .prepare(&aim_job, Bindings::new())
+        .unwrap()
+        .run_with_pulse(SharedPulse::default())
+        .unwrap();
+    let aim_v2 = aim_res.output_v2();
+    assert_eq!(aim_v2.outputs[0].aim_metric.as_deref(), Some("zensim_a"));
+    assert_eq!(aim_v2.outputs[0].aim_target, Some(85.0));
+    assert!(aim_v2.outputs[0].aim_revision.is_some());
+    assert!(aim_v2.outputs[0].aim_estimated_quality.is_some());
+    assert_eq!(aim_v2.outputs[0].verified_score, None);
+    assert_eq!(aim_v2.outputs[0].verified_score_f64, None);
 }
